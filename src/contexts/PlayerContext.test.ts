@@ -69,4 +69,17 @@ describe('shouldPreservePlayingStateDuringSeek', () => {
       })
     ).toBe(false);
   });
+
+  // Android emits playbackState "ended" (not "finished") when a song completes.
+  // The guard must NOT preserve state here — nextInPlaylist() handles the transition via didJustFinish.
+  it('does not preserve state when Android song ends (playbackState "ended")', () => {
+    expect(
+      shouldPreservePlayingStateDuringSeek({
+        playing: false,
+        playbackState: 'ended',
+        isBuffering: false,
+        isLoaded: true,
+      })
+    ).toBe(false);
+  });
 });
