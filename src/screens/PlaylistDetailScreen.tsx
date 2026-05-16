@@ -618,16 +618,13 @@ export const PlaylistDetailScreen: React.FC = () => {
                          <TimelineScrubber 
                             currentTime={activeIsPlaying ? position : 0}
                             duration={activeIsPlaying ? (duration > 0 ? duration : (currentSong?.duration || 180)) : (songs[0]?.duration || 180)}
-                            onSeek={(value) => {
+                            onSeek={async (value) => {
                                 if (activeIsPlaying && player) {
-                                    // 1. Lock updates to prevent "glitch back"
                                     isSeeking.current = true;
                                     if (seekTimeout.current) clearTimeout(seekTimeout.current);
-                                    
-                                    // 2. Perform Seek
-                                    player.seekTo(value);
-
-                                    // 4. Release lock after delay (1s is usually enough for audio to catch up)
+                                    const wasPlaying = usePlayerStore.getState().isPlaying;
+                                    await player.seekTo(value);
+                                    if (wasPlaying) player.play();
                                     seekTimeout.current = setTimeout(() => {
                                         isSeeking.current = false;
                                     }, 1000);
@@ -641,10 +638,12 @@ export const PlaylistDetailScreen: React.FC = () => {
                         {/* -10s */}
                         <Pressable 
                             style={styles.skipButton} 
-                            onPress={() => {
+                            onPress={async () => {
                                 if (activeIsPlaying && player) {
                                     const newTime = Math.max(0, position - 10);
-                                    player.seekTo(newTime);
+                                    const wasPlaying = usePlayerStore.getState().isPlaying;
+                                    await player.seekTo(newTime);
+                                    if (wasPlaying) player.play();
                                 }
                             }}
                             disabled={!activeIsPlaying}
@@ -683,10 +682,12 @@ export const PlaylistDetailScreen: React.FC = () => {
                         {/* +10s */}
                         <Pressable 
                             style={styles.skipButton} 
-                            onPress={() => {
+                            onPress={async () => {
                                 if (activeIsPlaying && player && duration > 1) {
                                     const newTime = Math.min(duration - 1, position + 10);
-                                    player.seekTo(Math.floor(newTime * 1000));
+                                    const wasPlaying = usePlayerStore.getState().isPlaying;
+                                    await player.seekTo(newTime);
+                                    if (wasPlaying) player.play();
                                 }
                             }}
                             disabled={!activeIsPlaying}
