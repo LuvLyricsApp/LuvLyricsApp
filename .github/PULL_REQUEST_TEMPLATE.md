@@ -1,10 +1,17 @@
-## Summary
+## Pre-flight check
 
-Briefly describe what this PR changes and why.
+> **PRs without a linked issue will be closed without review.**
+> Open or find an issue first, then come back here.
+
+- [ ] I have opened or referenced an existing issue that tracks this work (required)
 
 ## Related Issue
 
 Closes #
+
+## Summary
+
+Briefly describe what this PR changes and why.
 
 ## Type of Change
 

@@ -21,8 +21,8 @@ By participating, you agree to follow our Code of Conduct:
 ### 1. Fork and clone
 
 ```bash
-git clone https://github.com/<your-username>/LuvLyrics.git
-cd LuvLyrics
+git clone https://github.com/<your-username>/LuvLyricsApp.git
+cd LuvLyricsApp
 ```
 
 ### 2. Install dependencies
@@ -74,17 +74,23 @@ Prefer conventional commits:
 
 ## Pull Request Process
 
-1. Create an issue first (or reference an existing issue)
-2. Create a focused branch from `main`
-3. Keep PR scope small and reviewable
+> **Rule: every PR must be linked to an issue. PRs opened without a linked issue will be closed without review.**
+> If no issue exists yet, open one first and wait for a maintainer to confirm it's in scope before starting work.
+
+1. Open or find an issue — get it confirmed before writing code
+2. Create a focused branch from `main` following the branch naming convention below
+3. Keep PR scope small — one issue per PR
 4. Add/update tests where relevant
-5. Run the same quality checks used by CI before opening PR:
+5. Run CI checks locally before pushing:
 
 ```bash
-npm run ci
+npm run lint
+npm run typecheck
+npm run test:ci
 ```
 
-6. Open PR using the PR template and link the issue
+6. Open PR using the template, fill every section, and put `Closes #<issue-number>` in the Related Issue field
+7. Wait for a maintainer review — do not merge your own PR
 
 ## Automated PR Checks
 

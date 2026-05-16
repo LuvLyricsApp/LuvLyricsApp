@@ -1,0 +1,11 @@
+# Global owners — all PRs require review from at least one of these
+* @peterish8
+
+# Protect governance files — only peterish8 can approve changes to these
+.github/CODEOWNERS @peterish8
+.github/PULL_REQUEST_TEMPLATE.md @peterish8
+.github/ISSUE_TEMPLATE/ @peterish8
+.github/workflows/ @peterish8
+CONTRIBUTING.md @peterish8
+CODE_OF_CONDUCT.md @peterish8
+SECURITY.md @peterish8

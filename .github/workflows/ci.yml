@@ -20,15 +20,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for dependency file changes
+        id: dep-check
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -qE 'package\.json|package-lock\.json'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Review dependency changes
+        if: steps.dep-check.outputs.changed == 'true'
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+          comment-summary-in-pr: always
 
   quality-checks:
     name: Lint, Typecheck, Test
@@ -59,3 +70,11 @@ jobs:
 
       - name: Unit tests with coverage
         run: npm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
