@@ -825,29 +825,32 @@ Only provide the JSON array, no other text.`;
 
     return (
         <View style={styles.container}>
-            {/* Violet soft gradient morphism background */}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#08000F' }]} />
+            {/* Soft violet gradient morphism — overlapping full-screen washes, no shapes */}
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040008' }]} />
+            {/* Top-left subtle violet wash */}
             <LinearGradient
-                colors={['rgba(127,19,236,0.38)', 'rgba(100,0,200,0.18)', 'transparent']}
-                style={styles.blobTopLeft}
+                colors={['rgba(127,19,236,0.18)', 'transparent']}
+                style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                end={{ x: 0.75, y: 0.65 }}
             />
+            {/* Bottom-right subtle purple wash */}
             <LinearGradient
-                colors={['rgba(160,20,255,0.32)', 'rgba(80,0,180,0.12)', 'transparent']}
-                style={styles.blobBottomRight}
+                colors={['rgba(140,20,255,0.14)', 'transparent']}
+                style={StyleSheet.absoluteFill}
                 start={{ x: 1, y: 1 }}
-                end={{ x: 0, y: 0 }}
+                end={{ x: 0.25, y: 0.35 }}
             />
+            {/* Faint mid-screen bleed */}
             <LinearGradient
-                colors={['rgba(90,0,180,0.22)', 'rgba(60,0,140,0.08)', 'transparent']}
-                style={styles.blobCentre}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
+                colors={['transparent', 'rgba(80,0,180,0.08)', 'transparent']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0.55 }}
+                end={{ x: 1, y: 0.45 }}
             />
-            {/* Dark vignette to deepen edges */}
+            {/* Heavy dark overlay — keeps it mostly black */}
             <LinearGradient
-                colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.6)']}
+                colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -1261,31 +1264,6 @@ const styles = StyleSheet.create({
     },
     safeArea: {
         flex: 1,
-    },
-    // Soft gradient morphism blobs (LinearGradient → transparent, no hard edges)
-    blobTopLeft: {
-        position: 'absolute',
-        width: 420,
-        height: 420,
-        borderRadius: 9999,
-        top: -140,
-        left: -100,
-    },
-    blobBottomRight: {
-        position: 'absolute',
-        width: 380,
-        height: 380,
-        borderRadius: 9999,
-        bottom: -100,
-        right: -90,
-    },
-    blobCentre: {
-        position: 'absolute',
-        width: 320,
-        height: 320,
-        borderRadius: 9999,
-        top: '28%',
-        left: '5%',
     },
     header: {
         flexDirection: 'row',
