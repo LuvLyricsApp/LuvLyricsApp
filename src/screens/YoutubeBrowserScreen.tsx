@@ -22,7 +22,6 @@ import {
   Pressable,
   ActivityIndicator,
   StatusBar,
-  Alert,
 } from 'react-native';
 import { usePlayerStore } from '../store/playerStore';
 import { WebView, WebViewNavigation, WebViewMessageEvent } from 'react-native-webview';
@@ -167,7 +166,6 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
   }, [setMiniPlayerHidden]);
 
   const webViewRef = useRef<WebView>(null);
-  const [currentUrl, setCurrentUrl] = useState(YOUTUBE_URL);
   const [isVideoPage, setIsVideoPage] = useState(false);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -180,9 +178,9 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
 
   const fabAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: fabScale.value },
-      { translateY: fabTranslateY.value },
-    ],
+      { scale: fabScale.value as number },
+      { translateY: fabTranslateY.value as number },
+    ] as const,
     opacity: fabScale.value,
   }));
 
@@ -198,7 +196,6 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
 
   // ─── Navigation State Handler ──────────────────────────────
   const handleNavigationChange = useCallback((navState: WebViewNavigation) => {
-    setCurrentUrl(navState.url);
     const isVideo = navState.url.includes('watch?v=');
     
     if (isVideo && !isVideoPage) {

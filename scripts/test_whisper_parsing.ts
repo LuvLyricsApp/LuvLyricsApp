@@ -1,6 +1,4 @@
 
-import { WhisperService } from '../src/services/whisperService';
-
 // Mock the WhisperService to access the private parseWhisperResult method
 // or we can just copy the logic here to test it in isolation if we can't easily instantiate the service without native modules.
 // Since WhisperService relies on native modules, it's safer to extract the logic we want to test or mock the dependencies.

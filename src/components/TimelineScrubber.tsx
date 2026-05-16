@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, LayoutChangeEvent, Text, ViewStyle, Dimensions } from 'react-native';
+import { View, StyleSheet, LayoutChangeEvent, Text, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -7,7 +7,6 @@ import Animated, {
   runOnJS,
   withTiming,
   useDerivedValue,
-  runOnUI,
   SharedValue
 } from 'react-native-reanimated';
 
@@ -36,15 +35,12 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 }) => {
   const [trackWidth, setTrackWidth] = useState(0);
   const isScrubbing = useSharedValue(false);
+  const currentTimeNumberSV = useSharedValue(typeof currentTime === 'number' ? currentTime : 0);
+  const durationNumberSV = useSharedValue(typeof duration === 'number' ? duration : 0);
   
-  // Convert props to shared values if they aren't already
-  const currentTimeSV = typeof currentTime === 'number' 
-    ? useSharedValue(currentTime) 
-    : currentTime;
-    
-  const durationSV = typeof duration === 'number'
-    ? useSharedValue(duration)
-    : duration;
+  // Convert primitive props to stable shared values without calling hooks conditionally.
+  const currentTimeSV = typeof currentTime === 'number' ? currentTimeNumberSV : currentTime;
+  const durationSV = typeof duration === 'number' ? durationNumberSV : duration;
 
   // Sync when props change (if they are numbers)
   useEffect(() => {
@@ -160,18 +156,6 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
   const isIsland = variant === 'island';
   
-  // Time labels need to read from SV for 120Hz updates if we want them perfectly smooth
-  // However, Text components usually update on bridge anyway.
-  // We'll use a local state for currentTime if it's passed as a primary number via effector
-  // but for the most part, currentTime prop will stay primitive for now unless we optimize with Reanimated Text.
-  const [displayTime, setDisplayTime] = useState(typeof currentTime === 'number' ? currentTime : 0);
-  
-  useEffect(() => {
-    if (typeof currentTime === 'number') {
-      setDisplayTime(currentTime);
-    }
-  }, [currentTime]);
-
   return (
     <View style={[styles.container, isIsland ? styles.islandContainer : styles.classicContainer, style]}>
       <GestureDetector gesture={composedGesture}>
