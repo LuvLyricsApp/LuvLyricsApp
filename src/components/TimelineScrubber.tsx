@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, LayoutChangeEvent, Text, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { 
@@ -35,8 +35,10 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 }) => {
   const [trackWidth, setTrackWidth] = useState(0);
   const isScrubbing = useSharedValue(false);
+  const isSettling = useSharedValue(false);
   const currentTimeNumberSV = useSharedValue(typeof currentTime === 'number' ? currentTime : 0);
   const durationNumberSV = useSharedValue(typeof duration === 'number' ? duration : 0);
+  const settleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Convert primitive props to stable shared values without calling hooks conditionally.
   const currentTimeSV = typeof currentTime === 'number' ? currentTimeNumberSV : currentTime;
@@ -91,6 +93,19 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     if (onScrubEnd) onScrubEnd();
   }, [onScrubEnd]);
 
+  const startSettleWindow = useCallback(() => {
+    isSettling.value = true;
+    if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    settleTimeoutRef.current = setTimeout(() => {
+      isSettling.value = false;
+    }, 350);
+  }, [isSettling]);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    };
+  }, []);
 
   const panGesture = Gesture.Pan()
     .enabled(!disabled)
@@ -111,6 +126,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       'worklet';
       const finalProgress = dragProgress.value;
       runOnJS(handleSeekCommit)(finalProgress);
+      runOnJS(startSettleWindow)();
       runOnJS(handleScrubEnd)();
       isScrubbing.value = false;
     });
@@ -123,6 +139,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         const newProgress = Math.max(0, Math.min(1, e.x / trackWidth));
         dragProgress.value = newProgress;
         runOnJS(handleSeekCommit)(newProgress);
+        runOnJS(startSettleWindow)();
       }
     });
 
@@ -138,7 +155,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
   const fillStyle = useAnimatedStyle(() => {
     'worklet';
-    const displayProgress = isScrubbing.value ? dragProgress.value : scrubProgress.value;
+    const displayProgress = (isScrubbing.value || isSettling.value) ? dragProgress.value : scrubProgress.value;
     return {
       width: `${Math.max(0, Math.min(1, displayProgress)) * 100}%`,
     };
@@ -146,7 +163,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
   const thumbStyle = useAnimatedStyle(() => {
     'worklet';
-    const displayProgress = isScrubbing.value ? dragProgress.value : scrubProgress.value;
+    const displayProgress = (isScrubbing.value || isSettling.value) ? dragProgress.value : scrubProgress.value;
     return {
       left: `${Math.max(0, Math.min(1, displayProgress)) * 100}%`,
       opacity: withTiming(isScrubbing.value ? 0 : 1, { duration: 200 }),

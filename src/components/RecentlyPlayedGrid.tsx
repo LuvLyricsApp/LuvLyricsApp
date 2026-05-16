@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
-import Animated, { FadeInLeft } from 'react-native-reanimated';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { useSongsStore } from '../store/songsStore';
 import { SongCard } from './SongCard';
 import { Song } from '../types/song';
@@ -86,8 +86,8 @@ export const RecentlyPlayedGrid: React.FC<RecentlyPlayedGridProps> = React.memo(
       {visibleSongs.map((song) => (
         <Animated.View 
           key={song.id} 
-          style={styles.horizontalCard} 
-          entering={FadeInLeft.duration(300)}
+          style={styles.horizontalCard}
+          layout={LinearTransition.duration(160)}
         >
           <SongCard
             id={song.id} 

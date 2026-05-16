@@ -50,6 +50,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   
   const flatListRef = useRef<any>(null);
   const contentHeightRef = useRef(0);
+  const activeLoadSongIdRef = useRef<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number, y: number } | undefined>(undefined);
   const [showCoverSearch, setShowCoverSearch] = useState(false); // State for Cover Search Modal
@@ -215,16 +216,20 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         }
 
         // 2. Play Audio (Priority)
-        // Check if ALREADY loaded
-        if (loadedAudioId === targetSongId && storeDuration && storeDuration > 0) {
-           if (__DEV__) console.log('[NowPlaying] Audio already loaded & valid');
+        // If this exact song is already loaded, never replace again.
+        if (loadedAudioId === targetSongId) {
+           if (__DEV__) console.log('[NowPlaying] Audio already loaded');
            if (!storePlaying) player?.play();
         } else {
+           // Prevent duplicate replace calls while an in-flight load for the same song exists.
+           if (activeLoadSongIdRef.current === targetSongId) return;
+           activeLoadSongIdRef.current = targetSongId;
            // Load new
            if (__DEV__) console.log('[NowPlaying] Loading audio:', songToPlay.title);
            await player?.replace(songToPlay.audioUri); // This is the heavy op
            setLoadedAudioId(targetSongId);
            player?.play();
+           activeLoadSongIdRef.current = null;
         }
 
         // 3. Hydrate Lyrics (Background)
@@ -239,12 +244,13 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         }
 
       } catch (error) {
+        activeLoadSongIdRef.current = null;
         if (__DEV__) console.error('Failed to load song:', error);
         Alert.alert('Error', 'Could not load audio file.');
       }
     };
     load();
-  }, [songId, currentSong, loadedAudioId, player, setLoadedAudioId, storeDuration, storePlaying, updateCurrentSong]);
+  }, [songId, currentSong?.id, currentSong?.audioUri, currentSong?.lyrics?.length, loadedAudioId, player, setLoadedAudioId, storePlaying, updateCurrentSong]);
 
   // Removed manual interval polling of player.currentTime to prevent threading issues.
   // We use storePosition from usePlayerStore which is updated thread-safely in PlayerContext.
