@@ -121,6 +121,10 @@ Recommended labels:
 - If you find a security issue, follow:
 [SECURITY.md](./SECURITY.md)
 
+## Additional Resources
+
+- [Issue Triage Guide](docs/issue-triage.md)
+
 ## Need Help?
 
 - Use GitHub Discussions for questions
