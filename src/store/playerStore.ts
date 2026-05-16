@@ -171,7 +171,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentSongId: startSongId || null,
       isPlaying: true // FORCE PLAY
     });
-    console.log(`[PLAYER] Set playlist queue: ${playlistId}, ${songs.length} songs, starting at ${startIndex}`);
+    if (__DEV__) {
+      console.log(`[PLAYER] Set playlist queue: ${playlistId}, ${songs.length} songs, starting at ${startIndex}`);
+    }
     
     // Fetch full song details (lyrics) for the starting song
     if (startSongId) {
@@ -192,7 +194,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     
     // If currently playing song was removed, stop playback
     if (state.currentSong?.id === songId) {
-      console.log('[PLAYER] Currently playing song removed from queue, clearing');
+      if (__DEV__) {
+        console.log('[PLAYER] Currently playing song removed from queue, clearing');
+      }
       set({ 
         playlistQueue: newQueue.length > 0 ? newQueue : null,
         currentSong: null,
@@ -212,7 +216,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentPlaylistId: newQueue.length > 0 ? state.currentPlaylistId : null
     });
     
-    console.log(`[PLAYER] Removed ${songId} from queue, ${newQueue.length} songs remaining`);
+    if (__DEV__) {
+      console.log(`[PLAYER] Removed ${songId} from queue, ${newQueue.length} songs remaining`);
+    }
   },
   
   nextInPlaylist: () => {
@@ -251,7 +257,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // Trigger audio load
     get().loadSong(nextSong.id);
     get().play(); // Execute Play
-    console.log(`[PLAYER] Next in playlist: ${nextSong.title}`);
+    if (__DEV__) {
+      console.log(`[PLAYER] Next in playlist: ${nextSong.title}`);
+    }
   },
   
   previousInPlaylist: () => {
@@ -271,7 +279,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // Trigger audio load
     get().loadSong(prevSong.id);
     get().play(); // Execute Play
-    console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);
+    if (__DEV__) {
+      console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);
+    }
   },
   
   clearPlaylistQueue: () => {
@@ -280,7 +290,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentPlaylistId: null,
       currentQueueIndex: -1
     });
-    console.log('[PLAYER] Cleared playlist queue');
+    if (__DEV__) {
+      console.log('[PLAYER] Cleared playlist queue');
+    }
   },
 
   reset: () => set({ 

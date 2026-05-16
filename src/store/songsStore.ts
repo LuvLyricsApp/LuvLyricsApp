@@ -59,7 +59,7 @@ export const useSongsStore = create<SongsState>()(
         
         try {
           const songs = await queries.getAllSongs();
-          console.log('[STORE] Fetched songs:', songs.length);
+          if (__DEV__) console.log('[STORE] Fetched songs:', songs.length);
           set({ songs, isLoading: false });
         } catch (error) {
           console.error('[STORE] Fetch error:', error);
@@ -75,7 +75,7 @@ export const useSongsStore = create<SongsState>()(
         set({ isLoading: true, error: null });
         try {
           const hiddenSongs = await queries.getHiddenSongs();
-          console.log('[STORE] Fetched hidden songs:', hiddenSongs.length);
+          if (__DEV__) console.log('[STORE] Fetched hidden songs:', hiddenSongs.length);
           set({ hiddenSongs, isLoading: false });
         } catch (error) {
           console.error('[STORE] Fetch hidden error:', error);
@@ -104,7 +104,7 @@ export const useSongsStore = create<SongsState>()(
       addSong: async (song: Song) => {
         set({ isLoading: true, error: null });
         try {
-          console.log('[STORE] Adding song:', song.title);
+          if (__DEV__) console.log('[STORE] Adding song:', song.title);
           await queries.insertSong(song);
           await get().fetchSongs();
           set({ isLoading: false });

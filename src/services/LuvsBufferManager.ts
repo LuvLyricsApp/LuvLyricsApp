@@ -32,7 +32,7 @@ class LuvsBufferManager {
   async enterLuvsMode() {
     if (this.isInitialized) return;
 
-    console.log('[LuvsBuffer] Entering Luvs mode, setting up audio focus');
+    if (__DEV__) console.log('[LuvsBuffer] Entering Luvs mode, setting up audio focus');
     
     try {
       await Audio.setAudioModeAsync({
@@ -43,7 +43,7 @@ class LuvsBufferManager {
       });
       
       this.isInitialized = true;
-      console.log('[LuvsBuffer] Audio focus configured');
+      if (__DEV__) console.log('[LuvsBuffer] Audio focus configured');
     } catch (error) {
       console.error('[LuvsBuffer] Failed to set audio mode:', error);
     }
@@ -53,7 +53,7 @@ class LuvsBufferManager {
    * Exit Luvs Mode - Clean up all sounds and reset audio mode
    */
   async exitLuvsMode() {
-    console.log('[LuvsBuffer] Exiting Luvs mode, cleaning up');
+    if (__DEV__) console.log('[LuvsBuffer] Exiting Luvs mode, cleaning up');
     
     // 1. Take a snapshot of slots to unload, then clear the map immediately 
     // to prevent any other logic from touching these slots during async unload
@@ -91,7 +91,7 @@ class LuvsBufferManager {
         playThroughEarpieceAndroid: false,
         playsInSilentModeIOS: true,
       });
-      console.log('[LuvsBuffer] Audio mode reset to default');
+      if (__DEV__) console.log('[LuvsBuffer] Audio mode reset to default');
     } catch (error) {
       console.error('[LuvsBuffer] Failed to reset audio mode:', error);
     }
@@ -101,7 +101,7 @@ class LuvsBufferManager {
    * Set suspension state
    */
   setSuspended(suspended: boolean) {
-    console.log(`[LuvsBuffer] Suspension changed: ${this.isSuspended} → ${suspended}`);
+    if (__DEV__) console.log(`[LuvsBuffer] Suspension changed: ${this.isSuspended} → ${suspended}`);
     this.isSuspended = suspended;
   }
 
@@ -114,7 +114,7 @@ class LuvsBufferManager {
     if (newIndex === lastIndex) return;
     this.activeIndex = newIndex;
     
-    console.log(`[LuvsBuffer] Index: ${lastIndex} → ${newIndex}`);
+    if (__DEV__) console.log(`[LuvsBuffer] Index: ${lastIndex} → ${newIndex}`);
     
     // 2. IMMEDIATE STOP: Synchronously kill current sound to prevent "ghost" playback
     if (lastIndex !== -1) {
@@ -146,13 +146,13 @@ class LuvsBufferManager {
     
     // Check if loaded. If not, load it.
     if (!this.slots.has(index)) {
-      console.log(`[LuvsBuffer] Loading active slot ${index}`);
+      if (__DEV__) console.log(`[LuvsBuffer] Loading active slot ${index}`);
       await this.loadSlot(index, song);
     }
     
     // CRITICAL GUARD: Ensure we are STILL active after loading
     if (this.activeIndex !== index) {
-        console.log(`[LuvsBuffer] 🛑 Aborted play for slot ${index} (Stale)`);
+        if (__DEV__) console.log(`[LuvsBuffer] 🛑 Aborted play for slot ${index} (Stale)`);
         return;
     }
 
@@ -174,9 +174,9 @@ class LuvsBufferManager {
             await activeSlot.sound.setPositionAsync(0);
             if (shouldPlay) {
                 await activeSlot.sound.playAsync();
-                console.log(`[LuvsBuffer] ▶️ Playing: ${song.title}`);
+                if (__DEV__) console.log(`[LuvsBuffer] ▶️ Playing: ${song.title}`);
             } else {
-                console.log(`[LuvsBuffer] ⏸️ Loaded but PAUSED: ${song.title}`);
+                if (__DEV__) console.log(`[LuvsBuffer] ⏸️ Loaded but PAUSED: ${song.title}`);
             }
         }
       } catch (error) {
@@ -221,7 +221,7 @@ class LuvsBufferManager {
                 if (localTargetIndex === this.activeIndex && this.activeStatusCallback) {
                     sound.setOnPlaybackStatusUpdate(this.activeStatusCallback);
                 }
-                console.log(`[LuvsBuffer] ✅ Loaded slot ${localTargetIndex}`);
+                if (__DEV__) console.log(`[LuvsBuffer] ✅ Loaded slot ${localTargetIndex}`);
             } else {
                 await sound.unloadAsync().catch(() => {});
             }

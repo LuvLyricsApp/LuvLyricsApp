@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
     View, Text, StyleSheet, TextInput, Pressable, 
-    ActivityIndicator, Dimensions, ScrollView, FlatList, SectionList
+    ActivityIndicator, ScrollView, FlatList, SectionList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 // Safe area dimensions removed as unused in this block
 
 // useSongStaging removed as unused
@@ -58,6 +58,13 @@ const ScrollableHeader: React.FC<ScrollableHeaderProps> = memo(({
     selectionMode, setSelectionMode, activeTabMode, updateTab
 }) => (
     <View style={styles.toolbarRow}>
+        <Pressable
+            style={[styles.microBtn, selectionMode && styles.microBtnActive]}
+            onPress={() => setSelectionMode(!selectionMode)}
+        >
+            <Ionicons name={selectionMode ? "checkmark-circle" : "checkmark-circle-outline"} size={17} color={selectionMode ? '#fff' : Colors.primary} />
+        </Pressable>
+
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -92,13 +99,6 @@ const ScrollableHeader: React.FC<ScrollableHeaderProps> = memo(({
         >
             <Ionicons name={activeTabMode === 'bulk' ? 'layers' : 'layers-outline'} size={17} color={activeTabMode === 'bulk' ? '#C084FC' : '#555'} />
         </Pressable>
-
-        <Pressable
-            style={[styles.microBtn, selectionMode && styles.microBtnActive]}
-            onPress={() => setSelectionMode(!selectionMode)}
-        >
-            <Ionicons name={selectionMode ? "checkmark-circle" : "checkmark-circle-outline"} size={17} color={selectionMode ? '#fff' : Colors.primary} />
-        </Pressable>
     </View>
 ));
 
@@ -132,6 +132,7 @@ interface AudioDownloaderProps {
 
 
 export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigation }) => {
+    const insets = useSafeAreaInsets();
     // Global Stores
     const { 
         tabs, activeTabId, 
@@ -166,6 +167,11 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
     // Swap Modal State
     const [swapModalVisible, setSwapModalVisible] = useState(false);
     const [swapTargetItem, setSwapTargetItem] = useState<BulkItem | null>(null);
+
+    const selectedCount = getSelectedSongs().length;
+    const readyBulkCount = activeTab.bulkItems?.filter(i => i.result).length || 0;
+    const showBottomActionBar = selectedCount > 0 || (activeTab.mode === 'bulk' && readyBulkCount > 0);
+    const actionBarBottom = Math.max(24, insets.bottom + 12);
 
     // Effect to sync local state ONLY when switching tabs
     useEffect(() => {
@@ -275,7 +281,7 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
         });
 
         try {
-            console.log(`[Tab-${activeTabId.slice(-4)}] 🔍 Searching: ${finalQuery}`);
+            if (__DEV__) console.log(`[Tab-${activeTabId.slice(-4)}] 🔍 Searching: ${finalQuery}`);
             const results = await MultiSourceSearchService.searchMusic(finalQuery, artistQuery, (status) => {
                  updateTab(activeTabId, { status });
             });
@@ -286,7 +292,7 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
                 
                 // Fallback: If strict filtering hid everything, but we have results, show them!
                 if (exactMatches.length === 0 && remixesAndCovers.length === 0 && results.length > 0) {
-                     console.log('[AudioDownloader] Strict filter hid all results. Falling back to raw.');
+                     if (__DEV__) console.log('[AudioDownloader] Strict filter hid all results. Falling back to raw.');
                      updateTab(activeTabId, { 
                         results, 
                         remixResults: [],
@@ -824,14 +830,6 @@ Only provide the JSON array, no other text.`;
                         <Ionicons name="arrow-back" size={22} color="#fff" />
                     </Pressable>
                     <View style={[styles.searchBarContainer, { flex: 1 }]}>
-                        <Pressable
-                            style={styles.searchModePill}
-                            onPress={() => setSearchMode(searchMode === 'title' ? 'artist' : 'title')}
-                        >
-                            <Text style={styles.searchModePillText}>
-                                {searchMode === 'title' ? 'Title' : 'Artist'}
-                            </Text>
-                        </Pressable>
                         <TextInput
                             style={styles.unifiedInput}
                             placeholder={searchMode === 'title' ? "Song title..." : "Artist name..."}
@@ -852,6 +850,14 @@ Only provide the JSON array, no other text.`;
                                 <Ionicons name="close-circle" size={16} color="#666" />
                             </Pressable>
                         ) : null}
+                        <Pressable
+                            style={styles.searchModePill}
+                            onPress={() => setSearchMode(searchMode === 'title' ? 'artist' : 'title')}
+                        >
+                            <Text style={styles.searchModePillText}>
+                                {searchMode === 'title' ? 'Title' : 'Artist'}
+                            </Text>
+                        </Pressable>
                     </View>
                 </View>
 
@@ -901,6 +907,7 @@ Only provide the JSON array, no other text.`;
                              ) : (
                                 <>
                                     <FlatList
+                                        key={`bulk-${activeTabId}`}
                                         data={activeTab.bulkItems}
                                         ListHeaderComponent={
                                             <BulkHeader
@@ -992,7 +999,7 @@ Only provide the JSON array, no other text.`;
                                         }}
                                     />
                                     
-                                    <View style={styles.actionBar}>
+                                    <View style={[styles.actionBar, { bottom: actionBarBottom }]}>
                                         <Text style={styles.selectionText}>
                                             {activeTab.bulkItems.filter(i => i.result).length} songs ready
                                         </Text>
@@ -1027,6 +1034,7 @@ Only provide the JSON array, no other text.`;
                     ) : activeTab.results.length > 0 || (activeTab.remixResults && activeTab.remixResults.length > 0) ? (
                         activeTab.remixResults && activeTab.remixResults.length > 0 ? (
                             <SectionList
+                                key={`section-${activeTabId}`}
                                 ListHeaderComponent={
                                     <ScrollableHeader
                                         selectionMode={selectionMode}
@@ -1096,6 +1104,7 @@ Only provide the JSON array, no other text.`;
                             />
                         ) : (
                             <FlatList
+                                key={`results-${activeTabId}`}
                                 ListHeaderComponent={
                                     <ScrollableHeader
                                         selectionMode={selectionMode}
@@ -1152,10 +1161,10 @@ Only provide the JSON array, no other text.`;
                 </View>
 
                 {/* Bottom Action Bar (Selection Mode) */}
-                 {getSelectedSongs().length > 0 && (
-                    <View style={styles.actionBar}>
+                 {selectedCount > 0 && (
+                    <View style={[styles.actionBar, { bottom: actionBarBottom }]}>
                         <Text style={styles.selectionText}>
-                            {getSelectedSongs().length} selected
+                            {selectedCount} selected
                         </Text>
                         <Pressable style={styles.reviewBtn} onPress={handleBatchDownload}>
                             <Text style={styles.reviewBtnText}>Download Selected</Text>
@@ -1192,7 +1201,9 @@ Only provide the JSON array, no other text.`;
                     onSkip={() => confirmDownload(undefined)}
                 />
                 
-                <FloatingDownloadIndicator onPress={() => setShowQueue(true)} />
+                {!showBottomActionBar && (
+                    <FloatingDownloadIndicator onPress={() => setShowQueue(true)} />
+                )}
                 
                 {toast && (
                     <Toast 
