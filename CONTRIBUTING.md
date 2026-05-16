@@ -49,6 +49,48 @@ For iOS:
 npm run ios
 ```
 
+## Troubleshooting
+
+If setup or local checks fail, start with these quick checks.
+
+Confirm you are using Node.js 20 or newer:
+
+```bash
+node --version
+```
+
+If dependencies look stale after pulling changes or switching branches, install
+them again:
+
+```bash
+npm install
+```
+
+If a local environment file is needed, copy the example file and fill only the
+values you need for your work:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Run the same checks that CI uses:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test:ci
+```
+
+Docs-only work, linting, typechecking, and unit tests usually do not require
+Firebase or Google credentials. If Android, iOS, or emulator setup fails, check
+the platform setup notes in `README.md`.
+
 ## Branch Naming
 
 Use clear, scoped branch names:
