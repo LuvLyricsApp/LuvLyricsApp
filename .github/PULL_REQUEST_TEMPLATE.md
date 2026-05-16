@@ -18,6 +18,7 @@ Briefly describe what this PR changes and why.
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Refactor
+- [ ] Performance improvement
 - [ ] Documentation update
 - [ ] Test improvement
 
@@ -29,11 +30,22 @@ Briefly describe what this PR changes and why.
 
 ## Testing
 
-- [ ] `npm run lint`
+- [ ] `npm run ci` passes (lint + typecheck + tests)
+- [ ] Tested on Android
+- [ ] Tested on iOS
 - [ ] Manual testing completed
 - [ ] Relevant test cases added/updated (if applicable)
 
 Describe how you tested this change:
+
+## Player / Audio changes
+
+If this PR touches playback, scrubbing, auto-next, or queue logic, confirm:
+
+- [ ] Scrub resumes playback if song was playing (`wasPlaying → seekTo → play()` pattern)
+- [ ] Auto-next does not fire when user manually pauses near end of song
+- [ ] No duplicate `player.replace()` calls on fast navigation
+- [ ] Tested with both Dynamic Island and Classic MiniPlayer styles
 
 ## Screenshots / Recordings (if UI change)
 
@@ -41,7 +53,8 @@ Add screenshots or short recordings here.
 
 ## Checklist
 
-- [ ] I kept this PR focused (no unrelated large changes)
-- [ ] I followed existing code style and project structure
-- [ ] I updated docs where needed
-- [ ] I did not commit secrets or sensitive credentials
+- [ ] PR is focused — no unrelated changes bundled in
+- [ ] Followed existing code style and project structure
+- [ ] No `console.log` outside `if (__DEV__)` blocks
+- [ ] No secrets or sensitive credentials committed
+- [ ] `CLAUDE.md` updated if new patterns or rules were introduced
