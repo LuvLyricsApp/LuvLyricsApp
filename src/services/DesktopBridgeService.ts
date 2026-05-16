@@ -476,7 +476,7 @@ class DesktopBridgeService {
     // this.playerUnsubscribe = null;
     // this.downloadUnsubscribe?.();
     // this.downloadUnsubscribe = null;
-    this.wsServer?.close();
+    // this.wsServer?.close();
     // this.wsServer = null;
     // this.httpServer?.close();
     // this.httpServer = null;

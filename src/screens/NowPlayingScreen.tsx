@@ -190,6 +190,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   }));
   
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
         // 1. Immediate Audio Check (using data from Library/Store)
@@ -226,6 +227,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
            // Load new
            if (__DEV__) console.log('[NowPlaying] Loading audio:', songToPlay.title);
            await player?.replace(songToPlay.audioUri); // This is the heavy op
+           if (cancelled) { activeLoadSongIdRef.current = null; return; }
            setLoadedAudioId(targetSongId);
            player?.play();
            activeLoadSongIdRef.current = null;
@@ -249,6 +251,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     };
     load();
+    return () => { cancelled = true; };
   }, [songId, currentSong?.id, currentSong?.audioUri, currentSong?.lyrics?.length, loadedAudioId, player, setLoadedAudioId, storePlaying, updateCurrentSong]);
 
   // Removed manual interval polling of player.currentTime to prevent threading issues.

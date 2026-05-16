@@ -87,6 +87,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const activeSongId = store.currentSongId;
       const isNearEndFallback =
         !didJustFinish &&
+        store.isPlaying &&
         isLoaded &&
         !isBuffering &&
         !playing &&
