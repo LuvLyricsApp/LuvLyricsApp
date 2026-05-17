@@ -1,8 +1,4 @@
 import { lyricaService, LyricaResult } from './LyricaService';
-import { LrcLibService } from './LrcLibService';
-import { JioSaavnLyricsService } from './JioSaavnLyricsService';
-import { GeniusService } from './GeniusService';
-import { UnifiedSong } from '../types/song';
 
 /**
  * Maps internal/network errors to user-friendly messages.
@@ -27,29 +23,28 @@ export function getLyricsFriendlyError(error: unknown): string {
       return 'Lyrics service is temporarily unavailable. Please retry in a moment.';
     }
   }
-    return 'Lyrics service is temporarily unavailable. Please retry in a moment.';
+
+  return 'Lyrics service is temporarily unavailable. Please retry in a moment.';
 }
+
 /**
  * Service to race multiple lyric providers and aggregate results
  * User Requirement: "Show all lyrics so they can preview and select"
  */
 export const MultiSourceLyricsService = {
-    
-    fetchLyricsParallel: async (title: string, artist: string, duration?: number): Promise<LyricaResult[]> => {
-        try {
-            console.log(`[LyricsEngine] 🔒 Restricted to Lyrica Only (Slowed > Fast > Plain)`);
-            
-            // Lyrica Service (Handles Strategy Internally)
-            const result = await lyricaService.fetchLyrics(title, artist, false, duration);
-            
-            if (result) {
-                return [result];
-            }
-            
-            return [];
-        } catch (error) {
-             console.error('[LyricsEngine] Critical failure in fetchLyricsParallel:', error);
-             return [];
-        }
+  fetchLyricsParallel: async (
+    title: string,
+    artist: string,
+    duration?: number
+  ): Promise<LyricaResult[]> => {
+    try {
+      console.log('[LyricsEngine] Restricted to Lyrica only (slow synced > fast synced > plain)');
+
+      const result = await lyricaService.fetchLyrics(title, artist, false, duration);
+      return result ? [result] : [];
+    } catch (error) {
+      console.error('[LyricsEngine] Critical failure in fetchLyricsParallel:', error);
+      throw error;
     }
+  }
 };

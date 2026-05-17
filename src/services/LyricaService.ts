@@ -69,7 +69,7 @@ class LyricaService {
       return null;
     } catch (error) {
       console.error('[Lyrica] Fetch error:', error);
-      return null;
+      throw error;
     }
   }
 
@@ -100,7 +100,11 @@ class LyricaService {
         
         const truncatedError = errorText.length > 200 ? errorText.substring(0, 200) + '...' : errorText;
         console.log(`[Lyrica] ${label} HTTP ${response.status}:`, truncatedError);
-        return null;
+        if (response.status === 404) {
+          return null;
+        }
+
+        throw new Error(`Lyrics request failed: ${response.status} ${response.statusText}`.trim());
       }
 
       const data = await response.json();
@@ -180,11 +184,11 @@ class LyricaService {
     } catch (err: any) {
       if (err.message === 'TIMEOUT' || err.name === 'AbortError') {
          console.warn(`[Lyrica] ${label} timed out safely (45s limit).`);
-         return null;
-      } 
-      
+         throw new Error('Lyrics request timed out');
+      }
+
       console.log(`[Lyrica] ${label} failed:`, err.message || 'Unknown Network Error');
-      return null;
+      throw err instanceof Error ? err : new Error('Lyrics request failed');
     }
   }
 

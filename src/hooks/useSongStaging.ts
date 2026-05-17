@@ -302,6 +302,9 @@ export const useSongStaging = () => {
         const lyricResults = await MultiSourceLyricsService.fetchLyricsParallel(staging.title, staging.artist, staging.duration);
         
         console.log(`[Staging] Retry results: ${lyricResults.length}`);
+        if (lyricResults.length === 0) {
+            setLyricFetchError('No lyrics found for this song. Try title/artist edit and retry.');
+        }
         
         setStaging(prev => {
             if (!prev || prev.id !== staging.id) return prev;
