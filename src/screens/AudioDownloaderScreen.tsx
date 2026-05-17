@@ -167,6 +167,9 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
     // Swap Modal State
     const [swapModalVisible, setSwapModalVisible] = useState(false);
     const [swapTargetItem, setSwapTargetItem] = useState<BulkItem | null>(null);
+    const [bulkCandidateMap, setBulkCandidateMap] = useState<Record<string, UnifiedSong[]>>({});
+    const [bulkCandidateIndexMap, setBulkCandidateIndexMap] = useState<Record<string, number>>({});
+    const [cyclingItemId, setCyclingItemId] = useState<string | null>(null);
 
     const selectedCount = getSelectedSongs().length;
     const readyBulkCount = activeTab.bulkItems?.filter(i => i.result).length || 0;
@@ -491,6 +494,39 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
         setSwapModalVisible(true);
     };
 
+    const handleCycleNextCandidate = async (item: BulkItem) => {
+        if (!item.result) return;
+        setCyclingItemId(item.id);
+        try {
+            let candidates = bulkCandidateMap[item.id] || [];
+            if (candidates.length === 0) {
+                const query = `${item.query.title} ${item.query.artist}`.trim();
+                candidates = await MultiSourceSearchService.searchMusic(query, item.query.artist);
+                setBulkCandidateMap(prev => ({ ...prev, [item.id]: candidates }));
+            }
+
+            if (candidates.length === 0) {
+                setToast({ visible: true, message: 'No alternate matches found', type: 'error' });
+                return;
+            }
+
+            const currentIndex = bulkCandidateIndexMap[item.id] ?? candidates.findIndex(c => c.id === item.result?.id);
+            const normalizedCurrent = currentIndex >= 0 ? currentIndex : 0;
+            const nextIndex = (normalizedCurrent + 1) % candidates.length;
+            const nextSong = candidates[nextIndex];
+
+            const updatedItems = activeTab.bulkItems?.map(i =>
+                i.id === item.id ? { ...i, result: nextSong, status: 'found' as const } : i
+            );
+            updateTab(activeTabId, { bulkItems: updatedItems });
+            setBulkCandidateIndexMap(prev => ({ ...prev, [item.id]: nextIndex }));
+        } catch {
+            setToast({ visible: true, message: 'Could not fetch next match', type: 'error' });
+        } finally {
+            setCyclingItemId(null);
+        }
+    };
+
     const onSwapConfirm = (newSong: UnifiedSong) => {
         if (!swapTargetItem) return;
         
@@ -500,6 +536,14 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
         );
         
         updateTab(activeTabId, { bulkItems: updatedItems });
+        const existing = bulkCandidateMap[swapTargetItem.id] || [];
+        const foundIndex = existing.findIndex(song => song.id === newSong.id);
+        if (foundIndex >= 0) {
+            setBulkCandidateIndexMap(prev => ({ ...prev, [swapTargetItem.id]: foundIndex }));
+        } else {
+            setBulkCandidateMap(prev => ({ ...prev, [swapTargetItem.id]: [newSong, ...existing] }));
+            setBulkCandidateIndexMap(prev => ({ ...prev, [swapTargetItem.id]: 0 }));
+        }
         setSwapModalVisible(false);
         setSwapTargetItem(null);
     };
@@ -516,10 +560,38 @@ Only provide the JSON array, no other text.`;
         setToast({ visible: true, message: 'Prompt copied to clipboard!', type: 'success' });
     };
 
+    const parseBulkInput = (input: string): Array<{ title?: string; artist?: string }> => {
+        try {
+            const parsed = JSON.parse(input);
+            if (Array.isArray(parsed)) return parsed;
+        } catch {
+            // Fallback below for loosely formatted pasted content.
+        }
+
+        const objectChunks = input.match(/\{[\s\S]*?\}/g) || [];
+        const extracted = objectChunks
+            .map((chunk) => {
+                const match = chunk.match(
+                    /["']title["']\s*:\s*["']([\s\S]*?)["']\s*,\s*["']artist["']\s*:\s*["']([\s\S]*?)["']/i
+                );
+                if (!match) return null;
+                return {
+                    title: (match[1] || '').trim(),
+                    artist: (match[2] || '').trim(),
+                };
+            })
+            .filter((item): item is { title: string; artist: string } => item !== null);
+
+        if (extracted.length === 0) {
+            throw new Error('Invalid JSON format');
+        }
+
+        return extracted;
+    };
+
     const parseAndSearchBulk = async () => {
         try {
-            const parsed = JSON.parse(jsonInput);
-            if (!Array.isArray(parsed)) throw new Error('Not an array');
+            const parsed = parseBulkInput(jsonInput);
 
             const bulkItems: BulkItem[] = parsed.map((item: { title?: string; artist?: string }, index: number) => ({
                 id: `bulk-${Date.now()}-${index}`,
@@ -596,6 +668,9 @@ Only provide the JSON array, no other text.`;
                             
                             // Pick best match if it meets threshold, otherwise take first but warn
                             const bestMatch = matches[0].rating > 0.4 ? matches[0].result : results[0];
+                            const bestMatchIndex = results.findIndex(r => r.id === bestMatch.id);
+                            setBulkCandidateMap(prev => ({ ...prev, [currentItem.id]: results }));
+                            setBulkCandidateIndexMap(prev => ({ ...prev, [currentItem.id]: bestMatchIndex >= 0 ? bestMatchIndex : 0 }));
 
                             updatedItems[i] = {
                                 ...updatedItems[i],
@@ -603,6 +678,8 @@ Only provide the JSON array, no other text.`;
                                 result: bestMatch
                             };
                         } else {
+                            setBulkCandidateMap(prev => ({ ...prev, [currentItem.id]: [] }));
+                            setBulkCandidateIndexMap(prev => ({ ...prev, [currentItem.id]: 0 }));
                             updatedItems[i] = {
                                 ...updatedItems[i],
                                 status: 'not_found'
@@ -945,8 +1022,7 @@ Only provide the JSON array, no other text.`;
                                             if (!item.result) {
                                                 return (
                                                    <View style={{ width: '50%', padding: 4 }}>
-                                                       <Pressable 
-                                                           onPress={() => handleSwap(item)}
+                                                       <View
                                                            style={{ 
                                                                height: 200, 
                                                                backgroundColor: '#111', 
@@ -954,7 +1030,8 @@ Only provide the JSON array, no other text.`;
                                                                justifyContent: 'center', 
                                                                alignItems: 'center',
                                                                borderWidth: 1,
-                                                               borderColor: '#222'
+                                                               borderColor: '#222',
+                                                               paddingHorizontal: 8
                                                            }}
                                                        >
                                                            {item.status === 'searching' ? (
@@ -963,16 +1040,23 @@ Only provide the JSON array, no other text.`;
                                                                <Ionicons name="refresh-circle" size={40} color={Colors.primary} />
                                                            )}
                                                            <Text style={{ color: '#fff', marginTop: 8, fontSize: 12, textAlign: 'center', fontWeight: 'bold' }}>
-                                                               Tap to Search
+                                                               {item.status === 'not_found' ? 'No match yet' : 'Ready to search'}
                                                            </Text>
                                                            <Text style={{ color: '#666', marginTop: 4, fontSize: 12, textAlign: 'center', paddingHorizontal: 8 }}>
                                                                {item.query.title}
                                                            </Text>
-                                                            <Text style={{ color: '#444', fontSize: 10, textAlign: 'center' }}>
+                                                           <Text style={{ color: '#444', fontSize: 10, textAlign: 'center' }}>
                                                                {item.query.artist}
                                                            </Text>
-                                                       </Pressable>
-                                                   </View>
+                                                           <Pressable
+                                                               onPress={() => handleSwap(item)}
+                                                               style={styles.bulkActionBtn}
+                                                           >
+                                                               <Ionicons name="search" size={14} color="#fff" />
+                                                               <Text style={styles.bulkActionBtnText}>Retry manually</Text>
+                                                           </Pressable>
+                                                       </View>
+                                                    </View>
                                                 );
                                             }
                                             
@@ -1005,6 +1089,19 @@ Only provide the JSON array, no other text.`;
                                                             </Text>
                                                         </View>
                                                     )}
+                                                    <Pressable
+                                                        onPress={() => handleCycleNextCandidate(item)}
+                                                        style={[styles.bulkActionBtn, styles.bulkNextBtn]}
+                                                    >
+                                                        {cyclingItemId === item.id ? (
+                                                            <ActivityIndicator color="#fff" size="small" />
+                                                        ) : (
+                                                            <>
+                                                                <Ionicons name="play-skip-forward" size={14} color="#fff" />
+                                                                <Text style={styles.bulkActionBtnText}>Next match</Text>
+                                                            </>
+                                                        )}
+                                                    </Pressable>
                                                 </View>
                                             );
                                         }}
@@ -1456,6 +1553,30 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 14,
         fontWeight: '500'
+    },
+    bulkActionBtn: {
+        marginTop: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(127,19,236,0.65)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.16)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 14
+    },
+    bulkActionBtnText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '700'
+    },
+    bulkNextBtn: {
+        position: 'absolute',
+        bottom: 10,
+        right: 10,
+        marginTop: 0,
+        backgroundColor: 'rgba(0,0,0,0.72)'
     }
 });
 
