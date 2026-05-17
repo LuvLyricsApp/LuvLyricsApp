@@ -598,7 +598,7 @@ export const MiniPlayer: React.FC = () => {
       )}
       
       <AnimatedPressable 
-        onPress={toggleExpand} 
+        onPress={!expanded ? toggleExpand : undefined} 
         style={[
           styles.content, 
           isIsland && styles.islandContent,
