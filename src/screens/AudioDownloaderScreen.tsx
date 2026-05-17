@@ -317,8 +317,8 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
             }
             
         } catch (_error) {
-            updateTab(activeTabId, { isSearching: false, status: 'Search failed.' });
-            setToast({ visible: true, message: 'Search failed', type: 'error' });
+            updateTab(activeTabId, { isSearching: false, status: 'No lyrics found. Try editing title or artist.' });
+            setToast({ visible: true, message: 'No lyrics found for this song. Try title/artist edit and retry.', type: 'error' });
         }
     }, [activeTabId, titleQuery, artistQuery, updateTab]);
 

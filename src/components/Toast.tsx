@@ -6,7 +6,7 @@ import { useSettingsStore } from '../store/settingsStore';
 
 interface ToastProps {
   visible: boolean;
-  message: string;
+  message: string; // Should be user-friendly; use getLyricsFriendlyError() for fetch errors
   type?: 'success' | 'error' | 'info';
   onDismiss: () => void;
   duration?: number;

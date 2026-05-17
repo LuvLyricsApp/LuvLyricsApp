@@ -7,7 +7,7 @@ import { LyricaResult, lyricaService } from '../services/LyricaService';
 import { ImageSearchService } from '../services/ImageSearchService';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { UnifiedSong } from '../types/song';
-import { MultiSourceLyricsService } from '../services/MultiSourceLyricsService';
+import { MultiSourceLyricsService, getLyricsFriendlyError } from '../services/MultiSourceLyricsService';
 
 // AudioOption interface (was previously from AudioExtractorService)
 export interface AudioOption {
@@ -36,12 +36,14 @@ export interface StagingSong {
   error?: string;
 }
 
+
 export const useSongStaging = () => {
-  const [staging, setStaging] = useState<StagingSong | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const addSong = useSongsStore(state => state.addSong);
-  const fetchSongs = useSongsStore(state => state.fetchSongs);
+    const [lyricFetchError, setLyricFetchError] = useState<string | null>(null);
+    const [staging, setStaging] = useState<StagingSong | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const addSong = useSongsStore(state => state.addSong);
+    const fetchSongs = useSongsStore(state => state.fetchSongs);
   
   // Cleanup sound
   useEffect(() => {
@@ -196,6 +198,7 @@ export const useSongStaging = () => {
                     if (!isActive) return;
                     
                     console.log(`[Staging-V2] Lyrics found: ${lyricResults.length} options`);
+                    setLyricFetchError(null);
                     
                     if (lyricResults.length > 0) {
                         setStaging(prev => {
@@ -212,6 +215,7 @@ export const useSongStaging = () => {
                         });
                     } else {
                         console.log('[Staging] ⚠️ No lyrics found for this song');
+                        setLyricFetchError('No lyrics found for this song. Try title/artist edit and retry.');
                         setStaging(prev => {
                             if (!prev || prev.id !== tempId) return prev;
                             return {
@@ -225,6 +229,7 @@ export const useSongStaging = () => {
                 } catch(e) {
                     if (!isActive) return;
                     console.error('[Staging] ❌ Lyrics fetch failed:', e);
+                    setLyricFetchError(getLyricsFriendlyError(e)); 
                     setStaging(prev => {
                         if (!prev || prev.id !== tempId) return prev;
                         return {
@@ -290,6 +295,7 @@ export const useSongStaging = () => {
     if (!staging) return;
 
     console.log('[Staging] 🔄 Retrying lyrics fetch...');
+    setLyricFetchError(null); 
     setStaging(prev => prev ? ({ ...prev, lyricOptions: null }) : null);
 
     try {
@@ -308,6 +314,7 @@ export const useSongStaging = () => {
         });
     } catch (e) {
         console.error('[Staging] Retry failed:', e);
+        setLyricFetchError(getLyricsFriendlyError(e)); 
         setStaging(prev => prev ? ({ ...prev, lyricOptions: [], selectedLyricIndex: -1 }) : null);
     }
   }, [staging]);
@@ -332,6 +339,7 @@ export const useSongStaging = () => {
     togglePreview,
     isPlaying,
     retryLyrics,
-    selectLyrics
+    selectLyrics,
+    lyricFetchError
   };
 };

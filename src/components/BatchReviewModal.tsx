@@ -4,6 +4,7 @@ import { UnifiedSong } from '../types/song';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useSongStaging } from '../hooks/useSongStaging';
+import { Toast } from './Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
@@ -12,13 +13,13 @@ interface BatchReviewModalProps {
     visible: boolean;
     selectedSongs: UnifiedSong[];
     onClose: () => void;
-    onQueue: (processedSongs: any[]) => void; // TODO: Define ProcessedSong type
+    onQueue: (processedSongs: any[]) => void;
 }
 
-// Internal component to handle hook logic for a SINGLE song
 const SingleSongReview = ({ song, onConfirm, onSkip }: { song: UnifiedSong, onConfirm: (data: any) => void, onSkip: () => void }) => {
-    const { staging, stageSong, retryLyrics, updateSelection, selectLyrics } = useSongStaging();
+    const { staging, stageSong, retryLyrics, updateSelection, selectLyrics, lyricFetchError } = useSongStaging();
     const [isLoaded, setIsLoaded] = useState(false);
+    const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
         if (song) {
@@ -26,6 +27,12 @@ const SingleSongReview = ({ song, onConfirm, onSkip }: { song: UnifiedSong, onCo
             setIsLoaded(true);
         }
     }, [song, stageSong]);
+
+    useEffect(() => {
+        if (lyricFetchError) {
+            setToast({ visible: true, message: lyricFetchError, type: 'error' });
+        }
+    }, [lyricFetchError]);
 
     if (!staging || !isLoaded) {
         return (
@@ -37,86 +44,95 @@ const SingleSongReview = ({ song, onConfirm, onSkip }: { song: UnifiedSong, onCo
     }
 
     return (
-        <View style={styles.reviewContainer}>
-            {/* Cover Art */}
-            <View style={styles.coverContainer}>
-                <Image source={{ uri: staging.selectedCoverUri }} style={styles.coverImage} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFill} />
-                <Text style={styles.songTitle}>{staging.title}</Text>
-                <Text style={styles.songArtist}>{staging.artist}</Text>
-            </View>
-
-            {/* Lyrics Preview */}
-            <View style={styles.lyricsContainer}>
-                <View style={styles.lyricsHeader}>
-                    <Text style={styles.sectionTitle}>Lyrics Preview</Text>
-                     <View style={{flexDirection: 'row', gap: 10}}>
-                         {staging.lyricOptions && staging.lyricOptions.length > 1 && (
-                            <View style={styles.pagination}>
-                                <Pressable 
-                                    onPress={() => {
-                                        const currentIndex = staging.selectedLyricIndex ?? 0;
-                                        const prevIndex = (currentIndex - 1 + staging.lyricOptions!.length) % staging.lyricOptions!.length;
-                                        selectLyrics(prevIndex);
-                                    }}
-                                    hitSlop={20}
-                                >
-                                    <Ionicons name="chevron-back" size={24} color={Colors.primary} />
-                                </Pressable>
-                                <Text style={styles.pageText}>
-                                    {(staging.selectedLyricIndex ?? 0) + 1} / {staging.lyricOptions!.length}
-                                </Text>
-                                <Pressable 
-                                    onPress={() => {
-                                        const currentIndex = staging.selectedLyricIndex ?? 0;
-                                        const nextIndex = (currentIndex + 1) % staging.lyricOptions!.length;
-                                        selectLyrics(nextIndex);
-                                    }}
-                                    hitSlop={20}
-                                >
-                                    <Ionicons name="chevron-forward" size={24} color={Colors.primary} />
-                                </Pressable>
-                            </View>
-                         )}
-                         <Pressable onPress={retryLyrics} style={styles.retryBtn}>
-                            <Ionicons name="refresh" size={16} color={Colors.primary} />
-                            <Text style={styles.retryText}>Retry</Text>
-                        </Pressable>
-                     </View>
+        <>
+            <View style={styles.reviewContainer}>
+                {/* Cover Art */}
+                <View style={styles.coverContainer}>
+                    <Image source={{ uri: staging.selectedCoverUri }} style={styles.coverImage} />
+                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFill} />
+                    <Text style={styles.songTitle}>{staging.title}</Text>
+                    <Text style={styles.songArtist}>{staging.artist}</Text>
                 </View>
 
-                {staging.lyricOptions === null ? (
-                    <ActivityIndicator color={Colors.primary} />
-                ) : staging.lyricOptions.length > 0 ? (
-                    <>
-                        <Text style={styles.sourceText}>
-                            Source: {staging.lyricOptions[staging.selectedLyricIndex ?? 0]?.source || 'Unknown'}
-                        </Text>
-                        <ScrollView style={styles.lyricsScroll}>
-                            <Text style={styles.lyricsText}>
-                                {staging.selectedLyrics?.substring(0, 300)}...
-                            </Text>
-                        </ScrollView>
-                    </>
-                ) : (
-                    <Text style={styles.noLyricsText}>No lyrics found.</Text>
-                )}
-            </View>
+                {/* Lyrics Preview */}
+                <View style={styles.lyricsContainer}>
+                    <View style={styles.lyricsHeader}>
+                        <Text style={styles.sectionTitle}>Lyrics Preview</Text>
+                        <View style={{flexDirection: 'row', gap: 10}}>
+                            {staging.lyricOptions && staging.lyricOptions.length > 1 && (
+                                <View style={styles.pagination}>
+                                    <Pressable
+                                        onPress={() => {
+                                            const currentIndex = staging.selectedLyricIndex ?? 0;
+                                            const prevIndex = (currentIndex - 1 + staging.lyricOptions!.length) % staging.lyricOptions!.length;
+                                            selectLyrics(prevIndex);
+                                        }}
+                                        hitSlop={20}
+                                    >
+                                        <Ionicons name="chevron-back" size={24} color={Colors.primary} />
+                                    </Pressable>
+                                    <Text style={styles.pageText}>
+                                        {(staging.selectedLyricIndex ?? 0) + 1} / {staging.lyricOptions!.length}
+                                    </Text>
+                                    <Pressable
+                                        onPress={() => {
+                                            const currentIndex = staging.selectedLyricIndex ?? 0;
+                                            const nextIndex = (currentIndex + 1) % staging.lyricOptions!.length;
+                                            selectLyrics(nextIndex);
+                                        }}
+                                        hitSlop={20}
+                                    >
+                                        <Ionicons name="chevron-forward" size={24} color={Colors.primary} />
+                                    </Pressable>
+                                </View>
+                            )}
+                            <Pressable onPress={retryLyrics} style={styles.retryBtn}>
+                                <Ionicons name="refresh" size={16} color={Colors.primary} />
+                                <Text style={styles.retryText}>Retry</Text>
+                            </Pressable>
+                        </View>
+                    </View>
 
-            {/* Actions */}
-            <View style={styles.actionRow}>
-                <Pressable style={styles.skipBtn} onPress={onSkip}>
-                    <Text style={styles.skipText}>Skip</Text>
-                </Pressable>
-                <Pressable 
-                    style={styles.confirmBtn} 
-                    onPress={() => onConfirm(staging)}
-                >
-                    <Text style={styles.confirmText}>Add to Queue</Text>
-                    <Ionicons name="arrow-forward" size={20} color="#fff" />
-                </Pressable>
+                    {staging.lyricOptions === null ? (
+                        <ActivityIndicator color={Colors.primary} />
+                    ) : staging.lyricOptions.length > 0 ? (
+                        <>
+                            <Text style={styles.sourceText}>
+                                Source: {staging.lyricOptions[staging.selectedLyricIndex ?? 0]?.source || 'Unknown'}
+                            </Text>
+                            <ScrollView style={styles.lyricsScroll}>
+                                <Text style={styles.lyricsText}>
+                                    {staging.selectedLyrics?.substring(0, 300)}...
+                                </Text>
+                            </ScrollView>
+                        </>
+                    ) : (
+                        <Text style={styles.noLyricsText}>No lyrics found.</Text>
+                    )}
+                </View>
+
+                {/* Actions */}
+                <View style={styles.actionRow}>
+                    <Pressable style={styles.skipBtn} onPress={onSkip}>
+                        <Text style={styles.skipText}>Skip</Text>
+                    </Pressable>
+                    <Pressable
+                        style={styles.confirmBtn}
+                        onPress={() => onConfirm(staging)}
+                    >
+                        <Text style={styles.confirmText}>Add to Queue</Text>
+                        <Ionicons name="arrow-forward" size={20} color="#fff" />
+                    </Pressable>
+                </View>
             </View>
-        </View>
+            <Toast
+                visible={toast?.visible ?? false}
+                message={toast?.message ?? ''}
+                type={toast?.type ?? 'error'}
+                onDismiss={() => setToast(null)}
+                duration={4000}
+            />
+        </>
     );
 };
 
@@ -134,18 +150,17 @@ export const BatchReviewModal = ({ visible, selectedSongs, onClose, onQueue }: B
     const handleConfirm = (stagingData: any) => {
         const newReviewed = [...reviewedItems, stagingData];
         setReviewedItems(newReviewed);
-        
+
         if (currentIndex < selectedSongs.length - 1) {
             setCurrentIndex(currentIndex + 1);
         } else {
-            // Done
             onQueue(newReviewed);
             onClose();
         }
     };
 
     const handleSkip = () => {
-         if (currentIndex < selectedSongs.length - 1) {
+        if (currentIndex < selectedSongs.length - 1) {
             setCurrentIndex(currentIndex + 1);
         } else {
             if (reviewedItems.length > 0) {
@@ -153,7 +168,7 @@ export const BatchReviewModal = ({ visible, selectedSongs, onClose, onQueue }: B
             }
             onClose();
         }
-    }
+    };
 
     if (!visible) return null;
 
@@ -170,9 +185,9 @@ export const BatchReviewModal = ({ visible, selectedSongs, onClose, onQueue }: B
                         </Pressable>
                     </View>
 
-                    <SingleSongReview 
-                        key={selectedSongs[currentIndex]?.id} // Force remount on song change
-                        song={selectedSongs[currentIndex]} 
+                    <SingleSongReview
+                        key={selectedSongs[currentIndex]?.id}
+                        song={selectedSongs[currentIndex]}
                         onConfirm={handleConfirm}
                         onSkip={handleSkip}
                     />
@@ -217,7 +232,6 @@ const styles = StyleSheet.create({
     coverImage: { ...StyleSheet.absoluteFillObject, opacity: 0.7 },
     songTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
     songArtist: { color: Colors.primary, fontSize: 18, fontWeight: '600' },
-    
     lyricsContainer: { flex: 1, padding: 20 },
     lyricsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
     sectionTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
@@ -226,7 +240,6 @@ const styles = StyleSheet.create({
     lyricsScroll: { flex: 1, backgroundColor: '#222', borderRadius: 12, padding: 12 },
     lyricsText: { color: '#ccc', lineHeight: 24 },
     noLyricsText: { color: '#666', fontStyle: 'italic' },
-
     actionRow: {
         flexDirection: 'row',
         padding: 20,
