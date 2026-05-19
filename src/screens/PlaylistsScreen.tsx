@@ -4,17 +4,18 @@
  */
 
 import React from 'react';
-import { StyleSheet, View, Text, FlatList, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, ActivityIndicator, Alert, GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { usePlaylistStore } from '../store/playlistStore';
 import { usePlayerStore } from '../store/playerStore';
-import { AuroraHeader, CustomMenu } from '../components';
+import { CustomMenu } from '../components';
 import { MosaicCover } from '../components/MosaicCover';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../types/navigation';
+import { Playlist, Song } from '../types/song';
 
 export const PlaylistsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -24,7 +25,7 @@ export const PlaylistsScreen: React.FC = () => {
   const fetchPlaylists = usePlaylistStore(state => state.fetchPlaylists);
   const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
   
-  const [playlistSongs, setPlaylistSongs] = React.useState<{ [key: string]: any[] }>({});
+  const [playlistSongs, setPlaylistSongs] = React.useState<Record<string, Song[]>>({});
 
   // Load playlists on mount and refresh on focus
   useFocusEffect(
@@ -38,7 +39,7 @@ export const PlaylistsScreen: React.FC = () => {
   React.useEffect(() => {
     const fetchAllPlaylistSongs = async () => {
       const { getPlaylistSongs } = await import('../database/playlistQueries');
-      const songsMap: {[key: string]: any[]} = {};
+      const songsMap: Record<string, Song[]> = {};
       
       for (const playlist of playlists) {
         const songs = await getPlaylistSongs(playlist.id);
@@ -54,19 +55,19 @@ export const PlaylistsScreen: React.FC = () => {
   }, [playlists]);
 
   const handlePlaylistPress = (playlistId: string) => {
-    navigation.navigate('PlaylistDetail' as any, { playlistId });
+    navigation.navigate('PlaylistDetail', { playlistId });
   };
 
   const handleCreatePlaylist = () => {
-    navigation.navigate('CreatePlaylist' as any);
+    navigation.navigate('CreatePlaylist');
   };
 
   // Menu State
   const [menuVisible, setMenuVisible] = React.useState(false);
   const [menuAnchor, setMenuAnchor] = React.useState<{ x: number, y: number } | undefined>(undefined);
-  const [selectedPlaylist, setSelectedPlaylist] = React.useState<any>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = React.useState<Playlist | null>(null);
 
-  const handleLongPress = (playlist: any, event: any) => {
+  const handleLongPress = (playlist: Playlist, event: GestureResponderEvent) => {
     if (playlist.isDefault) return; // Cannot modify "Liked Songs"
     
     const { pageX, pageY } = event.nativeEvent;
@@ -99,7 +100,7 @@ export const PlaylistsScreen: React.FC = () => {
       if (!selectedPlaylist) return;
       setMenuVisible(false);
       // Navigate to CreatePlaylistModal in Edit Mode
-      navigation.navigate('CreatePlaylist' as any, { 
+      navigation.navigate('CreatePlaylist', {
           playlistId: selectedPlaylist.id,
           initialName: selectedPlaylist.name
       });
