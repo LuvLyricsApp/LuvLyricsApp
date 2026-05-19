@@ -31,6 +31,12 @@ export interface AudioFormat {
     bitrate: number;
 }
 
+type YtdlGetInfoOptions = {
+    requestOptions?: {
+        headers?: Record<string, string>;
+    };
+};
+
 class AudioExtractorService {
     
     /**
@@ -42,8 +48,12 @@ class AudioExtractorService {
             
             // Get Info
             // Get Info
-            // @ts-ignore - react-native-ytdl types mismatch default ytdl-core signature
-            const info = await ytdl.getInfo(youtubeUrl, {
+            const getInfo = ytdl.getInfo as (
+                url: string,
+                options?: YtdlGetInfoOptions
+            ) => ReturnType<typeof ytdl.getInfo>;
+
+            const info = await getInfo(youtubeUrl, {
                 requestOptions: {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36',

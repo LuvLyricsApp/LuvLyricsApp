@@ -9,14 +9,12 @@ import { Colors } from '../constants/colors';
 import { UnifiedSong, Song } from '../types/song';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { useSongsStore } from '../store/songsStore';
-// @ts-ignore
 import * as FileSystem from 'expo-file-system/legacy';
 import { Toast } from './Toast';
 
 // Helper to access documentDirectory safely
 const getDocumentDirectory = () => {
-    // @ts-ignore
-    return (FileSystem.documentDirectory) || '';
+    return FileSystem.documentDirectory ?? '';
 };
 
 interface Props {
