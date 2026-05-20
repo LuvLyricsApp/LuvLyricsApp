@@ -9,12 +9,12 @@ import {
   Dimensions,
   TextInput,
   ActivityIndicator,
+  type ListRenderItem,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '../constants/colors';
 import { usePlaylistStore } from '../store/playlistStore';
@@ -25,9 +25,13 @@ import * as playlistQueries from '../database/playlistQueries';
 
 type AddToPlaylistNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AddToPlaylistRouteProp = RouteProp<RootStackParamList, 'AddToPlaylist'>;
+type AddToPlaylistMode = 'ADD_SONGS_TO_PLAYLIST' | 'ADD_SONG_TO_PLAYLISTS';
+type SelectableItem = Song | Playlist;
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_ITEM_WIDTH = (SCREEN_WIDTH - 48 - 12) / 3; // 3 columns, 24px padding sides, 6px gap
+
+const isSongItem = (item: SelectableItem): item is Song => 'title' in item;
 
 export const AddToPlaylistModal = () => {
   const navigation = useNavigation<AddToPlaylistNavigationProp>();
@@ -35,7 +39,7 @@ export const AddToPlaylistModal = () => {
   const params = route.params || {};
 
   // Determine Mode
-  const mode = params.playlistId ? 'ADD_SONGS_TO_PLAYLIST' : 'ADD_SONG_TO_PLAYLISTS';
+  const mode: AddToPlaylistMode = params.playlistId ? 'ADD_SONGS_TO_PLAYLIST' : 'ADD_SONG_TO_PLAYLISTS';
   const targetPlaylistId = params.playlistId;
   const targetSongId = params.songId;
 
@@ -83,22 +87,18 @@ export const AddToPlaylistModal = () => {
   }, [mode, targetPlaylistId, songs.length, fetchSongs, fetchPlaylists]);
 
   // Filter Data
-  const dataToRender = useMemo(() => {
-      let data: any[] = [];
+  const dataToRender = useMemo<SelectableItem[]>(() => {
       if (mode === 'ADD_SONGS_TO_PLAYLIST') {
-          data = songs;
-      } else {
-          data = playlists;
+          if (!searchQuery) return songs;
+
+          const lower = searchQuery.toLowerCase();
+          return songs.filter(s => s.title.toLowerCase().includes(lower) || s.artist?.toLowerCase().includes(lower));
       }
 
-      if (!searchQuery) return data;
+      if (!searchQuery) return playlists;
 
       const lower = searchQuery.toLowerCase();
-      if (mode === 'ADD_SONGS_TO_PLAYLIST') {
-          return (data as Song[]).filter(s => s.title.toLowerCase().includes(lower) || s.artist?.toLowerCase().includes(lower));
-      } else {
-          return (data as Playlist[]).filter(p => p.name.toLowerCase().includes(lower));
-      }
+      return playlists.filter(p => p.name.toLowerCase().includes(lower));
   }, [mode, songs, playlists, searchQuery]);
 
   // Actions
@@ -226,6 +226,18 @@ export const AddToPlaylistModal = () => {
        );
   }, [selectedItems, toggleSelection]);
 
+  const renderSelectableItem = useCallback<ListRenderItem<SelectableItem>>(({ item }) => {
+      if (mode === 'ADD_SONGS_TO_PLAYLIST' && isSongItem(item)) {
+          return renderSongItem({ item });
+      }
+
+      if (mode === 'ADD_SONG_TO_PLAYLISTS' && !isSongItem(item)) {
+          return renderPlaylistItem({ item });
+      }
+
+      return null;
+  }, [mode, renderSongItem, renderPlaylistItem]);
+
   return (
     <View style={styles.container}>
       <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -270,12 +282,12 @@ export const AddToPlaylistModal = () => {
         {loading ? (
              <ActivityIndicator color={Colors.primary} size="large" style={{flex: 1}} />
         ) : (
-             <FlatList 
+             <FlatList<SelectableItem>
                 key={viewMode} // Force full re-render on toggle
                 data={dataToRender}
                 keyExtractor={(item) => item.id}
                 numColumns={mode === 'ADD_SONGS_TO_PLAYLIST' && viewMode === 'grid' ? 3 : 1}
-                renderItem={mode === 'ADD_SONGS_TO_PLAYLIST' ? renderSongItem : renderPlaylistItem as any}
+                renderItem={renderSelectableItem}
                 contentContainerStyle={styles.listContent}
                 columnWrapperStyle={mode === 'ADD_SONGS_TO_PLAYLIST' && viewMode === 'grid' ? { gap: 6 } : undefined}
                 initialNumToRender={20}
