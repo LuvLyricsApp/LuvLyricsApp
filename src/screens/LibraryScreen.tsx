@@ -59,6 +59,16 @@ import Animated, {
 
 const AnimatedFlashList = Animated.createAnimatedComponent(FlashList) as any;
 
+type SongItemLayout = {
+  span?: number;
+  size?: number;
+};
+
+const setSongItemLayout = (layout: SongItemLayout) => {
+  layout.size = 80;
+  layout.span = 1;
+};
+
 const DEVICE_REFRESH_RATE = Platform.select({
   ios: 120,
   android: 60,
@@ -550,13 +560,10 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
             data={filteredSongs}
             keyExtractor={(item: any) => item.id}
             renderItem={renderItem}
-            // @ts-ignore
             estimatedItemSize={80}  
             drawDistance={1200}     // Reduced to prevent "slow update" warnings
-            overrideItemLayout={(layout, item, index, maxColumns, extraData) => {
-              // @ts-ignore
-              layout.size = 80;     
-              layout.span = 1;      
+            overrideItemLayout={(layout) => {
+              setSongItemLayout(layout);
             }}
             getItemType={(item) => 'song'} 
             contentContainerStyle={{ 
