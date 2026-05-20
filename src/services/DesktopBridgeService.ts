@@ -20,13 +20,15 @@
  *   <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
  */
 
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppState, AppStateStatus, NativeModules, Platform } from 'react-native';
 import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Zeroconf, { ImplType } from 'react-native-zeroconf';
+import nacl from 'tweetnacl';
 import { usePlayerStore } from '../store/playerStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
+import { trustedPairingService } from './TrustedPairingService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +36,9 @@ interface WsClient {
   socket: any;
   handshaken: boolean;
   buffer: Buffer;
+  protoVersion: number;
+  trusted: boolean;
+  desktopDeviceId: string | null;
 }
 
 interface TcpSocketModule {
@@ -46,9 +51,10 @@ type HandoffReason = 'unload_signal' | 'socket_close' | 'heartbeat_timeout' | 'n
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const WS_PORT = 8765;
+const DEFAULT_WS_PORT = 8765;
 const HTTP_PORT = 8766;
 const MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+const PROTO_VERSION = 2;
 
 let cachedTcpSocket: TcpSocketModule | null | undefined;
 
@@ -227,6 +233,9 @@ function sha1(msg: number[]): number[] {
 
 class DesktopBridgeService {
   private static readonly DEVICE_ID_KEY = '@desktop_bridge_device_id';
+  private static readonly INSTANCE_ID_KEY = '@desktop_bridge_instance_id';
+  private static readonly PUBLIC_KEY_KEY = '@desktop_bridge_phone_public_key';
+  private static readonly PRIVATE_KEY_KEY = '@desktop_bridge_phone_private_key';
   private wsServer: any = null;
   private httpServer: any = null;
   private clients: Map<number, WsClient> = new Map();
@@ -254,6 +263,12 @@ class DesktopBridgeService {
   private mdnsPublishLogAt = 0;
   private pingLogAt = 0;
   private coverLogAt = 0;
+  private instanceId: string | null = null;
+  private phonePublicKey: string | null = null;
+  private phonePrivateKey: string | null = null;
+  private stateVersion = 0;
+  private seenNonIdempotentIds = new Set<string>();
+  private controlPort = DEFAULT_WS_PORT;
   private logServerError(tag: string, err: unknown): void {
     if (err instanceof Error) {
       console.error(`[DesktopBridge] ${tag} server error: ${err.message}`, err);
@@ -358,21 +373,8 @@ class DesktopBridgeService {
     if (this.bridgeSource === nextSource || this.sourceTransitionInFlight) return;
     this.sourceTransitionInFlight = true;
     try {
-      const playerStore = usePlayerStore.getState();
-      if (nextSource === 'desktop') {
-        this.desktopWasPlaying = playerStore.isPlaying;
-        this.latestDesktopPosition = playerStore.position;
-        playerStore.pause();
-      } else {
-        if (this.latestDesktopPosition !== null) {
-          playerStore.seekTo(this.latestDesktopPosition);
-        }
-        if (this.desktopWasPlaying) {
-          playerStore.play();
-        }
-        if (reason) {
-          this.logDesktopEvent('source_handoff_to_phone(reason)', { reason });
-        }
+      if (reason) {
+        this.logDesktopEvent('source_handoff_to_phone(reason)', { reason });
       }
       this.bridgeSource = nextSource;
     } finally {
@@ -413,88 +415,135 @@ class DesktopBridgeService {
     if (!this.deviceName || this.deviceName === 'LuvLyrics Phone') {
       this.deviceName = this.inferDeviceName();
     }
-    if (this.deviceId) return;
-    const existing = await AsyncStorage.getItem(DesktopBridgeService.DEVICE_ID_KEY);
-    if (existing && existing.trim()) {
-      this.deviceId = existing;
+    if (!this.deviceId) {
+      const existing = await AsyncStorage.getItem(DesktopBridgeService.DEVICE_ID_KEY);
+      if (existing && existing.trim()) {
+        this.deviceId = existing;
+      } else {
+        const created = this.generateDeviceId();
+        this.deviceId = created;
+        await AsyncStorage.setItem(DesktopBridgeService.DEVICE_ID_KEY, created);
+      }
+    }
+
+    const existingInstance = await AsyncStorage.getItem(DesktopBridgeService.INSTANCE_ID_KEY);
+    if (existingInstance && existingInstance.trim()) {
+      this.instanceId = existingInstance;
+    } else {
+      this.instanceId = this.generateDeviceId();
+      await AsyncStorage.setItem(DesktopBridgeService.INSTANCE_ID_KEY, this.instanceId);
+    }
+
+    const existingPublicKey = await AsyncStorage.getItem(DesktopBridgeService.PUBLIC_KEY_KEY);
+    const existingPrivateKey = await AsyncStorage.getItem(DesktopBridgeService.PRIVATE_KEY_KEY);
+    const hasPemPublic = Boolean(existingPublicKey?.includes('BEGIN PUBLIC KEY'));
+    const hasPemPrivate = Boolean(existingPrivateKey?.includes('BEGIN PRIVATE KEY'));
+    if (hasPemPublic && hasPemPrivate) {
+      this.phonePublicKey = existingPublicKey!;
+      this.phonePrivateKey = existingPrivateKey!;
       return;
     }
-    const created = this.generateDeviceId();
-    this.deviceId = created;
-    await AsyncStorage.setItem(DesktopBridgeService.DEVICE_ID_KEY, created);
+
+    const seed = new Uint8Array(32);
+    const cryptoObj = (globalThis as any).crypto;
+    if (cryptoObj?.getRandomValues) {
+      cryptoObj.getRandomValues(seed);
+    } else {
+      for (let i = 0; i < seed.length; i++) {
+        seed[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const pair = nacl.sign.keyPair.fromSeed(seed);
+    const publicKey = pair.publicKey;
+
+    const privatePem = ed25519SeedToPrivateKeyPem(seed);
+    const publicPem = ed25519PublicKeyToPem(publicKey);
+    this.phonePrivateKey = privatePem;
+    this.phonePublicKey = publicPem;
+    await AsyncStorage.multiSet([
+      [DesktopBridgeService.PRIVATE_KEY_KEY, privatePem],
+      [DesktopBridgeService.PUBLIC_KEY_KEY, publicPem],
+    ]);
+  }
+
+  async updateControlPort(nextPort: number): Promise<void> {
+    const normalized = Math.max(1024, Math.min(65535, Math.floor(nextPort)));
+    if (normalized === this.controlPort) return;
+    const wasRunning = this.running;
+    this.controlPort = normalized;
+    if (wasRunning) {
+      this.stop();
+      await this.start();
+    }
   }
 
   async start(): Promise<void> {
     if (this.running) return;
-    // Desktop bridge temporarily disabled
-    // const tcpSocket = loadTcpSocket();
-    // if (!tcpSocket) {
-    //   this.running = false;
-    //   return;
-    // }
-    // console.log('[DesktopBridge] Starting…');
-    // try {
-    //   await this.ensureDeviceIdentity();
-    //   await this.startWsServer(tcpSocket);
-    //   await this.startHttpServer(tcpSocket);
-    // } catch (error) {
-    //   this.running = false;
-    //   this.wsServer?.close?.();
-    //   this.wsServer = null;
-    //   this.httpServer?.close?.();
-    //   this.httpServer = null;
-    //   this.clients.clear();
-    //   this.logServerError('Bridge startup', error);
-    //   console.warn(
-    //     '[DesktopBridge] Ports 8765/8766 are busy. Close older app/dev-client instance and relaunch.'
-    //   );
-    //   return;
-    // }
-    // this.running = true;
-    // this.startHeartbeatWatchdog();
-    // this.startIpWatchdog();
-    // this.appStateSub = AppState.addEventListener('change', this.handleAppStateChange);
-    // await this.startMdns('restart');
-    // this.subscribeToStores();
-    // console.log('[DesktopBridge] Started on ports', WS_PORT, HTTP_PORT);
+    const tcpSocket = loadTcpSocket();
+    if (!tcpSocket) {
+      this.running = false;
+      return;
+    }
+    try {
+      await this.ensureDeviceIdentity();
+      await this.startWsServer(tcpSocket);
+      await this.startHttpServer(tcpSocket);
+    } catch (error) {
+      this.running = false;
+      this.wsServer?.close?.();
+      this.wsServer = null;
+      this.httpServer?.close?.();
+      this.httpServer = null;
+      this.clients.clear();
+      this.logServerError('Bridge startup', error);
+      return;
+    }
+    this.running = true;
+    this.startHeartbeatWatchdog();
+    this.startIpWatchdog();
+    this.appStateSub = AppState.addEventListener('change', this.handleAppStateChange);
+    await this.startMdns('restart');
+    this.subscribeToStores();
   }
 
   stop(): void {
-    // Desktop bridge temporarily disabled
-    // this.running = false;
-    // this.stopHeartbeatWatchdog();
-    // this.stopIpWatchdog();
-    // this.clearPendingHandoff();
-    // this.desktopConnected = false;
-    // this.lastDesktopHeartbeatAt = 0;
-    // this.bridgeSource = 'phone';
-    // this.latestDesktopPosition = null;
-    // this.desktopWasPlaying = false;
-    // this.appStateSub?.remove?.();
-    // this.appStateSub = null;
-    // this.playerUnsubscribe?.();
-    // this.playerUnsubscribe = null;
-    // this.downloadUnsubscribe?.();
-    // this.downloadUnsubscribe = null;
-    // this.wsServer?.close();
-    // this.wsServer = null;
-    // this.httpServer?.close();
-    // this.httpServer = null;
-    // if (this.zeroconf) {
-    //   try {
-    //     if (Platform.OS === 'android') {
-    //       this.zeroconf.unpublishService(this.deviceName, ImplType.DNSSD);
-    //     } else {
-    //       this.zeroconf.unpublishService(this.deviceName);
-    //     }
-    //   } catch (error) {
-    //     console.warn('[DesktopBridge] Failed to unpublish mDNS service:', error);
-    //   }
-    //   this.zeroconf.removeDeviceListeners?.();
-    //   this.zeroconf = null;
-    // }
-    // this.clients.clear();
-    // console.log('[DesktopBridge] Stopped');
+    this.running = false;
+    this.stopHeartbeatWatchdog();
+    this.stopIpWatchdog();
+    this.clearPendingHandoff();
+    this.desktopConnected = false;
+    this.lastDesktopHeartbeatAt = 0;
+    this.bridgeSource = 'phone';
+    this.latestDesktopPosition = null;
+    this.desktopWasPlaying = false;
+    this.appStateSub?.remove?.();
+    this.appStateSub = null;
+    this.playerUnsubscribe?.();
+    this.playerUnsubscribe = null;
+    this.downloadUnsubscribe?.();
+    this.downloadUnsubscribe = null;
+    this.wsServer?.close();
+    this.wsServer = null;
+    this.httpServer?.close();
+    this.httpServer = null;
+    const nativeLan = (NativeModules as any)?.LuvLyricsLanDiscovery;
+    if (nativeLan?.stop) {
+      nativeLan.stop();
+    }
+    if (this.zeroconf) {
+      try {
+        if (Platform.OS === 'android') {
+          this.zeroconf.unpublishService(this.deviceName, ImplType.DNSSD);
+        } else {
+          this.zeroconf.unpublishService(this.deviceName);
+        }
+      } catch {
+        // ignore
+      }
+      this.zeroconf.removeDeviceListeners?.();
+      this.zeroconf = null;
+    }
+    this.clients.clear();
   }
 
   // ── WebSocket server ──────────────────────────────────────────────────────
@@ -504,7 +553,14 @@ class DesktopBridgeService {
       let settled = false;
       this.wsServer = tcpSocket.createServer((socket: any) => {
       const id = ++this.clientCounter;
-      const client: WsClient = { socket, handshaken: false, buffer: Buffer.alloc(0) };
+      const client: WsClient = {
+        socket,
+        handshaken: false,
+        buffer: Buffer.alloc(0),
+        protoVersion: 1,
+        trusted: false,
+        desktopDeviceId: null,
+      };
       this.clients.set(id, client);
       // console.log('[DesktopBridge] Client connected:', id);
 
@@ -550,12 +606,12 @@ class DesktopBridgeService {
         this.logServerError('WS', err);
       });
 
-      this.wsServer.listen(WS_PORT, '0.0.0.0', () => {
+      this.wsServer.listen(this.controlPort, '0.0.0.0', () => {
         if (!settled) {
           settled = true;
           resolve();
         }
-        console.log('[DesktopBridge] WS server listening on', WS_PORT);
+        console.log('[DesktopBridge] WS server listening on', this.controlPort);
       });
     });
   }
@@ -586,8 +642,7 @@ class DesktopBridgeService {
     // Clear the HTTP request bytes from buffer
     client.buffer = Buffer.alloc(0);
 
-    const state = usePlayerStore.getState();
-    this.sendToClient(client, this.buildStateMessage(state));
+    this.sendPresenceToClient(client);
     this.markDesktopConnected();
 
     // console.log('[DesktopBridge] Handshake complete for client', id);
@@ -602,12 +657,16 @@ class DesktopBridgeService {
     }
   }
 
-  private broadcast(msg: string): void {
+  private broadcast(msg: string, legacyMsg?: string): void {
     const frame = encodeFrame(msg);
+    const legacyFrame = legacyMsg ? encodeFrame(legacyMsg) : null;
     for (const client of this.clients.values()) {
       if (client.handshaken) {
         try {
           client.socket.write(frame);
+          if (legacyFrame && client.protoVersion < PROTO_VERSION) {
+            client.socket.write(legacyFrame);
+          }
         } catch {
           // ignore
         }
@@ -641,30 +700,66 @@ class DesktopBridgeService {
           }
         }
 
-        if (method !== 'GET') {
-          socket.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
-          socket.destroy();
-          return;
-        }
-
         if (path === '/ping') {
+          if (method !== 'GET') {
+            socket.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
+            socket.destroy();
+            return;
+          }
           const now = Date.now();
           if (now - this.pingLogAt > 3000) {
             this.pingLogAt = now;
             console.log('[DesktopBridge] ping request');
           }
           const payload = JSON.stringify({
-            ok: true,
-            ip: this.lastKnownIp,
-            deviceName: this.deviceName,
             deviceId: this.deviceId,
-            wsPort: WS_PORT,
-            httpPort: HTTP_PORT,
+            deviceName: this.deviceName,
+            pairingCapable: true,
+            controlPort: this.controlPort,
+            protoVersion: PROTO_VERSION,
+            instanceId: this.instanceId,
             ts: now,
           });
           socket.write(
             `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload, 'utf8')}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\n\r\n${payload}`
           );
+          socket.destroy();
+          return;
+        }
+
+        if (path === '/pair/callback') {
+          if (method !== 'POST') {
+            socket.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          const jsonStart = str.indexOf('\r\n\r\n');
+          const body = jsonStart >= 0 ? str.slice(jsonStart + 4) : '{}';
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(body || '{}');
+          } catch {
+            socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          if (!parsed?.desktopDeviceId) {
+            socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          trustedPairingService
+            .markSeen(parsed.desktopDeviceId)
+            .catch(() => undefined);
+          socket.write(
+            'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\n\r\n{"ok":true}'
+          );
+          socket.destroy();
+          return;
+        }
+
+        if (method !== 'GET') {
+          socket.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
           socket.destroy();
           return;
         }
@@ -831,13 +926,24 @@ class DesktopBridgeService {
       }
 
       const txt: Record<string, string> = {
-        ip: localIp ?? '',
-        name: this.deviceName,
-        deviceName: this.deviceName,
         deviceId: this.deviceId ?? '',
-        app: 'luvlyrics',
-        proto: '1',
+        deviceName: this.deviceName,
+        protoVersion: String(PROTO_VERSION),
+        controlPort: String(this.controlPort),
+        instanceId: this.instanceId ?? '',
+        pairingCapable: 'true',
       };
+
+      const nativeLan = (NativeModules as any)?.LuvLyricsLanDiscovery;
+      if (nativeLan?.publishService) {
+        await nativeLan.publishService({
+          type: '_luvlyrics._tcp',
+          port: this.controlPort,
+          txt,
+          serviceName: this.deviceName,
+        });
+        return;
+      }
 
       const implType: ZeroconfImplType | undefined =
         Platform.OS === 'android' ? ImplType.DNSSD : undefined;
@@ -857,7 +963,7 @@ class DesktopBridgeService {
         'tcp',
         'local.',
         this.deviceName,
-        WS_PORT,
+        this.controlPort,
         txt,
         implType
       );
@@ -869,7 +975,7 @@ class DesktopBridgeService {
             reason,
             service: '_luvlyrics._tcp.local',
             name: this.deviceName,
-            port: WS_PORT,
+            port: this.controlPort,
             txtKeys: Object.keys(txt),
             impl: Platform.OS === 'android' ? ImplType.DNSSD : Platform.OS,
           })
@@ -886,8 +992,8 @@ class DesktopBridgeService {
     // Subscribe to player state changes
     this.playerUnsubscribe = usePlayerStore.subscribe((state) => {
       if (!this.running || this.clients.size === 0) return;
-      const msg = this.buildStateMessage(state);
-      this.broadcast(msg);
+      const msg = this.buildStateMessage(state, true);
+      this.broadcast(msg, this.buildLegacyStateMessage(state));
     });
 
     // Subscribe to download queue changes
@@ -907,7 +1013,75 @@ class DesktopBridgeService {
     });
   }
 
-  private buildStateMessage(state: any): string {
+  private sendSnapshotToClient(client: WsClient): void {
+    const state = usePlayerStore.getState();
+    this.sendToClient(client, this.buildStateMessage(state, true));
+    if (client.protoVersion < PROTO_VERSION) {
+      this.sendToClient(client, this.buildLegacyStateMessage(state));
+    }
+  }
+
+  private sendPresenceToClient(client: WsClient): void {
+    this.sendToClient(
+      client,
+      JSON.stringify({
+        type: 'presence',
+        protoVersion: PROTO_VERSION,
+        deviceId: this.deviceId,
+        deviceName: this.deviceName,
+        instanceId: this.instanceId,
+      })
+    );
+  }
+
+  private buildStateMessage(state: any, mutateVersion = false): string {
+    if (mutateVersion) this.stateVersion += 1;
+    const current = state.currentSong;
+    const palette = {
+      gradientId: current?.gradientId ?? 'dynamic',
+      coverImageUri: current?.coverImageUri ?? null,
+    };
+    return JSON.stringify({
+      type: 'state',
+      protoVersion: PROTO_VERSION,
+      stateVersion: this.stateVersion,
+      track: current
+        ? {
+            id: current.id,
+            title: current.title,
+            artist: current.artist ?? '',
+            album: current.album ?? '',
+            duration: current.duration,
+            coverImageUri: current.coverImageUri ?? null,
+          }
+        : null,
+      playback: {
+        position: state.position ?? 0,
+        positionMs: Math.max(0, Math.floor((state.position ?? 0) * 1000)),
+        duration: state.duration ?? 0,
+        durationMs: Math.max(0, Math.floor((state.duration ?? 0) * 1000)),
+        isPlaying: Boolean(state.isPlaying),
+        source: this.bridgeSource,
+        audioSource: this.bridgeSource,
+      },
+      queue: (state.playlistQueue ?? []).slice(0, 100).map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        artist: s.artist ?? '',
+        duration: s.duration,
+        coverImageUri: s.coverImageUri ?? null,
+      })),
+      currentQueueIndex: state.currentQueueIndex,
+      lyrics: (current?.lyrics ?? []).map((l: any) => ({
+        timestamp: l.timestamp,
+        text: l.text,
+        lineOrder: l.lineOrder,
+      })),
+      palette,
+    });
+  }
+
+  private buildLegacyStateMessage(state: any): string {
     return JSON.stringify({
       type: 'STATE',
       payload: {
@@ -925,7 +1099,7 @@ class DesktopBridgeService {
         position: state.position,
         duration: state.duration,
         isPlaying: state.isPlaying,
-        volume: 0.8, // phone volume exposed as fixed for now; actual volume comes from AVPlayer
+        volume: 0.8,
         audioSource: this.bridgeSource,
         queue: (state.playlistQueue ?? []).slice(0, 20).map((s: any) => ({
           id: s.id,
@@ -949,25 +1123,66 @@ class DesktopBridgeService {
   private handleMessage(raw: string, _clientId?: number): void {
     try {
       const msg = JSON.parse(raw);
+      const client = _clientId ? this.clients.get(_clientId) : null;
       this.markDesktopHeartbeat();
+      if (msg?.protoVersion && Number.isFinite(msg.protoVersion) && _clientId) {
+        if (client) client.protoVersion = Number(msg.protoVersion);
+      }
+      if (msg.type === 'presence' && client) {
+        const desktopDeviceId = typeof msg.deviceId === 'string' ? msg.deviceId : null;
+        client.desktopDeviceId = desktopDeviceId;
+        if (desktopDeviceId) {
+          trustedPairingService
+            .listTrustedDesktops()
+            .then((records) => {
+              client.trusted = records.some((r) => r.desktopDeviceId === desktopDeviceId);
+              if (client.trusted) {
+                trustedPairingService.markSeen(desktopDeviceId).catch(() => undefined);
+                this.sendSnapshotToClient(client);
+              } else {
+                client.socket.destroy();
+              }
+            })
+            .catch(() => {
+              client.socket.destroy();
+            });
+        } else {
+          client.socket.destroy();
+        }
+        return;
+      }
       if (msg.type === 'HEARTBEAT' || msg.action === 'HEARTBEAT') return;
-      if (msg.type !== 'CMD') return;
+      if (msg.type === 'SYNC_REQUEST' || (msg.type === 'cmd' && msg.action === 'SYNC_REQUEST')) {
+        if (client && client.trusted) this.sendSnapshotToClient(client);
+        return;
+      }
+      const isV2Command = msg?.type === 'cmd';
+      const isLegacyCommand = msg?.type === 'CMD';
+      if (!isV2Command && !isLegacyCommand) return;
 
       const settings = useDesktopBridgeSettingsStore.getState();
       if (!settings.desktopConnectEnabled) return;
+      if (client && !client.trusted) return;
 
       const playerStore = usePlayerStore.getState();
-      if (
-        msg.type === 'CMD' &&
-        (msg.action === 'PLAY' ||
-          msg.action === 'PAUSE' ||
-          msg.action === 'SEEK' ||
-          msg.action === 'SET_SOURCE')
-      ) {
-        console.log('[DesktopBridge] command receive', JSON.stringify({ action: msg.action }));
+      const action = msg.action;
+      const commandId = typeof msg.id === 'string' ? msg.id : '';
+      const requiresAck = Boolean(msg.requiresAck || isV2Command);
+      const payload = msg.payload ?? msg;
+
+      if ((action === 'NEXT' || action === 'PREV') && commandId) {
+        if (this.seenNonIdempotentIds.has(commandId)) {
+          if (requiresAck) this.sendAck(_clientId, commandId, true);
+          return;
+        }
+        this.seenNonIdempotentIds.add(commandId);
+        if (this.seenNonIdempotentIds.size > 300) {
+          const first = this.seenNonIdempotentIds.values().next().value;
+          if (first) this.seenNonIdempotentIds.delete(first);
+        }
       }
 
-      switch (msg.action) {
+      switch (action) {
         case 'PLAY':
           this.desktopWasPlaying = true;
           if (!playerStore.isPlaying) playerStore.play();
@@ -987,9 +1202,12 @@ class DesktopBridgeService {
           break;
 
         case 'SEEK':
-          if (typeof msg.position === 'number') {
-            this.latestDesktopPosition = msg.position;
-            playerStore.seekTo(msg.position);
+          if (typeof payload.position === 'number') {
+            this.latestDesktopPosition = payload.position;
+            const epsilon = 0.15;
+            if (Math.abs((playerStore.position ?? 0) - payload.position) > epsilon) {
+              playerStore.seekTo(payload.position);
+            }
           }
           break;
 
@@ -999,10 +1217,7 @@ class DesktopBridgeService {
           break;
 
         case 'SET_SOURCE':
-          // 'desktop' = desktop is playing, phone should mute
-          // 'phone'   = phone resumes playback
-          // This is stored in a separate flag; the PlayerContext reads it
-          if (msg.source === 'desktop') {
+          if (payload.source === 'desktop') {
             this.transitionSource('desktop');
           } else {
             this.transitionSource('phone', 'unload_signal');
@@ -1011,18 +1226,105 @@ class DesktopBridgeService {
 
         case 'DOWNLOAD':
           if (!settings.allowDesktopDownloads) return;
-          if (msg.song) {
-            useDownloadQueueStore.getState().addToQueue([msg.song]);
+          if (payload.song) {
+            useDownloadQueueStore.getState().addToQueue([payload.song]);
           }
           break;
 
         default:
-          console.warn('[DesktopBridge] Unknown action:', msg.action);
+          console.warn('[DesktopBridge] Unknown action:', action);
+      }
+      if (requiresAck && commandId) {
+        this.sendAck(_clientId, commandId, true);
       }
     } catch (e) {
       console.warn('[DesktopBridge] Failed to parse message:', e);
     }
   }
+
+  private sendAck(clientId: number | undefined, commandId: string, ok: boolean): void {
+    if (!clientId) return;
+    const client = this.clients.get(clientId);
+    if (!client) return;
+    const playerStore = usePlayerStore.getState();
+    this.sendToClient(
+      client,
+      JSON.stringify({
+        id: commandId,
+        type: 'ack',
+        ok,
+        appliedPositionMs: Math.max(0, Math.floor((playerStore.position ?? 0) * 1000)),
+        stateVersion: this.stateVersion,
+      })
+    );
+  }
+
+  getPairingContext(): {
+    phoneDeviceId: string | null;
+    phoneDisplayName: string;
+    phonePublicKey: string | null;
+    controlPort: number;
+    protoVersion: number;
+    instanceId: string | null;
+  } {
+    return {
+      phoneDeviceId: this.deviceId,
+      phoneDisplayName: this.deviceName,
+      phonePublicKey: this.phonePublicKey,
+      controlPort: this.controlPort,
+      protoVersion: PROTO_VERSION,
+      instanceId: this.instanceId,
+    };
+  }
+
+  async pairFromQrPayload(qrPayloadRaw: string): Promise<void> {
+    await this.ensureDeviceIdentity();
+    const ctx = this.getPairingContext();
+    if (!ctx.phoneDeviceId || !ctx.phonePublicKey || !ctx.instanceId) {
+      throw new Error('Phone identity is not ready');
+    }
+    if (!this.phonePrivateKey) {
+      throw new Error('Phone private key unavailable');
+    }
+    await trustedPairingService.pairWithDesktop(qrPayloadRaw, {
+      phoneDeviceId: ctx.phoneDeviceId,
+      phoneDisplayName: ctx.phoneDisplayName,
+      phonePublicKey: ctx.phonePublicKey,
+      controlPort: ctx.controlPort,
+      protoVersion: ctx.protoVersion,
+      instanceId: ctx.instanceId,
+      phonePrivateKey: this.phonePrivateKey,
+    });
+  }
+}
+
+function toPem(label: string, derBytes: Uint8Array): string {
+  const base64 = Buffer.from(derBytes).toString('base64');
+  const lines = base64.match(/.{1,64}/g)?.join('\n') ?? base64;
+  return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----`;
+}
+
+function ed25519SeedToPrivateKeyPem(seed: Uint8Array): string {
+  // PKCS#8 DER prefix for Ed25519 + 32-byte seed
+  const prefix = Uint8Array.from([
+    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70,
+    0x04, 0x22, 0x04, 0x20,
+  ]);
+  const der = new Uint8Array(prefix.length + seed.length);
+  der.set(prefix, 0);
+  der.set(seed, prefix.length);
+  return toPem('PRIVATE KEY', der);
+}
+
+function ed25519PublicKeyToPem(publicKey: Uint8Array): string {
+  // SPKI DER prefix for Ed25519 + 32-byte public key
+  const prefix = Uint8Array.from([
+    0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+  ]);
+  const der = new Uint8Array(prefix.length + publicKey.length);
+  der.set(prefix, 0);
+  der.set(publicKey, prefix.length);
+  return toPem('PUBLIC KEY', der);
 }
 
 export const desktopBridgeService = new DesktopBridgeService();

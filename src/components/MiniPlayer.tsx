@@ -7,19 +7,21 @@ import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
 import TimelineScrubber from './TimelineScrubber';
 const { Gesture, GestureDetector } = GestureHandler;
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withTiming, 
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
   withSequence,
   withSpring,
-  Easing, 
+  Easing,
   cancelAnimation,
   interpolate,
   Extrapolation,
   runOnJS,
-  useDerivedValue
+  useDerivedValue,
+  useAnimatedReaction
 } from 'react-native-reanimated';
+import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore } from '../store/playerStore';
@@ -44,9 +46,6 @@ export const MiniPlayer: React.FC = () => {
   const hideMiniPlayer = usePlayerStore(state => state.hideMiniPlayer);
   const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
   const setStorePlaying = usePlayerStore(state => state.setIsPlaying);
-  // Rename to real* to allow optimistic override below
-  const realPosition = usePlayerStore(state => state.position);
-  const realDuration = usePlayerStore(state => state.duration);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
@@ -147,23 +146,8 @@ export const MiniPlayer: React.FC = () => {
   // Create a "vignette" theme for island: Black -> Color -> Black
   const mainColor = gradientColors[1] || gradientColors[0];
 
-  // Seek Lock to prevent visual glitch
-  const isSeekingRef = useRef(false);
+  // Seek lock timeout (isSeeking shared value lives in positionBus)
   const seekLockTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  // Optimistic position for smooth scrubbing
-  const [optimizedPosition, setOptimizedPosition] = useState(0);
-
-  // Sync effect
-  useEffect(() => {
-     if (!isSeekingRef.current) {
-         setOptimizedPosition(realPosition);
-     }
-  }, [realPosition]);
-  
-  // Use optimistic position as source of truth for UI
-  const storePosition = optimizedPosition;
-  const storeDuration = realDuration;
   
 
 
@@ -291,18 +275,6 @@ export const MiniPlayer: React.FC = () => {
     };
   });
   
-  // Safe progress calculation
-  const progress = storeDuration > 0 && !isNaN(storePosition) 
-    ? Math.min(storePosition / storeDuration, 1) 
-    : 0;
-  
-  const formatTime = (seconds: number): string => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -313,11 +285,24 @@ export const MiniPlayer: React.FC = () => {
 
   const lyricsDelay = useSettingsStore(state => state.lyricsDelay);
 
-  const currentLyricIndex = lyricsToUse
-    ? getCurrentLineIndex(lyricsToUse, storePosition + lyricsDelay) // DELAY: User configured offset (default -1.2s)
-    : -1;
-  const currentLyricText = (currentLyricIndex !== -1 && lyricsToUse?.[currentLyricIndex]) 
-    ? lyricsToUse[currentLyricIndex].text 
+  // Lyric index computed on UI thread — re-renders only when the active line changes
+  const currentLyricIndexDV = useDerivedValue(() => {
+    if (!lyricsToUse || lyricsToUse.length === 0) return -1;
+    return getCurrentLineIndex(lyricsToUse, positionSV.value + lyricsDelay);
+  });
+
+  const [currentLyricIndex, setCurrentLyricIndex] = useState(-1);
+  useAnimatedReaction(
+    () => currentLyricIndexDV.value,
+    (next, prev) => {
+      if (next !== prev) {
+        runOnJS(setCurrentLyricIndex)(next);
+      }
+    }
+  );
+
+  const currentLyricText = (currentLyricIndex !== -1 && lyricsToUse?.[currentLyricIndex])
+    ? lyricsToUse[currentLyricIndex].text
     : '';
 
   /* 
@@ -341,17 +326,15 @@ export const MiniPlayer: React.FC = () => {
   const skipBackward = (e?: any) => {
     e?.stopPropagation();
     // Spotify Rule: Restart if > 3s, else Previous Track
-    if (storePosition > 3 && player) {
-        // Optimistic UI Update: Instant reset to 0
-        isSeekingRef.current = true;
-        setOptimizedPosition(0);
+    if (positionSV.value > 3 && player) {
+        isSeeking.value = true;
+        positionSV.value = 0; // Optimistic reset
         player.seekTo(0);
-        
-        // Release lock after delay to allow engine to catch up
+
         if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
         seekLockTimeout.current = setTimeout(() => {
-            isSeekingRef.current = false;
-        }, 1000); // 1s cushion
+            isSeeking.value = false;
+        }, 1000);
     } else {
         usePlayerStore.getState().previousInPlaylist();
     }
@@ -359,10 +342,10 @@ export const MiniPlayer: React.FC = () => {
 
   const handleSeekPress = async (e: any) => {
       e.stopPropagation();
-      if (!player || storeDuration <= 0 || progressBarWidth <= 0) return;
+      if (!player || durationSV.value <= 0 || progressBarWidth <= 0) return;
       const { locationX } = e.nativeEvent;
       const percentage = locationX / progressBarWidth;
-      const seekTime = percentage * storeDuration;
+      const seekTime = percentage * durationSV.value;
       const wasPlaying = usePlayerStore.getState().isPlaying;
       await player.seekTo(seekTime);
       if (wasPlaying) player.play();
@@ -549,23 +532,17 @@ export const MiniPlayer: React.FC = () => {
   }, [fullLyricExpanded, fullExpansionProgress]);
 
   const handleIslandSeek = useCallback(async (time: number) => {
-    if(player) {
-         // Lock updates
-        isSeekingRef.current = true;
-
-        // Optimistic Update: Set the UI position immediately to the target time
-        // This prevents the "jump back" because progress will now be calculated from this time
-        // until isSeekingRef is released.
-        setOptimizedPosition(time);
+    if (player) {
+        isSeeking.value = true;
+        positionSV.value = time; // Optimistic update
 
         const wasPlaying = usePlayerStore.getState().isPlaying;
         await player.seekTo(time);
         if (wasPlaying) player.play();
 
-        // Unlock after delay
         if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
         seekLockTimeout.current = setTimeout(() => {
-            isSeekingRef.current = false;
+            isSeeking.value = false;
         }, 1000);
     }
   }, [player]);
@@ -588,8 +565,8 @@ export const MiniPlayer: React.FC = () => {
       {/* Classic Scrubber (Gapless & Animated) */}
       {!isIsland && (
          <TimelineScrubber
-            currentTime={storePosition}
-            duration={storeDuration > 0 ? storeDuration : 1}
+            currentTime={positionSV}
+            duration={durationSV}
             onSeek={handleIslandSeek}
             variant="classic"
             showTimeLabels={false}
@@ -741,7 +718,7 @@ export const MiniPlayer: React.FC = () => {
                             <View style={styles.expandedLyricsContainer}>
                                 <SynchronizedLyrics
                                     lyrics={lyricsToUse || []}
-                                    currentTime={isSeekingRef.current ? storePosition : storePosition} // Force fresh read
+                                    currentTime={positionSV}
                                     onLyricPress={handleLyricPress}
                                     isUserScrolling={false}
                                     scrollEnabled={fullLyricExpanded}
@@ -760,9 +737,9 @@ export const MiniPlayer: React.FC = () => {
                         {/* Smooth Time Scrubber - Bottom of Island */}
                         {isIsland && expanded && (
                              <View style={styles.scrubberContainer}>
-                                <TimelineScrubber 
-                                    currentTime={storePosition}
-                                    duration={storeDuration > 0 ? storeDuration : 1}
+                                <TimelineScrubber
+                                    currentTime={positionSV}
+                                    duration={durationSV}
                                     onSeek={handleIslandSeek}
                                     variant="island"
                                 />
@@ -844,7 +821,7 @@ export const MiniPlayer: React.FC = () => {
                         <Animated.View style={[styles.classicLyricsContainer, animatedClassicLyricsStyle]}>
                             <SynchronizedLyrics
                                 lyrics={lyricsToUse || []}
-                                currentTime={storePosition}
+                                currentTime={positionSV}
                                 onLyricPress={async (time) => {
                                     if (player) {
                                         const wasPlaying = usePlayerStore.getState().isPlaying;

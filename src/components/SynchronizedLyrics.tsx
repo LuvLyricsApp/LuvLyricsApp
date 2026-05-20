@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useState } from 'react';
 import { View, Dimensions, Text, Pressable, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { FlashList as FlashListRaw, FlashListRef } from '@shopify/flash-list';
 const FlashList = FlashListRaw as any;
@@ -8,7 +8,11 @@ import Animated, {
   withTiming,
   interpolateColor,
   interpolate,
-  Extrapolation
+  Extrapolation,
+  useDerivedValue,
+  useAnimatedReaction,
+  runOnJS,
+  SharedValue
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -23,8 +27,7 @@ import { useSettingsStore } from '../store/settingsStore';
 
 interface LyricLineProps {
   text: string;
-  isActive: boolean;
-  isPassed: boolean;
+  activeIndexSV: SharedValue<number>;
   timestamp: number;
   index: number;
   onLyricPress: (timestamp: number) => void;
@@ -34,7 +37,7 @@ interface LyricLineProps {
   highlightColor?: string;
 }
 
-const LyricLine = React.memo(({ text, isActive, isPassed, timestamp, index, onLyricPress, onMeasured, textStyle, songTitle, highlightColor = '#FFD700' }: LyricLineProps) => {
+const LyricLine = React.memo(({ text, activeIndexSV, timestamp, index, onLyricPress, onMeasured, textStyle, songTitle, highlightColor = '#FFD700' }: LyricLineProps) => {
   const handlePress = useCallback(() => onLyricPress(timestamp), [onLyricPress, timestamp]);
   
   // Debounce layout measurement to avoid thrashing during scroll
@@ -47,17 +50,13 @@ const LyricLine = React.memo(({ text, isActive, isPassed, timestamp, index, onLy
     }
   }, [onMeasured, index]);
 
-  // Shared value to drive animations (0 = inactive, 1 = active)
-  const activeValue = useSharedValue(isActive ? 1 : 0);
-
-  useEffect(() => {
-    // Use timing instead of spring for smoother, lighter animations
-    activeValue.value = withTiming(isActive ? 1 : 0, { duration: 200 });
-  }, [isActive, activeValue]);
+  const activeValue = useDerivedValue(() =>
+    withTiming(activeIndexSV.value === index ? 1 : 0, { duration: 200 })
+  );
 
   const animatedStyle = useAnimatedStyle(() => {
     const scale = interpolate(activeValue.value, [0, 1], [1.0, 1.05], Extrapolation.CLAMP);
-    const targetOpacity = isPassed ? 0.5 : 0.3;
+    const targetOpacity = activeIndexSV.value > index ? 0.5 : 0.3;
     const opacity = interpolate(activeValue.value, [0, 1], [targetOpacity, 1.0], Extrapolation.CLAMP);
     const color = interpolateColor(
         activeValue.value,
@@ -118,7 +117,7 @@ const LyricLine = React.memo(({ text, isActive, isPassed, timestamp, index, onLy
 
 interface SynchronizedLyricsProps {
   lyrics: { timestamp: number; text: string }[];
-  currentTime: number;
+  currentTime: number | SharedValue<number>;
   onLyricPress: (timestamp: number) => void;
   isUserScrolling?: boolean;
   onScrollStateChange?: (isScrolling: boolean) => void;
@@ -192,43 +191,52 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
 
   const { lyricsDelay } = useSettingsStore();
 
-  const effectiveTime = currentTime + lyricsDelay;
+  // Support both number and SharedValue<number> for currentTime
+  const currentTimeNumberSV = useSharedValue(typeof currentTime === 'number' ? currentTime : 0);
+  const currentTimeSV = typeof currentTime === 'number' ? currentTimeNumberSV : currentTime;
 
-  // Optimized active index: forward scan from current instead of full findIndex
-  const activeIndexRef = useRef(-1);
-  const activeIndex = useMemo(() => {
-    const prev = activeIndexRef.current;
-    // If we have a valid previous index, try to step forward
-    if (prev >= 0 && prev < lyrics.length) {
-      const nextLine = lyrics[prev + 1];
-      if (nextLine && effectiveTime >= nextLine.timestamp) {
-        activeIndexRef.current = prev + 1;
-        return prev + 1;
-      }
-      if (effectiveTime >= lyrics[prev].timestamp) {
-        return prev;
-      }
+  useEffect(() => {
+    if (typeof currentTime === 'number') {
+      currentTimeNumberSV.value = currentTime;
     }
-    // Fallback: binary search since timestamps are sorted
+  }, [currentTime, currentTimeNumberSV]);
+
+  // Active index computed on UI thread — no JS re-render on every position tick
+  const activeIndexDV = useDerivedValue(() => {
+    const et = currentTimeSV.value + lyricsDelay;
+    if (lyrics.length === 0) return -1;
+    // Binary search for the active line
     let left = 0;
     let right = lyrics.length - 1;
     let result = -1;
     while (left <= right) {
-      const mid = Math.floor((left + right) / 2);
-      const nextLine = lyrics[mid + 1];
-      if (effectiveTime >= lyrics[mid].timestamp && (!nextLine || effectiveTime < nextLine.timestamp)) {
+      const mid = (left + right) >>> 1;
+      const nextTs = lyrics[mid + 1]?.timestamp;
+      if (et >= lyrics[mid].timestamp && (nextTs === undefined || et < nextTs)) {
         result = mid;
         break;
       }
-      if (effectiveTime < lyrics[mid].timestamp) {
+      if (et < lyrics[mid].timestamp) {
         right = mid - 1;
       } else {
         left = mid + 1;
       }
     }
-    activeIndexRef.current = result;
     return result;
-  }, [effectiveTime, lyrics]);
+  });
+
+  // JS-side activeIndex state — only updates (and re-renders) when the line changes
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const activeIndexSV = useSharedValue(-1);
+  useAnimatedReaction(
+    () => activeIndexDV.value,
+    (next, prev) => {
+      if (next !== prev) {
+        activeIndexSV.value = next;
+        runOnJS(setActiveIndex)(next);
+      }
+    }
+  );
 
   const containerOpacity = useSharedValue(1);
 
@@ -273,18 +281,12 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     }
   }, [activeIndex, isLayoutReady, isUserScrolling, lyrics.length, activeLinePosition, expandedAt]);
 
-  // Stable ref for activeIndex so renderItem doesn't need it in deps
-  const activeIndexLiveRef = useRef(activeIndex);
-  activeIndexLiveRef.current = activeIndex;
-
-  // Stable renderItem - does NOT depend on activeIndex
+  // Stable renderItem - active state is derived on the UI thread per row
   const renderItem = useCallback(({ item, index }: { item: { timestamp: number; text: string }; index: number }) => {
-    const currentActive = activeIndexLiveRef.current;
     return (
       <LyricLine
+        activeIndexSV={activeIndexSV}
         text={item.text}
-        isActive={index === currentActive}
-        isPassed={index < currentActive}
         timestamp={item.timestamp}
         index={index}
         onLyricPress={onLyricPress}
@@ -294,7 +296,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         highlightColor={highlightColor}
       />
     );
-  }, [onLyricPress, handleItemMeasured, textStyle, songTitle, highlightColor]);
+  }, [activeIndexSV, onLyricPress, handleItemMeasured, textStyle, songTitle, highlightColor]);
 
   return (
     <Animated.View style={[styles.container, containerStyle]}>
@@ -316,7 +318,6 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
           renderItem={renderItem}
           scrollEnabled={scrollEnabled}
           estimatedItemSize={LYRIC_LINE_HEIGHT}
-          extraData={activeIndex}
           ListHeaderComponent={
             <View>
               <View style={{ height: topSpacerHeight }} />

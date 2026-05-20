@@ -8,6 +8,7 @@ import * as GestureHandler from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore } from '../store/playerStore';
+import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { useSongsStore } from '../store/songsStore';
 import { useArtHistoryStore } from '../store/artHistoryStore';
 import TimelineScrubber from '../components/TimelineScrubber';
@@ -35,8 +36,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
-  const storePosition = usePlayerStore(state => state.position);
-  const storeDuration = usePlayerStore(state => state.duration);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const setStorePlaying = usePlayerStore(state => state.setIsPlaying);
 
@@ -271,8 +270,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
          const isCollapsed = lastTimestamp === 0 && rawLyrics.length > 1;
 
          if (isCollapsed) {
-             const duration = (storeDuration && storeDuration > 0) 
-                ? storeDuration 
+             const duration = (durationSV.value > 0)
+                ? durationSV.value
                 : (currentSong?.duration || 180);
              
              console.log(`[NowPlaying] âš ï¸ Detected collapsed lyrics. Auto-generating timestamps for ${duration}s`);
@@ -292,7 +291,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
          }
      }
      return rawLyrics;
-  }, [currentSong?.lyrics, currentSong?.transliteratedLyrics, showTransliteration, storeDuration, currentSong?.duration]);
+  }, [currentSong?.lyrics, currentSong?.transliteratedLyrics, showTransliteration, currentSong?.duration]);
 
   // âœ… Determine if lyrics are "Linear" (Plain/Teleprompter)
   const isLinear = React.useMemo(() => {
@@ -314,50 +313,42 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
      return isConstant;
   }, [processedLyrics]);
 
-  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
-  const isUserScrolling = useRef(false); // âœ… Track user interaction
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null); // âœ… Track timeout to clear it
+  const isUserScrolling = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { lyricsDelay } = useSettingsStore();
 
-  // âœ… Auto-Scroll & Sync Logic
-  useEffect(() => {
-    if (!processedLyrics || processedLyrics.length === 0) return;
+  // Stable refs so the reaction closure doesn't need recreation on each render
+  const linearScrollDataRef = useRef({ isLinear, processedLyrics, lyricsDelay });
+  linearScrollDataRef.current = { isLinear, processedLyrics, lyricsDelay };
 
-    // Standard Time-Based Index Calculation
-    // Use configured delay
-    const effectiveTime = storePosition + lyricsDelay;
-    
-    const index = processedLyrics.findIndex((line, i) => {
+  const doLinearScroll = useCallback((pos: number) => {
+    const { isLinear: lin, processedLyrics: lyrics } = linearScrollDataRef.current;
+    if (!lin || !flatListRef.current || isUserScrolling.current || !lyrics.length) return;
+    const progress = Math.min(1, Math.max(0, pos / (durationSV.value || 180)));
+    const estimatedIndex = Math.floor(progress * (lyrics.length - 1));
+    flatListRef.current.scrollToIndex({ index: estimatedIndex, animated: true, viewPosition: 0.4 });
+  }, []);
+
+  // Fires on every position tick but only does work for linear (teleprompter) lyrics
+  useAnimatedReaction(
+    () => positionSV.value,
+    (pos) => {
+      if (linearScrollDataRef.current.isLinear) {
+        runOnJS(doLinearScroll)(pos);
+      }
+    }
+  );
+
+  // Lazy active lyric index — computed on demand for "Go to Current Lyric" menu item
+  const getActiveLyricIndex = useCallback(() => {
+    if (!processedLyrics || processedLyrics.length === 0) return -1;
+    const effectiveTime = positionSV.value + lyricsDelay;
+    return processedLyrics.findIndex((line, i) => {
       const nextLine = processedLyrics[i + 1];
       return effectiveTime >= line.timestamp && (!nextLine || effectiveTime < nextLine.timestamp);
     });
-
-    if (!isLinear) {
-        // For Synced Lyrics, Time determines Highlight
-        if (index !== activeLyricIndex) {
-            setActiveLyricIndex(index);
-        }
-    }
-
-    // LINEAR LYRICS SCROLL LOGIC
-    // âœ… Skip auto-scroll if user is interacting
-    if (isLinear && flatListRef.current && !isUserScrolling.current) {
-        // Estimate scroll position based on song progress for smooth teleprompter scrolling
-        const progress = Math.min(1, Math.max(0, storePosition / (storeDuration || 180)));
-        const estimatedIndex = Math.floor(progress * (processedLyrics.length - 1));
-        
-        flatListRef.current.scrollToIndex({
-             index: estimatedIndex,
-             animated: true,
-             viewPosition: 0.4, // Position at 40% down from top
-        });
-        return;
-    }
-
-    // STANDARD SYNCED SCROLL (Jump to line)
-    // Handled internally by SynchronizedLyrics component now.
-  }, [storePosition, currentSong, processedLyrics, isLinear, activeLyricIndex, flatListRef, isUserScrolling, setActiveLyricIndex, storeDuration]);
+  }, [processedLyrics, lyricsDelay]);
 
   // âœ… Playback Controls
   const playButtonScale = useSharedValue(1);
@@ -395,15 +386,14 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const skipBackward = async () => {
     resetHideTimer();
     if (!player) return;
-    
     // Spotify Rule: Restart if > 3s, else Previous Track
-    if (storePosition > 3) {
-         // Optimistic Update for NowPlaying Scrubber
-         // We use the store's updateProgress to force the UI to 0 immediately
-         usePlayerStore.getState().updateProgress(0, storeDuration);
-         await player.seekTo(0);
+    if (positionSV.value > 3) {
+        isSeeking.value = true;
+        positionSV.value = 0; // Optimistic reset
+        await player.seekTo(0);
+        isSeeking.value = false;
     } else {
-         usePlayerStore.getState().previousInPlaylist();
+        usePlayerStore.getState().previousInPlaylist();
     }
   };
 
@@ -418,10 +408,11 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleLyricTap = async (timestamp: number) => {
       resetHideTimer();
       if (!player) return;
-      // Optimistic update: immediately jump lyrics to tapped position
-      usePlayerStore.getState().updateProgress(timestamp, storeDuration);
-      await player.seekTo(timestamp); // Timestamp is in seconds.
-      player.play(); // Ensure playback continues
+      isSeeking.value = true;
+      positionSV.value = timestamp; // Optimistic update
+      await player.seekTo(timestamp);
+      player.play();
+      isSeeking.value = false;
   };
 
   // âœ… Use Loaded Audio ID
@@ -537,8 +528,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
                       icon: 'locate-outline',
                       onPress: () => {
                         setMenuVisible(false);
+                        const activeLyricIndex = getActiveLyricIndex();
                         if (flatListRef.current && activeLyricIndex !== -1 && !isLinear) {
-                          // Scroll to active lyric for synced lyrics
                           flatListRef.current.scrollToIndex({
                             index: activeLyricIndex,
                             animated: true,
@@ -625,10 +616,10 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
        <View style={styles.contentArea}>
            {showLyrics ? (
              // Lyrics List
-           <SynchronizedLyrics 
+           <SynchronizedLyrics
               ref={flatListRef}
               lyrics={processedLyrics || []}
-              currentTime={storePosition}
+              currentTime={positionSV}
               onLyricPress={handleLyricTap}
               songTitle={currentSong?.title}
               highlightColor={gradientColors[0] !== '#000' ? gradientColors[0] : 'rgba(255,255,255,0.2)'}
@@ -732,9 +723,9 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
                {/* 2. Scrubber - Middle */}
                <View style={{ marginVertical: 8 }}> 
-                  <TimelineScrubber 
-                     currentTime={storePosition} 
-                     duration={storeDuration} 
+                  <TimelineScrubber
+                     currentTime={positionSV}
+                     duration={durationSV}
                      onSeek={handleScrub}
                      variant="classic"
                   />

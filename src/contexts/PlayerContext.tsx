@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { usePlayerStore } from '../store/playerStore';
 import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
+import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 const PlayerContext = createContext<any>(null);
 
@@ -9,6 +10,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const player = useAudioPlayer();
   const setControls = usePlayerStore(state => state.setControls);
   const lastSeekAtRef = useRef(0);
+  const lastZustandUpdateRef = useRef(0);
   const endHandledForSongIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -80,8 +82,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const store = usePlayerStore.getState();
 
-      // Batch updates if possible, or only update if changed significantly
-      store.updateProgress(currentTime, duration);
+      // Write to shared values directly — no React re-render
+      if (!isSeeking.value) {
+        positionSV.value = currentTime;
+      }
+      durationSV.value = duration;
+
+      // Throttled Zustand update for non-animation consumers (max 2/sec)
+      const now = Date.now();
+      if (now - lastZustandUpdateRef.current >= 500) {
+        lastZustandUpdateRef.current = now;
+        store.updateProgress(currentTime, duration);
+      }
 
       const justSought = Date.now() - lastSeekAtRef.current < 1500;
       const activeSongId = store.currentSongId;
@@ -91,8 +103,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isLoaded &&
         !isBuffering &&
         !playing &&
-        duration > 0 &&
-        currentTime >= Math.max(0, duration - 0.35);
+        durationSV.value > 0 &&
+        positionSV.value >= Math.max(0, durationSV.value - 0.35);
       const shouldAdvance =
         !justSought &&
         (didJustFinish || isNearEndFallback) &&

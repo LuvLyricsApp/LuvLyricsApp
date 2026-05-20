@@ -30,6 +30,8 @@ import { exportAllSongs, shareExportedFile, importSongsFromJson } from '../utils
 import { clearAllData } from '../database/queries';
 import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
+import { desktopBridgeService } from '../services/DesktopBridgeService';
+import { trustedPairingService, TrustedDesktopRecord } from '../services/TrustedPairingService';
 
 const LuvsLanguagesModal = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
     const { preferredLanguages, updateLanguageWeight } = useLuvsPreferencesStore();
@@ -125,13 +127,50 @@ const SettingsScreen: React.FC<Props> = () => {
     setDesktopConnectEnabled,
     setAllowDesktopDownloads,
   } = useDesktopBridgeSettingsStore();
+  const [pairingModalVisible, setPairingModalVisible] = React.useState(false);
+  const [pairingPayloadText, setPairingPayloadText] = React.useState('');
+  const [pairingBusy, setPairingBusy] = React.useState(false);
+  const [trustedDesktops, setTrustedDesktops] = React.useState<TrustedDesktopRecord[]>([]);
+
+  const loadTrustedDesktops = React.useCallback(async () => {
+    const all = await trustedPairingService.listTrustedDesktops();
+    setTrustedDesktops(all);
+  }, []);
 
   // Visibility Management: Hide MiniPlayer when Settings is focus
   useFocusEffect(
     React.useCallback(() => {
       setMiniPlayerHidden(true);
-    }, [setMiniPlayerHidden])
+      loadTrustedDesktops().catch(() => undefined);
+    }, [setMiniPlayerHidden, loadTrustedDesktops])
   );
+
+  const handlePairFromPayload = async () => {
+    if (!pairingPayloadText.trim()) return;
+    try {
+      setPairingBusy(true);
+      await desktopBridgeService.pairFromQrPayload(pairingPayloadText.trim());
+      await loadTrustedDesktops();
+      setPairingModalVisible(false);
+      setPairingPayloadText('');
+      setAlertConfig({
+        visible: true,
+        title: 'Pairing Complete',
+        message: 'Trusted desktop saved. Future reconnects can happen without QR.',
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pairing failed';
+      setAlertConfig({
+        visible: true,
+        title: 'Pairing Failed',
+        message,
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+    } finally {
+      setPairingBusy(false);
+    }
+  };
 
   // Filter audio files based on search query
   const filteredAudioFiles = React.useMemo(() => {
@@ -678,6 +717,12 @@ const SettingsScreen: React.FC<Props> = () => {
               value={desktopConnectEnabled}
               onToggle={setDesktopConnectEnabled}
             />
+            <SettingsRow
+              icon="qr-code-outline"
+              label="Trusted Pairing (QR)"
+              value={trustedDesktops.length > 0 ? `${trustedDesktops.length} trusted` : 'Not paired'}
+              onPress={() => setPairingModalVisible(true)}
+            />
             <SettingsRowSwitch
               icon="cloud-download-outline"
               label="Allow Desktop Downloads"
@@ -826,6 +871,46 @@ const SettingsScreen: React.FC<Props> = () => {
                 disabled={selectedFiles.size === 0}
               >
                 <Text style={[styles.selectionButtonText, styles.selectionButtonTextImport]}>Import {selectedFiles.size}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={pairingModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPairingModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPairingModalVisible(false)}>
+          <Pressable style={styles.nameModal} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.nameModalTitle}>Trusted Pairing</Text>
+            <Text style={styles.pairingHint}>
+              Scan the desktop QR and paste its JSON payload here.
+            </Text>
+            <TextInput
+              style={styles.pairingInput}
+              value={pairingPayloadText}
+              onChangeText={setPairingPayloadText}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Paste QR payload JSON"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+            />
+            <View style={styles.nameModalButtons}>
+              <Pressable style={styles.nameModalButton} onPress={() => setPairingModalVisible(false)}>
+                <Text style={styles.nameModalButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.nameModalButton, styles.nameModalButtonPrimary]}
+                onPress={handlePairFromPayload}
+                disabled={pairingBusy}
+              >
+                <Text style={[styles.nameModalButtonText, styles.nameModalButtonTextPrimary]}>
+                  {pairingBusy ? 'Pairing...' : 'Pair'}
+                </Text>
               </Pressable>
             </View>
           </Pressable>
@@ -1133,6 +1218,23 @@ const styles = StyleSheet.create({
   },
   nameModalButtonTextPrimary: {
     color: '#fff',
+  },
+  pairingHint: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  pairingInput: {
+    minHeight: 120,
+    maxHeight: 200,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    color: Colors.textPrimary,
+    padding: 10,
+    textAlignVertical: 'top',
+    marginBottom: 12,
   },
   selectionOverlay: {
     flex: 1,
