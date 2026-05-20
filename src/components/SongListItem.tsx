@@ -7,6 +7,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Song } from '../types/song';
 import { Colors } from '../constants/colors';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
+import { songHasAnyLyrics } from '../utils/lyricsState';
 
 
 interface SongListItemProps {
@@ -26,7 +27,7 @@ export const SongListItem = React.memo(({
     // Derive scan status internally via selector
     const scanJob = useLyricsScanQueueStore(state => state.queue[song.id]);
     const isScanning = scanJob?.status === 'scanning' || scanJob?.status === 'pending';
-    const isCompleted = scanJob?.status === 'completed';
+    const isCompleted = scanJob?.status === 'completed' || songHasAnyLyrics(song);
     const isFailed = scanJob?.status === 'failed';
 
     const renderRightActions = (_progress: RNAnimated.AnimatedInterpolation<number>, dragX: RNAnimated.AnimatedInterpolation<number>) => {

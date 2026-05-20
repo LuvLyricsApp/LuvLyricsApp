@@ -53,6 +53,7 @@ import TimelineScrubber from '../components/TimelineScrubber';
 import { ModernDeleteModal } from '../components/ModernDeleteModal';
 import { Toast } from '../components/Toast';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
+import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
 
 type PlaylistDetailRouteProp = RouteProp<
   { PlaylistDetail: { playlistId: string } },
@@ -104,7 +105,9 @@ export const PlaylistDetailScreen: React.FC = () => {
       const existing = scanQueue[song.id];
       
       // If result is plain, we allow "Upgrading" to synced
-      const isPlainResult = existing?.status === 'completed' && existing?.resultType === 'plain';
+      const isPlainResult =
+        (existing?.status === 'completed' && existing?.resultType === 'plain') ||
+        (!existing && songCanUpgradeToSyncedLyrics(song));
 
       if (existing) {
          if (existing.status === 'failed' || isPlainResult) {

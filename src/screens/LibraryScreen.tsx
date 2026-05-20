@@ -39,6 +39,7 @@ import { SongVersionSearchModal } from '../components/SongVersionSearchModal';
 import { Colors } from '../constants/colors';
 import { getGradientColors } from '../constants/gradients';
 import { Song } from '../types/song';
+import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -193,7 +194,9 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
       // Access state directly to avoid re-creating callback on every queue update
       const currentQueue = useLyricsScanQueueStore.getState().queue;
       const existing = currentQueue[song.id];
-      const isPlainResult = existing?.status === 'completed' && existing?.resultType === 'plain';
+      const isPlainResult =
+        (existing?.status === 'completed' && existing?.resultType === 'plain') ||
+        (!existing && songCanUpgradeToSyncedLyrics(song));
       
       if (existing) {
          if (existing.status === 'failed' || isPlainResult) {
