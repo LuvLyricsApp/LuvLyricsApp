@@ -247,6 +247,7 @@ Read [SECURITY.md](./SECURITY.md) for responsible reporting and secret-handling 
 - [CONTRIBUTING.md](./CONTRIBUTING.md): contributor workflow
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md): community standards
 - [SECURITY.md](./SECURITY.md): security policy
+- [Database Schema Guide](./docs/database-schema.md): SQLite tables, migrations, and schema-change checklist
 - [README_DETAILED.md](./README_DETAILED.md): architecture notes and historical feature details
 
 ## License
