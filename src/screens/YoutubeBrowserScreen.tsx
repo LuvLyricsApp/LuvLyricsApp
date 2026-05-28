@@ -219,9 +219,9 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
         const bitrateKbps = Math.round((data.audioBitrate || 128000) / 1000);
         const ext = data.audioMimeType?.includes('audio/mp4') ? 'm4a' : 'webm';
         
-        console.log(`[YTBrowser] ✓ Audio extracted: ${data.title}`);
-        console.log(`[YTBrowser] URL: ${data.audioUrl.substring(0, 100)}...`);
-        console.log(`[YTBrowser] Bitrate: ${bitrateKbps}kbps, Format: ${ext}, Duration: ${data.lengthSeconds}s`);
+        if (__DEV__) console.log(`[YTBrowser] ✓ Audio extracted: ${data.title}`);
+        if (__DEV__) console.log(`[YTBrowser] URL: ${data.audioUrl.substring(0, 100)}...`);
+        if (__DEV__) console.log(`[YTBrowser] Bitrate: ${bitrateKbps}kbps, Format: ${ext}, Duration: ${data.lengthSeconds}s`);
         
         setVideoInfo({
           title: data.title,
@@ -238,7 +238,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
         showFab();
       } else if (data.type === 'EXTRACTION_ERROR') {
          // Silent warning
-         console.log(`[YTBrowser] Extraction err: ${data.error}`);
+         if (__DEV__) console.log(`[YTBrowser] Extraction err: ${data.error}`);
       }
     } catch (e) {
       // Ignore non-JSON messages
@@ -249,7 +249,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
   const handleDownloadPress = useCallback(() => {
     if (!videoInfo) return;
 
-    console.log(`[YTBrowser] Handing off: ${videoInfo.title}`);
+    if (__DEV__) console.log(`[YTBrowser] Handing off: ${videoInfo.title}`);
 
     navigation.replace('AudioDownloader', {
       fromBrowser: true,
@@ -317,7 +317,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
           onLoadEnd={() => setIsLoading(false)}
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
-            console.warn(`[YTBrowser] WebView error: ${nativeEvent.description}`);
+            if (__DEV__) console.warn(`[YTBrowser] WebView error: ${nativeEvent.description}`);
             if (nativeEvent.description !== 'net::ERR_CACHE_MISS') {
                setLoadError(nativeEvent.description || 'Failed to load');
             }

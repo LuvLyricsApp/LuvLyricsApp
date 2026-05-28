@@ -65,9 +65,9 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
         isLoading: false 
       });
       
-      console.log(`[PLAYLIST_STORE] Loaded ${playlists.length} playlists, ${likedIds.size} liked songs`);
+      if (__DEV__) console.log(`[PLAYLIST_STORE] Loaded ${playlists.length} playlists, ${likedIds.size} liked songs`);
     } catch (error) {
-      console.error('[PLAYLIST_STORE] Fetch error:', error);
+      if (__DEV__) console.error('[PLAYLIST_STORE] Fetch error:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch playlists', 
         isLoading: false 
@@ -83,7 +83,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       await get().fetchPlaylists(); // Refresh list to get sort order correct
       return id;
     } catch (error) {
-      console.error('[PLAYLIST_STORE] Create error:', error);
+      if (__DEV__) console.error('[PLAYLIST_STORE] Create error:', error);
       set({ error: error instanceof Error ? error.message : 'Failed to create playlist', isLoading: false });
       throw error;
     }
@@ -137,7 +137,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       }));
 
     } catch (error) {
-      console.error('[PLAYLIST_STORE] Add song error:', error);
+      if (__DEV__) console.error('[PLAYLIST_STORE] Add song error:', error);
       // Revert optimistic update if needed
       if (playlistId === get().defaultPlaylistId) {
          set(state => {
@@ -163,7 +163,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
             lastUpdate: Date.now()
         }));
     } catch (error) {
-        console.error('[PLAYLIST_STORE] Batch add error:', error);
+        if (__DEV__) console.error('[PLAYLIST_STORE] Batch add error:', error);
         throw error;
     }
   },
@@ -187,7 +187,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       const playerState = usePlayerStore.getState();
       if (playerState.currentPlaylistId === playlistId) {
         playerState.removeFromQueue(songId);
-        console.log(`[PLAYLIST_STORE] Removed ${songId} from active playlist queue`);
+        if (__DEV__) console.log(`[PLAYLIST_STORE] Removed ${songId} from active playlist queue`);
       }
       
       // OPTIMIZATION: Update local count instead of re-fetching
@@ -200,7 +200,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       }));
 
     } catch (error) {
-      console.error('[PLAYLIST_STORE] Remove song error:', error);
+      if (__DEV__) console.error('[PLAYLIST_STORE] Remove song error:', error);
       // Revert optimistic update if needed
       if (playlistId === get().defaultPlaylistId) {
          set(state => {
@@ -218,7 +218,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     const { defaultPlaylistId, likedSongIds } = get();
     
     if (!defaultPlaylistId) {
-      console.error('[PLAYLIST_STORE] No default playlist found!');
+      if (__DEV__) console.error('[PLAYLIST_STORE] No default playlist found!');
       return;
     }
 
@@ -226,7 +226,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     const isLiked = likedSongIds.has(songId);
 
     try {
-      console.log(`[PLAYLIST_STORE] Toggling like for ${songId}. Currently liked: ${isLiked}`);
+      if (__DEV__) console.log(`[PLAYLIST_STORE] Toggling like for ${songId}. Currently liked: ${isLiked}`);
       
       // 1. Update DB (both playlist_songs AND legacy is_liked column for safety)
       const song = await songQueries.getSongById(songId);
@@ -242,7 +242,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       }
 
     } catch (error) {
-      console.error('[PLAYLIST_STORE] Toggle like failed:', error);
+      if (__DEV__) console.error('[PLAYLIST_STORE] Toggle like failed:', error);
       set({ error: 'Failed to update like status' });
     }
   },

@@ -47,7 +47,7 @@ export const scanAudioFiles = async (): Promise<AudioFile[]> => {
       albumArt: undefined,
     }));
   } catch (error) {
-    console.error('Failed to scan audio files:', error);
+    if (__DEV__) console.error('Failed to scan audio files:', error);
     throw error;
   }
 };

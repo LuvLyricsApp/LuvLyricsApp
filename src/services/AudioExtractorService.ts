@@ -44,7 +44,7 @@ class AudioExtractorService {
      */
     async getAudioFormats(youtubeUrl: string): Promise<AudioFormat[]> {
         try {
-            console.log(`[AudioExtractor] Fetching info for: ${youtubeUrl}`);
+            if (__DEV__) console.log(`[AudioExtractor] Fetching info for: ${youtubeUrl}`);
             
             // Get Info
             // Get Info
@@ -60,22 +60,22 @@ class AudioExtractorService {
                     }
                 }
             });
-            console.log(`[AudioExtractor] Raw formats found: ${info.formats.length}`);
+            if (__DEV__) console.log(`[AudioExtractor] Raw formats found: ${info.formats.length}`);
             
             // Filter for Audio Only
             let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-            console.log(`[AudioExtractor] Audio-only formats: ${audioFormats.length}`);
+            if (__DEV__) console.log(`[AudioExtractor] Audio-only formats: ${audioFormats.length}`);
             
             // RELAXED FILTER: If no audio-only, try filters that contain audio (audioandvideo)
             if (!audioFormats.length) {
-                console.warn('[AudioExtractor] No audio-only formats, trying to find ANY format with audio (audioandvideo)...');
+                if (__DEV__) console.warn('[AudioExtractor] No audio-only formats, trying to find ANY format with audio (audioandvideo)...');
                 audioFormats = ytdl.filterFormats(info.formats, 'audioandvideo');
             }
 
-            console.log(`[AudioExtractor] Final formats count: ${audioFormats.length}`);
+            if (__DEV__) console.log(`[AudioExtractor] Final formats count: ${audioFormats.length}`);
 
             if (!audioFormats.length) {
-                console.warn('[AudioExtractor] No audio formats found (Strict or Relaxed)');
+                if (__DEV__) console.warn('[AudioExtractor] No audio formats found (Strict or Relaxed)');
                 return [];
             }
 
@@ -108,7 +108,7 @@ class AudioExtractorService {
             return mappedFormats.sort((a: any, b: any) => b.bitrate - a.bitrate);
 
         } catch (error) {
-            console.error('[AudioExtractor] Error:', error);
+            if (__DEV__) console.error('[AudioExtractor] Error:', error);
             // Polyfill might be missing if this crashes on 'crypto' or 'stream'
             return [];
         }

@@ -128,13 +128,13 @@ export const importSongsFromJson = async (): Promise<number> => {
         importedCount++;
       } catch (error) {
         // ID conflict likely, skip or handle
-        console.warn(`Skipping song ${song.title} due to import error`, error);
+        if (__DEV__) console.warn(`Skipping song ${song.title} due to import error`, error);
       }
     }
 
     return importedCount;
   } catch (error) {
-    console.error('Import failed:', error);
+    if (__DEV__) console.error('Import failed:', error);
     throw error;
   }
 };

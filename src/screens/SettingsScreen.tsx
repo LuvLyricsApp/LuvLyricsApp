@@ -176,7 +176,7 @@ const SettingsScreen: React.FC<Props> = () => {
         setProfileImage(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Avatar selection failed:', error);
+      if (__DEV__) console.error('Avatar selection failed:', error);
     }
   };
 
@@ -185,7 +185,7 @@ const SettingsScreen: React.FC<Props> = () => {
       const fileUri = await exportAllSongs();
       await shareExportedFile(fileUri);
     } catch (error) {
-      console.error('Export failed:', error);
+      if (__DEV__) console.error('Export failed:', error);
       Alert.alert('Export Failed', 'Could not export songs.');
     }
   };
@@ -198,7 +198,7 @@ const SettingsScreen: React.FC<Props> = () => {
         await fetchSongs();
       }
     } catch (error) {
-       console.error('Import failed:', error);
+       if (__DEV__) console.error('Import failed:', error);
        Alert.alert('Import Failed', 'Could not import songs. Check file format.');
     }
   };
@@ -327,7 +327,7 @@ const SettingsScreen: React.FC<Props> = () => {
                     });
                     updated++;
                   } catch (error) {
-                    console.error('Failed to update:', song.title);
+                    if (__DEV__) console.error('Failed to update:', song.title);
                   }
                 }
                 addRecentArt(uri);
@@ -343,7 +343,7 @@ const SettingsScreen: React.FC<Props> = () => {
         });
       }
     } catch (error) {
-      console.error('Cover art selection failed:', error);
+      if (__DEV__) console.error('Cover art selection failed:', error);
     }
   };
 
@@ -378,7 +378,7 @@ const SettingsScreen: React.FC<Props> = () => {
       setSelectionModalVisible(true);
     } catch (error) {
       setIsImporting(false);
-      console.error('Import failed:', error);
+      if (__DEV__) console.error('Import failed:', error);
       Alert.alert('Import Failed', 'Could not access media library. Check permissions.');
     }
   };
@@ -395,7 +395,7 @@ const SettingsScreen: React.FC<Props> = () => {
           await addSong(song);
           imported++;
         } catch (error) {
-          console.error('Failed to import:', audioFile.filename, error);
+          if (__DEV__) console.error('Failed to import:', audioFile.filename, error);
         }
       }
     }
@@ -446,7 +446,7 @@ const SettingsScreen: React.FC<Props> = () => {
         Alert.alert('Success', 'Download location updated! Future downloads will be saved here.');
       }
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
       Alert.alert('Error', 'Failed to set download location.');
     }
   };

@@ -58,13 +58,13 @@ export const JioSaavnLyricsService = {
     duration?: number
   ): Promise<SaavnLyricsResult | null> => {
     try {
-      console.log(`[JioSaavn] 🔍 Searching for: ${title} - ${artist}`);
+      if (__DEV__) console.log(`[JioSaavn] 🔍 Searching for: ${title} - ${artist}`);
       
       // Step 1: Search for the song
       const query = `${title} ${artist}`.trim();
       const searchUrl = `${BASE_URL}/api/search/songs?query=${encodeURIComponent(query)}&limit=5`;
       
-      console.log('[JioSaavn] Search URL:', searchUrl);
+      if (__DEV__) console.log('[JioSaavn] Search URL:', searchUrl);
       
       const timeoutPromise = new Promise<any>((_, reject) => 
         setTimeout(() => reject(new Error('TIMEOUT')), 10000)
@@ -82,15 +82,15 @@ export const JioSaavnLyricsService = {
       ]) as Response;
       
       if (!searchResponse.ok) {
-        console.error('[JioSaavn] Search failed:', searchResponse.status, searchResponse.statusText);
+        if (__DEV__) console.error('[JioSaavn] Search failed:', searchResponse.status, searchResponse.statusText);
         return null;
       }
       
       const searchData: SaavnSearchResponse = await searchResponse.json();
-      console.log('[JioSaavn] Search results:', searchData.data.total);
+      if (__DEV__) console.log('[JioSaavn] Search results:', searchData.data.total);
       
       if (!searchData.success || !searchData.data.results.length) {
-        console.log('[JioSaavn] No results found');
+        if (__DEV__) console.log('[JioSaavn] No results found');
         return null;
       }
       
@@ -98,7 +98,7 @@ export const JioSaavnLyricsService = {
       let bestMatch: SaavnSongResult | null = null;
       
       for (const result of searchData.data.results) {
-        console.log(`[JioSaavn] Result: ${result.name} - hasLyrics: ${result.hasLyrics}, lyricsId: ${result.lyricsId}`);
+        if (__DEV__) console.log(`[JioSaavn] Result: ${result.name} - hasLyrics: ${result.hasLyrics}, lyricsId: ${result.lyricsId}`);
         
         if (result.hasLyrics && result.lyricsId) {
           bestMatch = result;
@@ -107,17 +107,17 @@ export const JioSaavnLyricsService = {
       }
       
       if (!bestMatch) {
-        console.log('[JioSaavn] No results with lyrics found');
+        if (__DEV__) console.log('[JioSaavn] No results with lyrics found');
         return null;
       }
       
-      console.log(`[JioSaavn] Best match: ${bestMatch.name} (ID: ${bestMatch.id}, LyricsID: ${bestMatch.lyricsId})`);
+      if (__DEV__) console.log(`[JioSaavn] Best match: ${bestMatch.name} (ID: ${bestMatch.id}, LyricsID: ${bestMatch.lyricsId})`);
       
       // Step 2: Try multiple endpoints to get lyrics
       const lyricsData = await JioSaavnLyricsService.fetchLyricsData(bestMatch.id, bestMatch.lyricsId!);
       
       if (!lyricsData) {
-        console.log('[JioSaavn] Could not fetch lyrics data');
+        if (__DEV__) console.log('[JioSaavn] Could not fetch lyrics data');
         return null;
       }
       
@@ -133,9 +133,9 @@ export const JioSaavnLyricsService = {
       
     } catch (error: any) {
       if (error.message === 'TIMEOUT' || error.name === 'AbortError') {
-          console.warn('[JioSaavn] Search timed out');
+          if (__DEV__) console.warn('[JioSaavn] Search timed out');
       } else {
-          console.error('[JioSaavn] Error:', error);
+          if (__DEV__) console.error('[JioSaavn] Error:', error);
       }
       return null;
     }
@@ -155,7 +155,7 @@ export const JioSaavnLyricsService = {
     for (const endpoint of endpoints) {
       try {
         const url = `${BASE_URL}${endpoint}`;
-        console.log(`[JioSaavn] Trying endpoint: ${url}`);
+        if (__DEV__) console.log(`[JioSaavn] Trying endpoint: ${url}`);
         
         const timeoutPromiseEndpoint = new Promise<any>((_, reject) => 
             setTimeout(() => reject(new Error('TIMEOUT')), 8000)
@@ -173,46 +173,46 @@ export const JioSaavnLyricsService = {
         ]) as Response;
         
         if (!response.ok) {
-          console.log(`[JioSaavn] ${endpoint} returned ${response.status}`);
+          if (__DEV__) console.log(`[JioSaavn] ${endpoint} returned ${response.status}`);
           continue;
         }
         
         const data = await response.json();
-        console.log(`[JioSaavn] Response from ${endpoint}:`, JSON.stringify(data).substring(0, 200));
+        if (__DEV__) console.log(`[JioSaavn] Response from ${endpoint}:`, JSON.stringify(data).substring(0, 200));
         
         // Try to extract lyrics from various possible structures
         if (data.success && data.data) {
           if (data.data.lyrics) {
-            console.log('[JioSaavn] ✅ Found lyrics in data.lyrics');
+            if (__DEV__) console.log('[JioSaavn] ✅ Found lyrics in data.lyrics');
             return data.data.lyrics;
           }
           if (data.data.syncedLyrics) {
-            console.log('[JioSaavn] ✅ Found lyrics in data.syncedLyrics');
+            if (__DEV__) console.log('[JioSaavn] ✅ Found lyrics in data.syncedLyrics');
             return data.data.syncedLyrics;
           }
           if (data.data.lrc) {
-            console.log('[JioSaavn] ✅ Found lyrics in data.lrc');
+            if (__DEV__) console.log('[JioSaavn] ✅ Found lyrics in data.lrc');
             return data.data.lrc;
           }
         }
         
         // If it's a direct lyrics response
         if (typeof data === 'string') {
-          console.log('[JioSaavn] ✅ Found lyrics as direct string');
+          if (__DEV__) console.log('[JioSaavn] ✅ Found lyrics as direct string');
           return data;
         }
         
       } catch (error: any) {
         if (error.name === 'AbortError') {
-             console.warn(`[JioSaavn] ${endpoint} timed out`);
+             if (__DEV__) console.warn(`[JioSaavn] ${endpoint} timed out`);
         } else {
-             console.log(`[JioSaavn] ${endpoint} error:`, error);
+             if (__DEV__) console.log(`[JioSaavn] ${endpoint} error:`, error);
         }
         continue;
       }
     }
     
-    console.log('[JioSaavn] ❌ No lyrics found in any endpoint');
+    if (__DEV__) console.log('[JioSaavn] ❌ No lyrics found in any endpoint');
     return null;
   },
   

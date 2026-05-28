@@ -14,7 +14,7 @@ let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let isInitialized = false;
 
 const log = (msg: string, data?: any) => {
-  console.log(`${LOG_PREFIX} ${msg}`, data ?? '');
+  if (__DEV__) console.log(`${LOG_PREFIX} ${msg}`, data ?? '');
 };
 
 const openAndInitialize = async (): Promise<SQLite.SQLiteDatabase> => {

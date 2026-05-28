@@ -242,7 +242,7 @@ export const useLuvsPreferencesStore = create<LuvsPreferencesState>((set, get) =
       ],
       explicitLikes: [],
     });
-    AsyncStorage.removeItem(PREFS_KEY).catch(console.error);
+    AsyncStorage.removeItem(PREFS_KEY).catch(error => { if (__DEV__) console.error(error); });
   },
 
   loadFromStorage: async () => {

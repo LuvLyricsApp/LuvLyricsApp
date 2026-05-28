@@ -78,7 +78,7 @@ export const AddToPlaylistModal = () => {
             await fetchPlaylists();
         }
       } catch (error) {
-        console.error("Failed to init modal", error);
+        if (__DEV__) console.error("Failed to init modal", error);
       } finally {
         setLoading(false);
       }
@@ -127,7 +127,7 @@ export const AddToPlaylistModal = () => {
         }
         navigation.goBack();
     } catch (e) {
-        console.error("Failed to save", e);
+        if (__DEV__) console.error("Failed to save", e);
         setLoading(false);
     }
   };

@@ -73,12 +73,16 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
                     if (route.name === 'Luvs') {
                         const { feedSongs } = (await import('../store/luvsFeedStore')).useLuvsFeedStore.getState();
                         if (feedSongs.length === 0) {
-                            import('../services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.refreshRecommendation()).catch(console.error);
+                            import('../services/LuvsRecommendationEngine')
+                                .then(m => m.luvsRecommendationEngine.refreshRecommendation())
+                                .catch(error => { if (__DEV__) console.error(error); });
                         }
                     }
                   } else if (isFocused && route.name === 'Luvs') {
                     // Refresh even if already focused (user tapping the button again)
-                    import('../services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.refreshRecommendation()).catch(console.error);
+                    import('../services/LuvsRecommendationEngine')
+                      .then(m => m.luvsRecommendationEngine.refreshRecommendation())
+                      .catch(error => { if (__DEV__) console.error(error); });
                   }
                 };
 

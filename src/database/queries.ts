@@ -18,7 +18,7 @@ import { normalizeLyrics } from '../utils/timestampParser';
 const LOG_PREFIX = '[QUERIES]';
 
 const log = (msg: string, data?: any) => {
-  console.log(`${LOG_PREFIX} ${msg}`, data ?? '');
+  if (__DEV__) console.log(`${LOG_PREFIX} ${msg}`, data ?? '');
 };
 
 
@@ -238,19 +238,19 @@ export const deleteSong = async (id: string): Promise<void> => {
       // 1. Delete physical files from disk if they are in the app's document directory
       if (song.audioUri && song.audioUri.includes(FileSystem.documentDirectory!)) {
         try {
-          console.log(`[QUERIES] Deleting physical audio file: ${song.audioUri}`);
+          if (__DEV__) console.log(`[QUERIES] Deleting physical audio file: ${song.audioUri}`);
           await FileSystem.deleteAsync(song.audioUri, { idempotent: true });
         } catch {
-          console.warn('[QUERIES] Failed to delete audio file, it might not exist');
+          if (__DEV__) console.warn('[QUERIES] Failed to delete audio file, it might not exist');
         }
       }
       
       if (song.coverImageUri && (song.coverImageUri.includes(FileSystem.documentDirectory!) || song.coverImageUri.includes('file:///'))) {
         try {
-          console.log(`[QUERIES] Deleting physical cover image: ${song.coverImageUri}`);
+          if (__DEV__) console.log(`[QUERIES] Deleting physical cover image: ${song.coverImageUri}`);
           await FileSystem.deleteAsync(song.coverImageUri, { idempotent: true });
         } catch {
-          console.warn('[QUERIES] Failed to delete cover image');
+          if (__DEV__) console.warn('[QUERIES] Failed to delete cover image');
         }
       }
     }
@@ -261,7 +261,7 @@ export const deleteSong = async (id: string): Promise<void> => {
       await db.execAsync(`DELETE FROM songs WHERE id = '${id}';`);
     });
   } catch (error) {
-    console.error('[QUERIES] deleteSong failed during file or DB cleanup:', error);
+    if (__DEV__) console.error('[QUERIES] deleteSong failed during file or DB cleanup:', error);
     throw error;
   }
 };

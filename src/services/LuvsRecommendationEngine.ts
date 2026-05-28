@@ -435,7 +435,7 @@ class LuvsRecommendationEngine {
       // If song has NO language property, and we have restrictions, we MUST be cautious.
       if (!songLang) {
           if (isLanguageRestricted) {
-              console.log(`[Luvs] 🚫 Filtered song with MISSING language (Restriction Active): ${song.title}`);
+              if (__DEV__) console.log(`[Luvs] 🚫 Filtered song with MISSING language (Restriction Active): ${song.title}`);
               return false;
           }
           return true;
@@ -447,7 +447,7 @@ class LuvsRecommendationEngine {
       // BLOCK if weight is explicitly 0 or language not found in a restricted set
       if (isLanguageRestricted) {
           if (!langPref || langPref.weight === 0) {
-              console.log(`[Luvs] 🌍 Filtered forbidden/unknown language (${song.language || 'none'}): ${song.title}`);
+              if (__DEV__) console.log(`[Luvs] 🌍 Filtered forbidden/unknown language (${song.language || 'none'}): ${song.title}`);
               return false;
           }
       }

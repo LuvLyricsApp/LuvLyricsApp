@@ -66,7 +66,7 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
         
         if (bestSynced) {
              // Auto-select immediately!
-             console.log('[Magic] Auto-picking best synced result:', bestSynced.trackName);
+             if (__DEV__) console.log('[Magic] Auto-picking best synced result:', bestSynced.trackName);
              onSelect(bestSynced); 
              // onClose is usually called by parent after onSelect, but we can do it here too just in case
              // But let's rely on parent closing it, or just return.
@@ -75,7 +75,7 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
       }
 
     } catch (error) {
-      console.error('Search failed:', error);
+      if (__DEV__) console.error('Search failed:', error);
       Alert.alert('Error', 'Failed to fetch lyrics. Please try again.');
     } finally {
       setLoading(false);

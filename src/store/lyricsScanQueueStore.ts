@@ -295,7 +295,7 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
           );
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : String(error);
-          console.error(`[ScanQueue] Error processing "${nextJob.title}":`, error);
+          if (__DEV__) console.error(`[ScanQueue] Error processing "${nextJob.title}":`, error);
           updateJob(prev => ({
             status: 'failed' as const,
             log: appendLog(prev.log, `Error: ${message}`),
@@ -305,7 +305,7 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error) {
-      console.error('[ScanQueue] Queue processor error:', error);
+      if (__DEV__) console.error('[ScanQueue] Queue processor error:', error);
     } finally {
       set({ processing: false });
     }

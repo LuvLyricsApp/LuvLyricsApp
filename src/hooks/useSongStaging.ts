@@ -87,7 +87,7 @@ export const useSongStaging = () => {
               });
           }
       } catch (e) {
-          console.warn('Preview failed', e);
+          if (__DEV__) console.warn('Preview failed', e);
       }
   }, [staging, sound, isPlaying]);
 
@@ -105,7 +105,7 @@ export const useSongStaging = () => {
 
     const tempId = Date.now().toString(); 
     
-    console.log(`[Staging] 🎨 Fetching iTunes cover art for: ${song.title} - ${song.artist}`);
+    if (__DEV__) console.log(`[Staging] 🎨 Fetching iTunes cover art for: ${song.title} - ${song.artist}`);
     
     // 2. Fetch iTunes Cover Art (fast, professional quality)
     let coverArtUrls: string[] = [];
@@ -128,15 +128,15 @@ export const useSongStaging = () => {
             const cleanArtist = cleanTerm(song.artist);
             const cleanQuery = `${cleanTitle} ${cleanArtist}`;
             
-            console.log(`[Staging] Raw search failed. Retrying with: ${cleanQuery}`);
+            if (__DEV__) console.log(`[Staging] Raw search failed. Retrying with: ${cleanQuery}`);
             if (cleanQuery !== query) {
                  coverArtUrls = await ImageSearchService.searchItunes(cleanQuery);
             }
         }
         
-        console.log(`[Staging] ✓ Got ${coverArtUrls.length} iTunes cover options`);
+        if (__DEV__) console.log(`[Staging] ✓ Got ${coverArtUrls.length} iTunes cover options`);
     } catch (e) {
-        console.warn('[Staging] iTunes fetch failed, using source artwork', e);
+        if (__DEV__) console.warn('[Staging] iTunes fetch failed, using source artwork', e);
     }
     
     // Use first iTunes result or fallback to source art (Saavn/SC)
@@ -182,7 +182,7 @@ export const useSongStaging = () => {
                 progress: 0,
             });
             
-            console.log(`[Staging] ✓ Staged instantly with iTunes art: ${song.title}`);
+            if (__DEV__) console.log(`[Staging] ✓ Staged instantly with iTunes art: ${song.title}`);
 
             // 4. Fetch lyrics in background (Parallel Sources)
             // Use a reference to track validity
@@ -190,14 +190,14 @@ export const useSongStaging = () => {
             
             const fetchLyrics = async () => {
                 try {
-                    console.log('[Staging-V2] 🔄 Fetching lyrics in background (Multi-Source)...');
+                    if (__DEV__) console.log('[Staging-V2] 🔄 Fetching lyrics in background (Multi-Source)...');
                     
                     // Using Static Import now
                     const lyricResults = await MultiSourceLyricsService.fetchLyricsParallel(song.title, song.artist, song.duration);
                     
                     if (!isActive) return;
                     
-                    console.log(`[Staging-V2] Lyrics found: ${lyricResults.length} options`);
+                    if (__DEV__) console.log(`[Staging-V2] Lyrics found: ${lyricResults.length} options`);
                     setLyricFetchError(null);
                     
                     if (lyricResults.length > 0) {
@@ -205,7 +205,7 @@ export const useSongStaging = () => {
                             // Safety check: Ensure we are updating the CORRECT song staging
                             if (!prev || prev.id !== tempId) return prev;
                             
-                            console.log('[Staging] ✓ Updating staging with lyrics');
+                            if (__DEV__) console.log('[Staging] ✓ Updating staging with lyrics');
                             return {
                                 ...prev,
                                 lyricOptions: lyricResults,
@@ -214,7 +214,7 @@ export const useSongStaging = () => {
                             };
                         });
                     } else {
-                        console.log('[Staging] ⚠️ No lyrics found for this song');
+                        if (__DEV__) console.log('[Staging] ⚠️ No lyrics found for this song');
                         setLyricFetchError('No lyrics found for this song. Try title/artist edit and retry.');
                         setStaging(prev => {
                             if (!prev || prev.id !== tempId) return prev;
@@ -228,7 +228,7 @@ export const useSongStaging = () => {
                     }
                 } catch(e) {
                     if (!isActive) return;
-                    console.error('[Staging] ❌ Lyrics fetch failed:', e);
+                    if (__DEV__) console.error('[Staging] ❌ Lyrics fetch failed:', e);
                     setLyricFetchError(getLyricsFriendlyError(e)); 
                     setStaging(prev => {
                         if (!prev || prev.id !== tempId) return prev;
@@ -251,12 +251,12 @@ export const useSongStaging = () => {
   const initFromBrowser = useCallback(async () => {}, []);
 
   const updateSelection = useCallback(async (updates: Partial<StagingSong>) => {
-      console.log('[StagingHook] updateSelection called with:', updates);
-      console.log('[StagingHook] Current staging:', staging);
+      if (__DEV__) console.log('[StagingHook] updateSelection called with:', updates);
+      if (__DEV__) console.log('[StagingHook] Current staging:', staging);
       
       setStaging(prev => {
         const newStaging = prev ? ({ ...prev, ...updates }) : null;
-        console.log('[StagingHook] New staging after update:', newStaging);
+        if (__DEV__) console.log('[StagingHook] New staging after update:', newStaging);
         return newStaging;
       });
 
@@ -286,7 +286,7 @@ export const useSongStaging = () => {
       setStaging(prev => prev ? ({ ...prev, status: 'completed', progress: 1.0 }) : null);
 
     } catch (error: any) {
-       console.error('Download Failed:', error);
+       if (__DEV__) console.error('Download Failed:', error);
        setStaging(prev => prev ? ({ ...prev, status: 'error', error: error.message }) : null);
     }
   }, [staging, addSong, fetchSongs]);
@@ -294,14 +294,14 @@ export const useSongStaging = () => {
   const retryLyrics = useCallback(async () => {
     if (!staging) return;
 
-    console.log('[Staging] 🔄 Retrying lyrics fetch...');
+    if (__DEV__) console.log('[Staging] 🔄 Retrying lyrics fetch...');
     setLyricFetchError(null); 
     setStaging(prev => prev ? ({ ...prev, lyricOptions: null }) : null);
 
     try {
         const lyricResults = await MultiSourceLyricsService.fetchLyricsParallel(staging.title, staging.artist, staging.duration);
         
-        console.log(`[Staging] Retry results: ${lyricResults.length}`);
+        if (__DEV__) console.log(`[Staging] Retry results: ${lyricResults.length}`);
         if (lyricResults.length === 0) {
             setLyricFetchError('No lyrics found for this song. Try title/artist edit and retry.');
         }
@@ -316,7 +316,7 @@ export const useSongStaging = () => {
             };
         });
     } catch (e) {
-        console.error('[Staging] Retry failed:', e);
+        if (__DEV__) console.error('[Staging] Retry failed:', e);
         setLyricFetchError(getLyricsFriendlyError(e)); 
         setStaging(prev => prev ? ({ ...prev, lyricOptions: [], selectedLyricIndex: -1 }) : null);
     }

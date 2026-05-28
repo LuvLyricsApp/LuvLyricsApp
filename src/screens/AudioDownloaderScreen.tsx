@@ -688,7 +688,7 @@ Only provide the JSON array, no other text.`;
                     }
                     updateTab(activeTabId, { bulkItems: updatedItems });
                 } catch (error) {
-                    console.warn(`[BulkSearch] Item ${i} failed:`, error);
+                    if (__DEV__) console.warn(`[BulkSearch] Item ${i} failed:`, error);
                     const tabAfterError = useDownloaderTabStore.getState().tabs.find(t => t.id === activeTabId);
                     if (tabAfterError && tabAfterError.bulkItems) {
                         const errorItems = [...tabAfterError.bulkItems];

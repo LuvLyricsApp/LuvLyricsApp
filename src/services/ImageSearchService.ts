@@ -56,7 +56,7 @@ class ImageSearchServiceImpl {
             }).filter((img: any) => img.uri); 
 
         } catch (error) {
-            console.error('Image search failed:', error);
+            if (__DEV__) console.error('Image search failed:', error);
             return [];
         }
     }
@@ -77,7 +77,7 @@ class ImageSearchServiceImpl {
             }
             return [];
         } catch (e) {
-            console.warn('[ImageSearchService] iTunes search failed:', e);
+            if (__DEV__) console.warn('[ImageSearchService] iTunes search failed:', e);
             return [];
         }
     }

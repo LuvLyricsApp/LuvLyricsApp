@@ -37,7 +37,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
       try {
           await FileSystem.deleteAsync(uri, { idempotent: true });
       } catch (e) {
-          console.warn('Failed to delete old audio:', e);
+          if (__DEV__) console.warn('Failed to delete old audio:', e);
       }
   };
 
@@ -77,7 +77,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
           }
           
           if (!downloadUrl) {
-              console.warn('[VersionReplace] No direct URL found. Result:', newVersion);
+              if (__DEV__) console.warn('[VersionReplace] No direct URL found. Result:', newVersion);
               throw new Error('No audio URL found for this version.');
           }
 
@@ -123,7 +123,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
           onClose();
 
       } catch (e: any) {
-          console.error(e);
+          if (__DEV__) console.error(e);
           setToast({ message: `Failed: ${e.message || 'Unknown error'}`, type: 'error' });
           setDownloadingId(null);
       }

@@ -45,7 +45,7 @@ class LuvsBufferManager {
       this.isInitialized = true;
       if (__DEV__) console.log('[LuvsBuffer] Audio focus configured');
     } catch (error) {
-      console.error('[LuvsBuffer] Failed to set audio mode:', error);
+      if (__DEV__) console.error('[LuvsBuffer] Failed to set audio mode:', error);
     }
   }
 
@@ -72,7 +72,7 @@ class LuvsBufferManager {
           // If the player is already gone, we don't need to log an error
           const errorMsg = error instanceof Error ? error.message : String(error);
           if (!errorMsg.includes('Player does not exist')) {
-            console.warn(`[LuvsBuffer] Unload failed for slot ${index}:`, errorMsg);
+            if (__DEV__) console.warn(`[LuvsBuffer] Unload failed for slot ${index}:`, errorMsg);
           }
         }
       }
@@ -93,7 +93,7 @@ class LuvsBufferManager {
       });
       if (__DEV__) console.log('[LuvsBuffer] Audio mode reset to default');
     } catch (error) {
-      console.error('[LuvsBuffer] Failed to reset audio mode:', error);
+      if (__DEV__) console.error('[LuvsBuffer] Failed to reset audio mode:', error);
     }
   }
 
@@ -132,9 +132,9 @@ class LuvsBufferManager {
     await this.playActiveSlot(newIndex, feedSongs, shouldPlay);
     
     // 4. Background buffer management
-    this.manageBuffer(newIndex, feedSongs).catch(e => 
-        console.error('[LuvsBuffer] Buffer management failed:', e)
-    );
+    this.manageBuffer(newIndex, feedSongs).catch(e => {
+        if (__DEV__) console.error('[LuvsBuffer] Buffer management failed:', e);
+    });
   }
 
   /**

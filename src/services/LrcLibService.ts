@@ -32,7 +32,7 @@ export const LrcLibService = {
       }
 
       const searchUrl = `${BASE_URL}${queryPath}`;
-      console.log('[LrcLibService] Searching LRCLIB:', searchUrl);
+      if (__DEV__) console.log('[LrcLibService] Searching LRCLIB:', searchUrl);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
@@ -53,9 +53,9 @@ export const LrcLibService = {
       return await response.json() as LrcLibTrack[];
     } catch (error: unknown) {
       if (isAbortError(error)) {
-         console.warn('[LrcLibService] Search timed out');
+         if (__DEV__) console.warn('[LrcLibService] Search timed out');
       } else {
-         console.error('[LrcLibService] Search error:', error);
+         if (__DEV__) console.error('[LrcLibService] Search error:', error);
       }
       return [];
     }
@@ -76,7 +76,7 @@ export const LrcLibService = {
       if (albumName) url += `&album_name=${encodeURIComponent(albumName)}`;
       if (duration) url += `&duration=${duration}`;
       
-      console.log('[LrcLibService] Getting lyrics from:', url);
+      if (__DEV__) console.log('[LrcLibService] Getting lyrics from:', url);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
@@ -98,9 +98,9 @@ export const LrcLibService = {
       return await response.json() as LrcLibTrack;
     } catch (error: unknown) {
       if (isAbortError(error)) {
-         console.warn('[LrcLibService] GetLyrics timed out');
+         if (__DEV__) console.warn('[LrcLibService] GetLyrics timed out');
       } else {
-         console.error('[LrcLibService] GetLyrics error:', error);
+         if (__DEV__) console.error('[LrcLibService] GetLyrics error:', error);
       }
       return null;
     }

@@ -151,7 +151,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
         }
       }
     } catch (error) {
-      console.error('Paste failed:', error);
+      if (__DEV__) console.error('Paste failed:', error);
     }
   };
 
@@ -243,7 +243,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
       parseDurationInput(durationText); // Validate but not stored if unused elsewhere below
       const searchAlbum = album.trim();
 
-      console.log(`[Magic] Attempt ${magicAttempt}: Searching for "${searchTitle}" by "${searchArtist}"`);
+      if (__DEV__) console.log(`[Magic] Attempt ${magicAttempt}: Searching for "${searchTitle}" by "${searchArtist}"`);
 
       try {
           // Lyrica Logic: Follows Synced Slow -> Fast -> Plain strategy
@@ -282,7 +282,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
           }
 
       } catch (error) {
-          console.error('[Magic] Error:', error);
+          if (__DEV__) console.error('[Magic] Error:', error);
           setMagicStatus('red');
           setToastMessage('Network error.');
           setToastType('error');
@@ -432,7 +432,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
         }
       }, 500);
     } catch (error) {
-      console.error('Save failed:', error);
+      if (__DEV__) console.error('Save failed:', error);
       Alert.alert(
         'Save Failed', 
         `Error: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check the console logs and try again.`
@@ -633,11 +633,11 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                         setIsShowingTransliteration(nextState);
                         // Auto-generate if switching to view and it's empty
                         if (nextState && !transliteratedText && lyricsText) {
-                            console.log('[AddEdit] Auto-generating transliteration...');
+                            if (__DEV__) console.log('[AddEdit] Auto-generating transliteration...');
                             const parsed = parseTimestampedLyrics(lyricsText);
                             const converted = TransliterationService.transliterate(parsed);
                             const resText = lyricsToRawText(converted);
-                            console.log('[AddEdit] Generated text length:', resText.length);
+                            if (__DEV__) console.log('[AddEdit] Generated text length:', resText.length);
                             setTransliteratedText(resText);
                             setToastMessage('Auto-Transliterated Tanglish vibes');
                             setToastType('success');

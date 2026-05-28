@@ -62,7 +62,7 @@ export const useSongsStore = create<SongsState>()(
           if (__DEV__) console.log('[STORE] Fetched songs:', songs.length);
           set({ songs, isLoading: false });
         } catch (error) {
-          console.error('[STORE] Fetch error:', error);
+          if (__DEV__) console.error('[STORE] Fetch error:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to fetch songs', 
             isLoading: false 
@@ -78,7 +78,7 @@ export const useSongsStore = create<SongsState>()(
           if (__DEV__) console.log('[STORE] Fetched hidden songs:', hiddenSongs.length);
           set({ hiddenSongs, isLoading: false });
         } catch (error) {
-          console.error('[STORE] Fetch hidden error:', error);
+          if (__DEV__) console.error('[STORE] Fetch hidden error:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to fetch hidden songs', 
             isLoading: false 
@@ -109,7 +109,7 @@ export const useSongsStore = create<SongsState>()(
           await get().fetchSongs();
           set({ isLoading: false });
         } catch (error) {
-          console.error('[STORE] Add error:', error);
+          if (__DEV__) console.error('[STORE] Add error:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to add song', 
             isLoading: false 
@@ -207,7 +207,7 @@ export const useSongsStore = create<SongsState>()(
                 set(state => ({
                     songs: state.songs.map(s => s.id === song.id ? { ...s, lastPlayed: now } : s)
                 }));
-                queries.updatePlayStats(song.id).catch(console.error);
+                queries.updatePlayStats(song.id).catch(error => { if (__DEV__) console.error(error); });
                 useDailyStatsStore.getState().incrementDailyPlay(song.id);
             }, 5000); 
         } else {
@@ -228,7 +228,7 @@ export const useSongsStore = create<SongsState>()(
         try {
           return await queries.searchSongs(query);
         } catch (error) {
-          console.error('Search failed:', error);
+          if (__DEV__) console.error('Search failed:', error);
           return [];
         }
       },

@@ -275,7 +275,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
                 ? storeDuration 
                 : (currentSong?.duration || 180);
              
-             console.log(`[NowPlaying] âš ï¸ Detected collapsed lyrics. Auto-generating timestamps for ${duration}s`);
+             if (__DEV__) console.log(`[NowPlaying] âš ï¸ Detected collapsed lyrics. Auto-generating timestamps for ${duration}s`);
              
              // Auto-distribute
              const newLyrics = rawLyrics.map((line, index) => ({

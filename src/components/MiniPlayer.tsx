@@ -188,7 +188,7 @@ export const MiniPlayer: React.FC = () => {
       // If the player doesn't have this audio loaded, load it
       if (loadedAudioId !== currentSong.id && currentSong.audioUri) {
         try {
-          console.log('[MiniPlayer] Syncing audio for:', currentSong.title);
+          if (__DEV__) console.log('[MiniPlayer] Syncing audio for:', currentSong.title);
           await player.replace(currentSong.audioUri);
           setLoadedAudioId(currentSong.id);
           
@@ -196,14 +196,14 @@ export const MiniPlayer: React.FC = () => {
           // On user-initiated song change, auto-play
           if (isInitialLoad.current) {
             isInitialLoad.current = false;
-            console.log('[MiniPlayer] Initial load - staying paused');
+            if (__DEV__) console.log('[MiniPlayer] Initial load - staying paused');
           } else {
             setStorePlaying(true);
             player.play();
-            console.log('[MiniPlayer] User selected song - auto-playing');
+            if (__DEV__) console.log('[MiniPlayer] User selected song - auto-playing');
           }
         } catch (error) {
-          console.error('[MiniPlayer] Failed to sync audio:', error);
+          if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
         }
       }
     };

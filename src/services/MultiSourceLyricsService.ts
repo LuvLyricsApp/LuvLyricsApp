@@ -38,12 +38,12 @@ export const MultiSourceLyricsService = {
     duration?: number
   ): Promise<LyricaResult[]> => {
     try {
-      console.log('[LyricsEngine] Restricted to Lyrica only (slow synced > fast synced > plain)');
+      if (__DEV__) console.log('[LyricsEngine] Restricted to Lyrica only (slow synced > fast synced > plain)');
 
       const result = await lyricaService.fetchLyrics(title, artist, false, duration);
       return result ? [result] : [];
     } catch (error) {
-      console.error('[LyricsEngine] Critical failure in fetchLyricsParallel:', error);
+      if (__DEV__) console.error('[LyricsEngine] Critical failure in fetchLyricsParallel:', error);
       throw error;
     }
   }

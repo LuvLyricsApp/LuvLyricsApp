@@ -22,7 +22,7 @@ class NativeSearchServiceImpl {
      */
     async searchNativeYouTube(query: string): Promise<NativeSearchResult[]> {
         try {
-            console.log(`[NativeSearch] Searching: ${query}`);
+            if (__DEV__) console.log(`[NativeSearch] Searching: ${query}`);
             const encodedQuery = encodeURIComponent(query);
             // Use a generic user agent to look like a browser
             const timeoutPromise = new Promise<any>((_, reject) => 
@@ -53,7 +53,7 @@ class NativeSearchServiceImpl {
             const contents = json.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
 
             if (!contents || !Array.isArray(contents)) {
-                console.warn('[NativeSearch] No contents found in JSON tree');
+                if (__DEV__) console.warn('[NativeSearch] No contents found in JSON tree');
                 return [];
             }
 
@@ -90,7 +90,7 @@ class NativeSearchServiceImpl {
             return results;
 
         } catch (error) {
-            console.error('[NativeSearch] Failed:', error);
+            if (__DEV__) console.error('[NativeSearch] Failed:', error);
             return [];
         }
     }

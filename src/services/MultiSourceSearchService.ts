@@ -78,7 +78,7 @@ const mapProviderSong = (song: SaavnGaanaSongResponse, source: ProviderSource): 
  */
 async function searchGaana(query: string): Promise<UnifiedSong[]> {
   try {
-    console.log(`[Gaana] Searching (Fallback): ${query}`);
+    if (__DEV__) console.log(`[Gaana] Searching (Fallback): ${query}`);
     const searchUrl = `${GAANA_API}/search/songs?query=${encodeURIComponent(query)}&limit=20`;
 
     const timeoutPromise = createTimeout(25000);
@@ -101,7 +101,7 @@ async function searchGaana(query: string): Promise<UnifiedSong[]> {
       .filter((s: UnifiedSong) => s.downloadUrl);
 
   } catch (error: unknown) {
-    console.warn(`[Gaana] Search failed: ${getErrorMessage(error)}`);
+    if (__DEV__) console.warn(`[Gaana] Search failed: ${getErrorMessage(error)}`);
     return [];
   }
 }
@@ -113,7 +113,7 @@ async function searchGaana(query: string): Promise<UnifiedSong[]> {
  */
 async function searchSaavn(query: string): Promise<UnifiedSong[]> {
   try {
-    console.log(`[Saavn] Searching: ${query}`);
+    if (__DEV__) console.log(`[Saavn] Searching: ${query}`);
     const searchUrl = `${SAAVN_API}/search/songs?query=${encodeURIComponent(query)}&limit=20`;
 
     const timeoutPromise = createTimeout(25000);
@@ -126,7 +126,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
     ]) as Response;
 
     if (!response.ok) {
-        console.warn(`[Saavn] API Error: ${response.status}`);
+        if (__DEV__) console.warn(`[Saavn] API Error: ${response.status}`);
         return [];
     }
 
@@ -141,7 +141,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
       .filter((s: UnifiedSong) => s.downloadUrl);
 
   } catch (error: unknown) {
-    console.warn(`[Saavn] Search failed: ${getErrorMessage(error)}`);
+    if (__DEV__) console.warn(`[Saavn] Search failed: ${getErrorMessage(error)}`);
     return [];
   }
 }
@@ -151,7 +151,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
  * Now exclusively uses Saavn for reliability
  */
 export async function searchMusic(query: string, artistName?: string, onProgress?: (status: string) => void): Promise<UnifiedSong[]> {
-  console.log(`[SearchEngine] 🚀 Searching JioSaavn. Query: "${query}"`);
+  if (__DEV__) console.log(`[SearchEngine] 🚀 Searching JioSaavn. Query: "${query}"`);
   onProgress?.('Searching JioSaavn...');
 
   try {
@@ -159,7 +159,7 @@ export async function searchMusic(query: string, artistName?: string, onProgress
       
       // FALLBACK TO GAANA
       if (results.length === 0) {
-          console.log(`[SearchEngine] ⚠️ Saavn returned 0 results. Trying Gaana...`);
+          if (__DEV__) console.log(`[SearchEngine] ⚠️ Saavn returned 0 results. Trying Gaana...`);
           onProgress?.('Saavn empty. Trying Gaana...');
           const gaanaResults = await searchGaana(query);
           results = gaanaResults;
@@ -183,9 +183,9 @@ export async function searchMusic(query: string, artistName?: string, onProgress
       const message = getErrorMessage(error);
       const name = error instanceof Error ? error.name : '';
       if (message === 'TIMEOUT' || name === 'AbortError' || message.includes('Network request failed')) {
-          console.warn(`[SearchEngine] Network timeout/error for "${query}".`);
+          if (__DEV__) console.warn(`[SearchEngine] Network timeout/error for "${query}".`);
       } else {
-          console.error(`[SearchEngine] ⚠️ Search Failed:`, error);
+          if (__DEV__) console.error(`[SearchEngine] ⚠️ Search Failed:`, error);
       }
       return [];
   }
@@ -210,7 +210,7 @@ export async function getRecommendations(songId: string): Promise<UnifiedSong[]>
       .filter((s: UnifiedSong) => s.downloadUrl);
 
   } catch (error) {
-    console.warn(`[SaavnRecs] Failed:`, error);
+    if (__DEV__) console.warn(`[SaavnRecs] Failed:`, error);
     return [];
   }
 }

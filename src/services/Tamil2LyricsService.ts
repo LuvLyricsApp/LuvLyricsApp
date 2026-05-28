@@ -39,7 +39,7 @@ class Tamil2LyricsService {
       const songUrl = linkMatch[1];
       return await this.fetchLyrics(songUrl);
     } catch (error) {
-      console.error('[Tamil2Lyrics] Search failed:', error);
+      if (__DEV__) console.error('[Tamil2Lyrics] Search failed:', error);
       return null;
     }
   }
@@ -88,7 +88,7 @@ class Tamil2LyricsService {
         source: 'Tamil2Lyrics',
       };
     } catch (error) {
-      console.error('[Tamil2Lyrics] Fetch failed:', error);
+      if (__DEV__) console.error('[Tamil2Lyrics] Fetch failed:', error);
       return null;
     }
   }

@@ -6,7 +6,7 @@
 import { getDatabase } from './db';
 
 const log = (msg: string, data?: any) => {
-  console.log(`[DB] ${msg}`, data ?? '');
+  if (__DEV__) console.log(`[DB] ${msg}`, data ?? '');
 };
 
 /**

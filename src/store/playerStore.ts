@@ -66,9 +66,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   
   // Default no-ops
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
-  play: () => console.warn('Player not initialized'),
-  pause: () => console.warn('Player not initialized'),
-  seekTo: () => console.warn('Player not initialized'),
+  play: () => { if (__DEV__) console.warn('Player not initialized'); },
+  pause: () => { if (__DEV__) console.warn('Player not initialized'); },
+  seekTo: () => { if (__DEV__) console.warn('Player not initialized'); },
   
   setControls: (controls) => set({ 
       play: controls.play, 
@@ -172,7 +172,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       isPlaying: true // FORCE PLAY
     });
     if (__DEV__) {
-      console.log(`[PLAYER] Set playlist queue: ${playlistId}, ${songs.length} songs, starting at ${startIndex}`);
+      if (__DEV__) console.log(`[PLAYER] Set playlist queue: ${playlistId}, ${songs.length} songs, starting at ${startIndex}`);
     }
     
     // Fetch full song details (lyrics) for the starting song
@@ -195,7 +195,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // If currently playing song was removed, stop playback
     if (state.currentSong?.id === songId) {
       if (__DEV__) {
-        console.log('[PLAYER] Currently playing song removed from queue, clearing');
+        if (__DEV__) console.log('[PLAYER] Currently playing song removed from queue, clearing');
       }
       set({ 
         playlistQueue: newQueue.length > 0 ? newQueue : null,
@@ -217,7 +217,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     });
     
     if (__DEV__) {
-      console.log(`[PLAYER] Removed ${songId} from queue, ${newQueue.length} songs remaining`);
+      if (__DEV__) console.log(`[PLAYER] Removed ${songId} from queue, ${newQueue.length} songs remaining`);
     }
   },
   
@@ -258,7 +258,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     get().loadSong(nextSong.id);
     get().play(); // Execute Play
     if (__DEV__) {
-      console.log(`[PLAYER] Next in playlist: ${nextSong.title}`);
+      if (__DEV__) console.log(`[PLAYER] Next in playlist: ${nextSong.title}`);
     }
   },
   
@@ -280,7 +280,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     get().loadSong(prevSong.id);
     get().play(); // Execute Play
     if (__DEV__) {
-      console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);
+      if (__DEV__) console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);
     }
   },
   
@@ -291,7 +291,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentQueueIndex: -1
     });
     if (__DEV__) {
-      console.log('[PLAYER] Cleared playlist queue');
+      if (__DEV__) console.log('[PLAYER] Cleared playlist queue');
     }
   },
 

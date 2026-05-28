@@ -488,7 +488,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
                 });
                 uriToShare = tempFile;
             } catch (copyError) {
-                console.error('Failed to copy content URI for sharing:', copyError);
+                if (__DEV__) console.error('Failed to copy content URI for sharing:', copyError);
                 // Continue with original URI as fallback
             }
         }
@@ -499,7 +499,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
             UTI: 'public.audio' // iOS compatibility
         });
     } catch (error) {
-        console.error('Share error:', error);
+        if (__DEV__) console.error('Share error:', error);
         setToast({ visible: true, message: 'Failed to share song', type: 'error' });
     }
   };

@@ -30,7 +30,7 @@ const App: React.FC = () => {
 
       while (retries > 0) {
         try {
-          console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
+          if (__DEV__) console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
 
           // Initialize Audio Mode for background/remote controls
           await setAudioModeAsync({
@@ -60,12 +60,16 @@ const App: React.FC = () => {
           }
 
           // Start desktop bridge if previously enabled
-          import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()).catch(console.error);
+          import('./store/desktopBridgeSettingsStore')
+            .then(m => m.useDesktopBridgeSettingsStore.getState().load())
+            .catch(initError => { if (__DEV__) console.error(initError); });
 
           // Pre-fetch Luvs for instant playback
-          import('./services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.prefetch()).catch(console.error);
+          import('./services/LuvsRecommendationEngine')
+            .then(m => m.luvsRecommendationEngine.prefetch())
+            .catch(initError => { if (__DEV__) console.error(initError); });
 
-          console.log('[APP] Initialization successful');
+          if (__DEV__) console.log('[APP] Initialization successful');
           setIsReady(true);
           
           // Run playlist migration AFTER UI renders (prevents startup freeze)
@@ -79,18 +83,18 @@ const App: React.FC = () => {
           return; // Success - exit retry loop
         } catch (err) {
           lastError = err instanceof Error ? err : new Error('Unknown error');
-          console.error(`[APP] Initialization error (attempt ${4 - retries}/3):`, err);
+          if (__DEV__) console.error(`[APP] Initialization error (attempt ${4 - retries}/3):`, err);
           
           retries--;
           if (retries > 0) {
-            console.log(`[APP] Retrying in 2 seconds...`);
+            if (__DEV__) console.log(`[APP] Retrying in 2 seconds...`);
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
       }
 
       // All retries failed
-      console.error('[APP] Initialization failed after 3 attempts');
+      if (__DEV__) console.error('[APP] Initialization failed after 3 attempts');
       setError(lastError?.message || 'Failed to initialize app. Please check your network connection and restart.');
       setIsReady(true); // Allow app to render with error state
     };

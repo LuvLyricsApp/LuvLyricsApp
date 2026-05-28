@@ -59,7 +59,7 @@ export const MusicSearchService = {
       });
 
     } catch (error) {
-      console.error('[MusicSearchService] Search Error:', error);
+      if (__DEV__) console.error('[MusicSearchService] Search Error:', error);
       return [];
     }
   },
@@ -82,7 +82,7 @@ export const MusicSearchService = {
         copyright: data.data.copyright || '',
       };
     } catch (error) {
-      console.error('[MusicSearchService] Lyrics Error:', error);
+      if (__DEV__) console.error('[MusicSearchService] Lyrics Error:', error);
       return null;
     }
   }

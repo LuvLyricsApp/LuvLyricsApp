@@ -48,7 +48,7 @@ export const PlaylistSelectionModal = ({ visible, onClose, onSelect, onSkip }: P
             onSelect(id, newPlaylistName.trim());
             onClose();
         } catch (e) {
-            console.error(e);
+            if (__DEV__) console.error(e);
         } finally {
             setLocalLoading(false);
         }

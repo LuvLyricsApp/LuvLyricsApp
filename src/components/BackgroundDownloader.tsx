@@ -38,7 +38,7 @@ export const BackgroundDownloader = () => {
         const queueIds = new Set(queue.map(q => q.id));
         for (const activeId of activeDownloads.current) {
             if (!queueIds.has(activeId)) {
-                console.log(`[BackgroundDownloader] Detected removal of active item: ${activeId}`);
+                if (__DEV__) console.log(`[BackgroundDownloader] Detected removal of active item: ${activeId}`);
                 // Stop the download to save bandwidth
                 downloadManager.pauseDownload(activeId); 
                 activeDownloads.current.delete(activeId);
@@ -48,11 +48,11 @@ export const BackgroundDownloader = () => {
         const processItem = async (item: any) => {
             // Check limits BEFORE adding to active set
             if (activeDownloads.current.has(item.id)) {
-                console.log(`[BackgroundDownloader] ${item.id} already downloading`);
+                if (__DEV__) console.log(`[BackgroundDownloader] ${item.id} already downloading`);
                 return;
             }
             if (activeDownloads.current.size >= MAX_CONCURRENT) {
-                console.log(`[BackgroundDownloader] Max concurrent (${MAX_CONCURRENT}) reached, waiting...`);
+                if (__DEV__) console.log(`[BackgroundDownloader] Max concurrent (${MAX_CONCURRENT}) reached, waiting...`);
                 return;
             }
 
@@ -61,7 +61,7 @@ export const BackgroundDownloader = () => {
             const targetUrl = item.song.downloadUrl || item.song.streamUrl;
             
             if (!targetUrl) {
-                console.error(`[BackgroundDownloader] ❌ No download URL for ${item.song.title}`);
+                if (__DEV__) console.error(`[BackgroundDownloader] ❌ No download URL for ${item.song.title}`);
                 updateItem(item.id, { 
                     status: 'failed', 
                     error: 'No download URL available', 
@@ -72,12 +72,12 @@ export const BackgroundDownloader = () => {
 
             // Add to active set IMMEDIATELY (synchronously)
             activeDownloads.current.add(item.id);
-            console.log(`[BackgroundDownloader] Starting download ${activeDownloads.current.size}/${MAX_CONCURRENT}: ${item.song.title}`);
-            console.log(`[BackgroundDownloader] URL: ${targetUrl.substring(0, 80)}...`);
+            if (__DEV__) console.log(`[BackgroundDownloader] Starting download ${activeDownloads.current.size}/${MAX_CONCURRENT}: ${item.song.title}`);
+            if (__DEV__) console.log(`[BackgroundDownloader] URL: ${targetUrl.substring(0, 80)}...`);
 
             try {
                 // Log song object to debug cover art
-                console.log(`[BackgroundDownloader] Song cover art URL:`, item.song.highResArt || item.song.thumbnail || 'NONE');
+                if (__DEV__) console.log(`[BackgroundDownloader] Song cover art URL:`, item.song.highResArt || item.song.thumbnail || 'NONE');
                 
                 // 1. Transform UnifiedSong to StagingSong format
                 const stagingPayload: any = {
@@ -215,7 +215,7 @@ export const BackgroundDownloader = () => {
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 if (__DEV__) {
-                    console.error(`[BackgroundDownloader] ❌ Error for ${item.song.title}:`, error);
+                    if (__DEV__) console.error(`[BackgroundDownloader] ❌ Error for ${item.song.title}:`, error);
                 }
                 
                 // Also remove from active set on error before updating status
