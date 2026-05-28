@@ -267,7 +267,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         <View
           style={styles.hitArea}
           onLayout={onLayout}
-          hitSlop={{ top: 20, bottom: 20, left: 10, right: 10 }}
+          hitSlop={{ top: 20, bottom: isIsland ? 20 : 6, left: 10, right: 10 }}
         >
           {/* Track Wrapper for vertical centering */}
           <View style={styles.trackWrapper}>

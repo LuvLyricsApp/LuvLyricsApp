@@ -44,8 +44,9 @@ interface TrackInfoProps {
   coverImageUri?: string;
   isIsland: boolean;
   onPress: () => void;
+  onBodyPress: () => void;
 }
-const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress }: TrackInfoProps) => (
+const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBodyPress }: TrackInfoProps) => (
   <>
     <Pressable onPress={(e) => { e.stopPropagation(); onPress(); }}>
       {coverImageUri ? (
@@ -59,12 +60,12 @@ const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress }: Tra
         </View>
       )}
     </Pressable>
-    <View style={styles.info}>
+    <Pressable onPress={(e) => { e.stopPropagation(); onBodyPress(); }} style={styles.info}>
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
       <Text style={[styles.artist, isIsland && { display: 'none' }]} numberOfLines={1}>
         {artist || 'Unknown Artist'}
       </Text>
-    </View>
+    </Pressable>
   </>
 ));
 TrackInfo.displayName = 'TrackInfo';
@@ -141,9 +142,6 @@ export const MiniPlayer: React.FC = () => {
   // Use store instead of navigation state to avoid root-level crashes
   const isNowPlaying = hideMiniPlayer;
 
-  // Optimistic Playback State
-  const [optimisticPlaying, setOptimisticPlaying] = useState(false);
-  
   // Animation for Play/Pause Button
   const playButtonScale = useSharedValue(1);
 
@@ -151,34 +149,23 @@ export const MiniPlayer: React.FC = () => {
     transform: [{ scale: playButtonScale.value }]
   }));
 
-  // Sync optimistic state with store instead of native player
-  useEffect(() => {
-    setOptimisticPlaying(storePlaying);
-  }, [storePlaying]);
-
+  // togglePlay reads live store state so the callback stays stable across renders.
+  // A stable callback means PlaybackControls (memo'd) never re-renders just because
+  // the play/pause state changed — only when the icon prop itself changes.
   const togglePlay = useCallback((e?: any) => {
       e?.stopPropagation();
       if (!player) return;
 
-      // 1. Optimistic Update
-      const nextState = !optimisticPlaying;
-      setOptimisticPlaying(nextState);
+      const nextState = !usePlayerStore.getState().isPlaying;
 
-      // 2. Button Animation (Bounce In -> Out)
       playButtonScale.value = withSequence(
           withTiming(0.8, { duration: 100 }),
           withSpring(1, { damping: 10, stiffness: 200 })
       );
 
-      // 3. Actual Action
-      if (nextState) {
-          setStorePlaying(true);
-          player.play();
-      } else {
-          setStorePlaying(false);
-          player.pause();
-      }
-  }, [optimisticPlaying, player, setStorePlaying, playButtonScale]);
+      setStorePlaying(nextState);
+      if (nextState) player.play(); else player.pause();
+  }, [player, setStorePlaying, playButtonScale]);
 
   
   const [expanded, setExpanded] = useState(false);
@@ -762,7 +749,7 @@ export const MiniPlayer: React.FC = () => {
                              <RotatingVinyl 
                                 imageUri={currentSong.coverImageUri} 
                                 size={64} 
-                                isPlaying={optimisticPlaying} 
+                                isPlaying={storePlaying} 
                              />
                         </Pressable>
 
@@ -779,7 +766,7 @@ export const MiniPlayer: React.FC = () => {
                         {/* Controls Grouped */}
                         <PlaybackControls
                             variant="island-expanded"
-                            playing={optimisticPlaying}
+                            playing={storePlaying}
                             onToggle={togglePlay}
                             onSkipBack={skipBackward}
                             onSkipForward={skipForward}
@@ -872,13 +859,14 @@ export const MiniPlayer: React.FC = () => {
                         coverImageUri={currentSong.coverImageUri}
                         isIsland={isIsland}
                         onPress={openNowPlaying}
+                        onBodyPress={toggleExpand}
                     />
                     
                     {/* Controls */}
                     {isIsland ? (
                     <PlaybackControls
                         variant="island-collapsed"
-                        playing={optimisticPlaying}
+                        playing={storePlaying}
                         onToggle={togglePlay}
                         onSkipBack={skipBackward}
                         onSkipForward={skipForward}
@@ -888,7 +876,7 @@ export const MiniPlayer: React.FC = () => {
                     /* Bar Mode Controls */
                     <PlaybackControls
                         variant="bar"
-                        playing={optimisticPlaying}
+                        playing={storePlaying}
                         onToggle={togglePlay}
                         onSkipBack={skipBackward}
                         onSkipForward={skipForward}
