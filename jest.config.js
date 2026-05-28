@@ -15,6 +15,9 @@ module.exports = {
     '^react-native$': '<rootDir>/node_modules/react-native/jest/setup.js',
     '\\.(jpg|jpeg|png|gif|mp3|wav|mp4)$': '<rootDir>/scripts/ci/__mocks__/fileMock.js',
   },
+  globals: {
+    __DEV__: false,
+  },
   // Coverage threshold scoped only to files that already have tests,
   // so CI doesn't fail as contributors add new untested files
   coverageThreshold: {
