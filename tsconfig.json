@@ -1,5 +1,5 @@
 {
   "compilerOptions": {},
-  "exclude": ["prats"],
+  "exclude": ["lakebed"],
   "extends": "expo/tsconfig.base"
 }

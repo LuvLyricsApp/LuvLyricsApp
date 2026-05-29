@@ -29,7 +29,7 @@ class LuvsPlayerModule : Module() {
             val context = appContext.reactContext ?: return@Function null
             audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION.SDK_INT) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 val playbackAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -56,7 +56,7 @@ class LuvsPlayerModule : Module() {
             scope.launch {
                 stopStatusPoller()
                 // Clear audio focus
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION.SDK_INT) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
                 } else {
                     @Suppress("DEPRECATION")
