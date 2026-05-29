@@ -152,13 +152,6 @@ android {
     }
 }
 
-// Exclude the Gradle-generated ExpoModulesPackageList.java so our
-// hand-written Kotlin override in src/main/java/expo/modules/ wins.
-afterEvaluate {
-    android.sourceSets.main.java.srcDirs = android.sourceSets.main.java.srcDirs.findAll {
-        !it.absolutePath.contains('generated/expo')
-    }.toSet()
-}
 
 dependencies {
     // Media3 ExoPlayer & Session dependencies for Module A
