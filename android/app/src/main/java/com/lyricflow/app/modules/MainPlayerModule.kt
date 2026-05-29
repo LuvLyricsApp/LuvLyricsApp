@@ -89,37 +89,37 @@ class MainPlayerModule : Module() {
         }
 
         Function("play") {
-            val player = PlayerBridge.getPlayer() ?: return@Function
-            mainHandler.post { player.play() }
+            PlayerBridge.getPlayer()?.let { player -> mainHandler.post { player.play() } }
         }
 
         Function("pause") {
-            val player = PlayerBridge.getPlayer() ?: return@Function
-            mainHandler.post { player.pause() }
+            PlayerBridge.getPlayer()?.let { player -> mainHandler.post { player.pause() } }
         }
 
         Function("seekTo") { seconds: Double ->
-            val player = PlayerBridge.getPlayer() ?: return@Function
-            val ms = (seconds * 1000.0).toLong()
-            mainHandler.post { player.seekTo(ms) }
+            PlayerBridge.getPlayer()?.let { player ->
+                val ms = (seconds * 1000.0).toLong()
+                mainHandler.post { player.seekTo(ms) }
+            }
         }
 
         Function("updateMetadata") { metadata: Map<String, String> ->
-            val player = PlayerBridge.getPlayer() ?: return@Function
-            mainHandler.post {
-                val currentItem = player.currentMediaItem ?: return@post
-                val updatedMetadata = MediaMetadata.Builder()
-                    .setTitle(metadata["title"])
-                    .setArtist(metadata["artist"])
-                    .setAlbumTitle(metadata["album"])
-                    .apply {
-                        metadata["artworkUri"]?.let {
-                            if (it.isNotEmpty()) setArtworkUri(Uri.parse(it))
+            PlayerBridge.getPlayer()?.let { player ->
+                mainHandler.post {
+                    val currentItem = player.currentMediaItem ?: return@post
+                    val updatedMetadata = MediaMetadata.Builder()
+                        .setTitle(metadata["title"])
+                        .setArtist(metadata["artist"])
+                        .setAlbumTitle(metadata["album"])
+                        .apply {
+                            metadata["artworkUri"]?.let {
+                                if (it.isNotEmpty()) setArtworkUri(Uri.parse(it))
+                            }
                         }
-                    }
-                    .build()
-                val newItem = currentItem.buildUpon().setMediaMetadata(updatedMetadata).build()
-                player.replaceMediaItem(player.currentMediaItemIndex, newItem)
+                        .build()
+                    val newItem = currentItem.buildUpon().setMediaMetadata(updatedMetadata).build()
+                    player.replaceMediaItem(player.currentMediaItemIndex, newItem)
+                }
             }
         }
 
