@@ -65,6 +65,21 @@ All complaints will be reviewed and investigated promptly and fairly.
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
 
+## Contact and Escalation
+
+If you need to report a violation, ask a question about enforcement, or escalate
+a concern that has not been addressed within 48 hours, you can reach out
+through the following channels:
+
+- **Email**: [contactluvlyricsapp@gmail.com](mailto:contactluvlyricsapp@gmail.com)  
+  Monitored by project admins. Please allow up to 48 hours for a response.
+- **Discord**: [Join our community](https://discord.gg/VeR3hAfUn)
+- **GitHub Security Report**: For sensitive issues, you may also open a private
+  security report as described in [SECURITY.md](./SECURITY.md).
+
+If you do not receive a response within 48 hours, or if the concern involves
+a community leader, you may escalate to the GSSoC 2026 admin team directly.
+
 ## Enforcement Guidelines
 
 Community leaders will follow these Community Impact Guidelines in determining
