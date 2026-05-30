@@ -57,6 +57,7 @@ export function useVoiceCommands() {
                   code === 'timeout' ? 'No speech detected' :
                   code === 'permission_denied' ? 'Microphone permission denied' :
                   code === 'not_available' ? 'Voice not available on this device' :
+                  code === 'busy' ? 'Voice is busy — try again' :
                   'Something went wrong';
       setState(s => ({ ...s, isListening: false, audioLevel: 0, error: msg }));
     });
@@ -144,8 +145,18 @@ export function useVoiceCommands() {
     if (isListeningRef.current) return;
     isListeningRef.current = true;
     setState(s => ({ ...s, isListening: true, error: null, lastCommand: null }));
-    if (!NativeVoiceInput.isAvailable()) return;
-    await NativeVoiceInput.startListening();
+    if (!NativeVoiceInput.isAvailable()) {
+      setState(s => ({ ...s, isListening: false, error: 'Voice not available on this device' }));
+      isListeningRef.current = false;
+      return;
+    }
+    try {
+      await NativeVoiceInput.startListening();
+    } catch (e) {
+      isListeningRef.current = false;
+      const msg = e instanceof Error ? e.message : 'Voice start failed';
+      setState(s => ({ ...s, isListening: false, error: msg }));
+    }
   }, []);
 
   const stopListening = useCallback(async () => {
@@ -153,13 +164,22 @@ export function useVoiceCommands() {
     isListeningRef.current = false;
     setState(s => ({ ...s, isListening: false, audioLevel: 0, partialTranscript: '' }));
     if (!NativeVoiceInput.isAvailable()) return;
-    await NativeVoiceInput.stopListening();
+    try {
+      await NativeVoiceInput.stopListening();
+    } catch {
+      // swallow — onEnd/onError will handle state
+    }
   }, []);
 
   const cancelListening = useCallback(async () => {
-    await NativeVoiceInput.cancelListening();
     isListeningRef.current = false;
     setState(s => ({ ...s, isListening: false, audioLevel: 0, partialTranscript: '' }));
+    if (!NativeVoiceInput.isAvailable()) return;
+    try {
+      await NativeVoiceInput.cancelListening();
+    } catch {
+      // swallow
+    }
   }, []);
 
   return { ...state, startListening, stopListening, cancelListening };

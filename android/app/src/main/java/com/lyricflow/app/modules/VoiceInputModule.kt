@@ -1,5 +1,6 @@
 package com.lyricflow.app.modules
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -7,6 +8,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CoroutineScope
@@ -28,17 +30,24 @@ class VoiceInputModule : Module() {
         AsyncFunction("startListening") {
             scope.launch {
                 val context = appContext.reactContext ?: run {
-                    sendEvent("onError", mapOf("code" to "no_context", "message" to "React context unavailable"))
+                    sendError("no_context", "React context unavailable")
                     return@launch
                 }
 
                 if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                    sendEvent("onError", mapOf("code" to "not_available", "message" to "Speech recognition not available on this device"))
+                    sendError("not_available", "Speech recognition not available on this device")
                     return@launch
                 }
 
                 recognizer?.destroy()
-                recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                val newRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+
+                if (newRecognizer == null) {
+                    sendError("not_available", "Failed to create SpeechRecognizer instance")
+                    return@launch
+                }
+
+                recognizer = newRecognizer.apply {
                     setRecognitionListener(object : RecognitionListener {
                         override fun onReadyForSpeech(params: Bundle?) {
                             sendEvent("onStart", emptyMap<String, Any>())
@@ -47,7 +56,6 @@ class VoiceInputModule : Module() {
                         override fun onBeginningOfSpeech() {}
 
                         override fun onRmsChanged(rmsdB: Float) {
-                            // Normalize typical range -2..10 dB to 0..1
                             val level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
                             sendEvent("onAudioLevel", mapOf("level" to level))
                         }
@@ -65,8 +73,10 @@ class VoiceInputModule : Module() {
                                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "busy"
                                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "permission_denied"
                                 SpeechRecognizer.ERROR_NETWORK -> "network_error"
+                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "timeout"
                                 else -> "error_$error"
                             }
+                            Log.w("VoiceInput", "SpeechRecognizer error: $code ($error)")
                             sendEvent("onError", mapOf("code" to code))
                             sendEvent("onEnd", mapOf("transcript" to ""))
                         }
@@ -97,7 +107,6 @@ class VoiceInputModule : Module() {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    // Stop listening 1.5s after silence
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
                 }
@@ -107,22 +116,38 @@ class VoiceInputModule : Module() {
 
         AsyncFunction("stopListening") {
             scope.launch {
-                recognizer?.stopListening()
+                try {
+                    recognizer?.stopListening()
+                } catch (e: Exception) {
+                    Log.w("VoiceInput", "stopListening failed: ${e.message}")
+                }
             }
         }
 
         AsyncFunction("cancelListening") {
             scope.launch {
-                recognizer?.cancel()
-                recognizer?.destroy()
+                try {
+                    recognizer?.cancel()
+                    recognizer?.destroy()
+                } catch (e: Exception) {
+                    Log.w("VoiceInput", "cancelListening failed: ${e.message}")
+                }
                 recognizer = null
                 sendEvent("onEnd", mapOf("transcript" to ""))
             }
         }
 
         OnDestroy {
-            recognizer?.destroy()
+            try {
+                recognizer?.destroy()
+            } catch (_: Exception) {}
             recognizer = null
         }
+    }
+
+    private fun sendError(code: String, message: String) {
+        Log.e("VoiceInput", "Error: $code — $message")
+        sendEvent("onError", mapOf("code" to code, "message" to message))
+        sendEvent("onEnd", mapOf("transcript" to ""))
     }
 }

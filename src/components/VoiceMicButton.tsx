@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, View, Platform } from 'react-native';
+import { Pressable, StyleSheet, View, Text } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useVoiceCommands } from '../hooks/useVoiceCommands';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
+import { useSettingsStore } from '../store/settingsStore';
 import { Ionicons } from '@expo/vector-icons';
 
 const BUTTON_SIZE = 56;
@@ -26,16 +27,19 @@ interface Props {
 const INLINE_SIZE = 40;
 const INLINE_PRIMARY = '#2F8CFF';
 
-const HOLD_THRESHOLD = 300; // ms — under this = tap, over = hold-to-talk
+// Long-press threshold: 600ms feels natural for hold-to-talk
+const LONG_PRESS_MS = 600;
 
 export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' }) => {
   const isInline = variant === 'inline';
-  const { isListening, audioLevel, startListening, stopListening, cancelListening } = useVoiceCommands();
+  const { isListening, audioLevel, error, startListening, stopListening, cancelListening } = useVoiceCommands();
   const isDark = useIsDark();
   const colors = useThemeColors();
+  const voiceMode = useSettingsStore(s => s.voiceMode ?? 'tap');
 
-  const pressStartRef = useRef<number>(0);
   const wasListeningOnPressRef = useRef<boolean>(false);
+  const isHoldRef = useRef(false);
+  const errorFlashRef = useRef(false);
 
   // Pulse ring animation
   const pulseScale = useSharedValue(1);
@@ -52,7 +56,6 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
 
   useEffect(() => {
     if (isListening) {
-      // Pulsing ring
       pulseScale.value = withRepeat(
         withSequence(
           withTiming(1.6, { duration: 800, easing: Easing.out(Easing.ease) }),
@@ -77,14 +80,20 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
       pulseOpacity.value = withTiming(0, { duration: 200 });
       pressScale.value = withTiming(1, { duration: 150 });
 
-      // Reset bars
       [bar1, bar2, bar3, bar4].forEach(b => {
         b.value = withTiming(0.3, { duration: 200 });
       });
     }
   }, [isListening]);
 
-  // Drive audio level bars from mic input
+  // Flash red briefly on error
+  useEffect(() => {
+    if (!error) return;
+    errorFlashRef.current = true;
+    const t = setTimeout(() => { errorFlashRef.current = false; }, 1200);
+    return () => clearTimeout(t);
+  }, [error]);
+
   useEffect(() => {
     if (!isListening) return;
     const lvl = audioLevel;
@@ -116,8 +125,8 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
     height: interpolate(bar4.value, [0, 1], [4, 20]),
   }));
 
-  // Hybrid hold+tap using RN's onLongPress (suppresses onPress when long press fires)
-  const isHoldRef = useRef(false);
+  // Respect voiceMode setting
+  const isTapMode = voiceMode === 'tap';
 
   const onPressIn = useCallback(() => {
     isHoldRef.current = false;
@@ -126,27 +135,40 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
   }, [isListening, startListening]);
 
   const onLongPress = useCallback(() => {
-    isHoldRef.current = true; // mark as hold — onPress won't fire after this
-  }, []);
+    if (isTapMode) return; // ignore long press in tap mode
+    isHoldRef.current = true;
+  }, [isTapMode]);
 
   const onPressOut = useCallback(() => {
-    if (isHoldRef.current) stopListening(); // hold released → stop
-  }, [stopListening]);
+    if (!isTapMode && isHoldRef.current) {
+      stopListening();
+    }
+    // In tap mode: release does nothing; tap toggles
+  }, [isTapMode, stopListening]);
 
   const onPress = useCallback(() => {
-    // only fires on quick tap (RN suppresses this when onLongPress fired)
-    if (wasListeningOnPressRef.current) stopListening(); // was on → tap turns off
-    // was off → startListening already called in onPressIn, stays on
-  }, [stopListening]);
+    if (isTapMode) {
+      // Tap toggles: if already listening, stop; if not, start already happened in onPressIn
+      if (wasListeningOnPressRef.current) {
+        stopListening();
+      }
+    }
+    // In hold mode: onPress is suppressed by onLongPress, so this only fires on quick tap.
+    // Quick tap while already listening should also stop (safety valve).
+    if (!isTapMode && wasListeningOnPressRef.current) {
+      stopListening();
+    }
+  }, [isTapMode, stopListening]);
 
-  const bgColor = isListening ? PRIMARY : (isDark ? '#1A1A2E' : '#FFFFFF');
+  // Error state overrides colors briefly
+  const hasError = !!error && !isListening;
+  const bgColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? '#1A1A2E' : '#FFFFFF'));
   const iconColor = isListening ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.75)' : colors.textMuted);
-  const borderColor = isListening ? PRIMARY : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)');
+  const borderColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'));
 
   if (isInline) {
-    // Neo-brutalism: high-contrast black & white only
-    const brutalBg = isListening ? '#000000' : '#FFFFFF';
-    const brutalBorder = isListening ? '#FFFFFF' : '#000000';
+    const brutalBg = isListening ? '#000000' : (hasError ? '#FF3B30' : '#FFFFFF');
+    const brutalBorder = isListening ? '#FFFFFF' : (hasError ? '#FF3B30' : '#000000');
     const brutalIcon = isListening ? '#FFFFFF' : '#000000';
 
     return (
@@ -155,7 +177,7 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
         onPressOut={onPressOut}
         onPress={onPress}
         onLongPress={onLongPress}
-        delayLongPress={300}
+        delayLongPress={LONG_PRESS_MS}
         style={style}
       >
         <View style={[styles.inlineButton, { backgroundColor: brutalBg, borderColor: brutalBorder }]}>
@@ -176,32 +198,22 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
 
   return (
     <View style={[styles.wrapper, style]} pointerEvents="box-none">
-      {/* Pulse ring — sits behind button */}
       <Animated.View
-        style={[
-          styles.pulse,
-          { borderColor: PRIMARY },
-          pulseStyle,
-        ]}
+        style={[styles.pulse, { borderColor: PRIMARY }, pulseStyle]}
         pointerEvents="none"
       />
-
       <Pressable
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         onPress={onPress}
         onLongPress={onLongPress}
-        delayLongPress={300}
+        delayLongPress={LONG_PRESS_MS}
         android_ripple={null}
       >
         <Animated.View
           style={[
             styles.button,
-            {
-              backgroundColor: bgColor,
-              borderColor,
-              shadowColor: isListening ? PRIMARY : '#000',
-            },
+            { backgroundColor: bgColor, borderColor, shadowColor: isListening ? PRIMARY : '#000' },
             buttonStyle,
           ]}
         >
@@ -217,6 +229,11 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
           )}
         </Animated.View>
       </Pressable>
+      {hasError && (
+        <Text style={styles.errorLabel} numberOfLines={2}>
+          {error}
+        </Text>
+      )}
     </View>
   );
 };
@@ -274,6 +291,14 @@ const styles = StyleSheet.create({
   inlineBar: {
     width: 2.5,
     borderRadius: 1.5,
+  },
+  errorLabel: {
+    position: 'absolute',
+    bottom: -28,
+    fontSize: 9,
+    color: '#FF3B30',
+    textAlign: 'center',
+    width: 120,
   },
 });
 
