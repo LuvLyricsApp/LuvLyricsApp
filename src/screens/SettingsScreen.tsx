@@ -19,7 +19,7 @@ import {
   PanResponder,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { TabScreenProps } from '../types/navigation';
@@ -369,6 +369,7 @@ const PIN_SECTIONS: { key: 'personalization' | 'system' | 'tools'; label: string
 type Props = TabScreenProps<'Settings'>;
 
 const SettingsScreen: React.FC<Props> = () => {
+  const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
   const { fetchSongs, addSong, songs, deleteSong, getSong } = useSongsStore();
   const applyThemeToOtherPages = useSettingsStore(state => state.applyThemeToOtherPages);
@@ -606,7 +607,7 @@ const SettingsScreen: React.FC<Props> = () => {
         </View>
       )}
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 150 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
           {/* ── Screen title ── */}
           <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Settings</Text>
@@ -808,6 +809,7 @@ const SettingsScreen: React.FC<Props> = () => {
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
       </BottomSheet>
 
+      <BottomSheet visible={activeSheet === 'library'} title="Library" onClose={closeSheet}>
         <SettingsRow
           icon="color-palette-outline" label="Background Theme"
           value={
@@ -833,6 +835,86 @@ const SettingsScreen: React.FC<Props> = () => {
           value={settings.applyThemeToOtherPages}
           onToggle={settings.setApplyThemeToOtherPages}
         />
+      </BottomSheet>
+
+      <BottomSheet visible={activeSheet === 'desktop'} title="Desktop Connect" onClose={closeSheet}>
+        <SettingsRowSwitch
+          icon="desktop-outline"
+          label="Enable Desktop Connect"
+          value={desktopConnectEnabled}
+          onToggle={setDesktopConnectEnabled}
+        />
+        <SettingsRowSwitch
+          icon="cloud-download-outline"
+          label="Allow Desktop Downloads"
+          value={allowDesktopDownloads}
+          onToggle={setAllowDesktopDownloads}
+        />
+        <SettingsRow
+          icon="qr-code-outline"
+          label="Pair New Desktop"
+          onPress={() => { closeSheet(); setPairingModalVisible(true); }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={activeSheet === 'discovery'} title="Discovery" onClose={closeSheet}>
+        <SettingsRowSwitch
+          icon="musical-notes-outline"
+          label="Show Thumbnails"
+          value={settings.showThumbnails}
+          onToggle={settings.setShowThumbnails}
+        />
+        <SettingsRow
+          icon="scan-outline"
+          label="Scan Local Audio"
+          onPress={() => { closeSheet(); handleImportLocalAudio(); }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={activeSheet === 'data'} title="Data" onClose={closeSheet}>
+        <SettingsRow
+          icon="eye-off-outline"
+          label="Hidden Songs"
+          value={`${hiddenSongs.length}`}
+          onPress={() => { closeSheet(); fetchHiddenSongs(); setHiddenSongsVisible(true); }}
+        />
+        <SettingsRow
+          icon="refresh-outline"
+          label="Reset Settings to Defaults"
+          onPress={() => {
+            setAlertConfig({
+              visible: true,
+              title: 'Reset Settings',
+              message: 'All settings will be restored to their defaults. Your library will not be affected.',
+              buttons: [
+                { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+                { text: 'Reset', onPress: () => { settings.resetToDefaults(); closeSheet(); }, style: 'destructive' },
+              ],
+            });
+          }}
+        />
+        <SettingsRow
+          icon="trash-outline"
+          label="Clear All Library Data"
+          onPress={() => {
+            setAlertConfig({
+              visible: true,
+              title: 'Clear All Data',
+              message: 'This will permanently delete your entire song library and playlists. This cannot be undone.',
+              buttons: [
+                { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+                { text: 'Delete Everything', onPress: async () => { await clearAllData(); closeSheet(); }, style: 'destructive' },
+              ],
+            });
+          }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={activeSheet === 'about'} title="About" onClose={closeSheet}>
+        <SettingsRow icon="musical-note-outline" label="App" value="LuvLyrics" onPress={() => {}} />
+        <SettingsRow icon="code-slash-outline" label="Version" value="1.0.0" onPress={() => {}} />
+      </BottomSheet>
+
       {/* ── Alerts & Utility Modals ──────────────────────────────────────────── */}
 
       <CustomAlert
@@ -1000,7 +1082,7 @@ const SettingsScreen: React.FC<Props> = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
+  content: { paddingHorizontal: 16 },
 
   // Screen title
   screenTitle: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: 12, marginBottom: 20 },
