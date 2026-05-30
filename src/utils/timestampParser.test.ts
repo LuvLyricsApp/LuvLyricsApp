@@ -35,6 +35,47 @@ describe('timestampParser', () => {
     expect(parsed[0].text).toBe('dot line');
   });
 
+  it('parses bracketed zero timestamp like [0:00]', () => {
+    const parsed = parseTimestampedLyrics('[0:00] start');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].timestamp).toBe(0);
+    expect(parsed[0].text).toBe('start');
+  });
+
+  it('parses parenthesized zero timestamp like (0:00)', () => {
+    const parsed = parseTimestampedLyrics('(0:00) start');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].timestamp).toBe(0);
+    expect(parsed[0].text).toBe('start');
+  });
+
+  it('parses plain dot timestamp format without wrappers', () => {
+    const parsed = parseTimestampedLyrics('0.00 intro');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].timestamp).toBe(0);
+    expect(parsed[0].text).toBe('intro');
+  });
+
+  it('parses mixed timestamp formats and preserves parsed ordering', () => {
+    const parsed = parseTimestampedLyrics('[0:00] start\nnext line\n(0:05) second block\n0.10 final block');
+    expect(parsed).toHaveLength(3);
+    expect(parsed[0]).toMatchObject({
+      timestamp: 0,
+      text: 'start\nnext line',
+      lineOrder: 0,
+    });
+    expect(parsed[1]).toMatchObject({
+      timestamp: 5,
+      text: 'second block',
+      lineOrder: 1,
+    });
+    expect(parsed[2]).toMatchObject({
+      timestamp: 10,
+      text: 'final block',
+      lineOrder: 2,
+    });
+  });
+
   it('keeps malformed untimestamped lines with the current lyric block', () => {
     const parsed = parseTimestampedLyrics('[00:05] first line\nmalformed line\n[00:10] second line');
     expect(parsed).toHaveLength(2);
