@@ -27,7 +27,6 @@ import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, playerControls } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
@@ -50,7 +49,11 @@ interface TrackInfoProps {
 }
 const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBodyPress }: TrackInfoProps) => (
   <>
-    <Pressable onPress={(e) => { e.stopPropagation(); onPress(); }}>
+    <Pressable
+      onPress={(e) => { e.stopPropagation(); onPress(); }}
+      accessibilityLabel="Expand now playing"
+      accessibilityRole="button"
+    >
       {coverImageUri ? (
         <Animated.Image
           source={{ uri: coverImageUri }}
@@ -62,7 +65,12 @@ const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBod
         </View>
       )}
     </Pressable>
-    <Pressable onPress={(e) => { e.stopPropagation(); onBodyPress(); }} style={styles.info}>
+    <Pressable
+      onPress={(e) => { e.stopPropagation(); onBodyPress(); }}
+      style={styles.info}
+      accessibilityLabel="Show player details"
+      accessibilityRole="button"
+    >
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
       <Text style={[styles.artist, isIsland && { display: 'none' }]} numberOfLines={1}>
         {artist || 'Unknown Artist'}
@@ -87,7 +95,12 @@ const PlaybackControls = memo(({
   if (variant === 'island-collapsed') {
     return (
       <View style={[styles.islandControls, { zIndex: 10 }]}>
-        <Pressable onPress={onToggle} hitSlop={20}>
+        <Pressable
+          onPress={onToggle}
+          hitSlop={20}
+          accessibilityLabel={playing ? 'Pause' : 'Play'}
+          accessibilityRole="button"
+        >
           <Animated.View style={animatedButtonStyle}>
             <Ionicons name={playing ? 'pause' : 'play'} size={24} color="#fff" />
           </Animated.View>
@@ -103,6 +116,8 @@ const PlaybackControls = memo(({
           onPress={(e) => { if (isBar) e.stopPropagation(); onSkipBack(isBar ? e : undefined); }}
           hitSlop={isBar ? undefined : 10}
           style={isBar ? styles.controlButton : undefined}
+          accessibilityLabel="Previous track"
+          accessibilityRole="button"
         >
           <Ionicons name="play-skip-back" size={24} color="#fff" />
         </Pressable>
@@ -111,6 +126,8 @@ const PlaybackControls = memo(({
         onPress={(e) => { if (isBar) e.stopPropagation(); onToggle(isBar ? e : undefined); }}
         hitSlop={20}
         style={isBar ? [styles.playButton, { marginHorizontal: showSkipButtons ? 12 : 0 }] : undefined}
+        accessibilityLabel={playing ? 'Pause' : 'Play'}
+        accessibilityRole="button"
       >
         <Animated.View style={animatedButtonStyle}>
           <Ionicons name={playing ? 'pause' : 'play'} size={32} color="#fff" />
@@ -121,6 +138,8 @@ const PlaybackControls = memo(({
           onPress={(e) => { if (isBar) e.stopPropagation(); onSkipForward(isBar ? e : undefined); }}
           hitSlop={isBar ? undefined : 10}
           style={isBar ? styles.controlButton : undefined}
+          accessibilityLabel="Next track"
+          accessibilityRole="button"
         >
           <Ionicons name="play-skip-forward" size={24} color="#fff" />
         </Pressable>
@@ -147,8 +166,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const isDark = useIsDark();
-
+  
   // Use store instead of navigation state to avoid root-level crashes
   const isNowPlaying = hideMiniPlayer;
 
@@ -168,7 +186,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       if (!currentSong) return;
 
       const nextState = !usePlayerStore.getState().isPlaying;
-
       playButtonScale.value = withSequence(
           withTiming(0.82, { duration: 55 }),
           withSpring(1, { damping: 18, stiffness: 380 })
@@ -253,7 +270,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   
 
 
-
   // ProgressBar width state (kept for classic mode)
   // const [progressBarWidth] = useState(0);
   // Cleanup seekLock
@@ -300,7 +316,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
-
   // Capture timestamp when any lyric view opens so SynchronizedLyrics can reset its scroll
   useEffect(() => {
     if (expanded || lyricExpanded || fullLyricExpanded || classicFullExpanded) {
@@ -406,7 +421,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
      User wants text to "come up" before highlighting.
      - currentLyricIndex: Logic source (time based).
   */
-
 
 
 
@@ -724,7 +738,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                   /* Theme palette gradient */
                   <LinearGradient
                     colors={themePlayerColors}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
                   />
                ) : currentSong.coverImageUri ? (
@@ -751,21 +766,19 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                  <View style={[StyleSheet.absoluteFill, { opacity: 0.65 }]}>
                    <LinearGradient
                      colors={themePlayerColors}
-                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                     start={{ x: 0, y: 0 }}
+                     end={{ x: 1, y: 1 }}
                      style={StyleSheet.absoluteFill}
                    />
                  </View>
-               ) : !libraryFocusMode && currentSong.coverImageUri ? (
-                  <Image
-                    source={{ uri: currentSong.coverImageUri }}
-                    style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
-                    resizeMode="cover"
-                    blurRadius={22}
-                  />
-               ) : (
-                  /* Solid fallback when no cover art — prevents transparent look */
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1a1a2e' : '#e8e8f0' }]} />
-               )}
+              ) : !libraryFocusMode && currentSong.coverImageUri ? (
+                 <Image
+                   source={{ uri: currentSong.coverImageUri }}
+                   style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
+                   resizeMode="cover"
+                   blurRadius={22}
+                 />
+              ) : null}
 
               {/* Vignette for text readability */}
               <LinearGradient
@@ -785,7 +798,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 <GestureDetector gesture={panGesture}>
                     <View style={styles.expandedTopRow}>
                         {/* Rotating Vinyl */}
-                        <Pressable onPress={openNowPlaying} style={styles.vinylMargin}>
+                        <Pressable
+                          onPress={openNowPlaying}
+                          style={styles.vinylMargin}
+                          accessibilityLabel="Open now playing"
+                          accessibilityRole="button"
+                        >
                              <RotatingVinyl 
                                 imageUri={currentSong.coverImageUri} 
                                 size={64} 
@@ -836,6 +854,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             styles.unifiedLyricsPressable,
                             (lyricExpanded || fullLyricExpanded) && styles.unifiedLyricsMargin
                         ]}
+                        accessibilityLabel="Seek position"
+                        accessibilityRole="adjustable"
                     >
                         <View style={styles.flexFullWidth}>
                         {(!lyricExpanded && !fullLyricExpanded) ? (
