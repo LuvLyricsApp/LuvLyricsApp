@@ -5,9 +5,10 @@
 
 import React from 'react';
 import { View } from 'react-native';
-import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
+import { navigationRef } from '../utils/navigationService';
 // import { Colors } from '../constants/colors'; // Currently unused
 
 // Import navigators and screens
@@ -20,14 +21,21 @@ import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
+import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
-  const navigationRef = useNavigationContainerRef();
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
+  const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
+
+  // Island mode: only render MiniPlayer on the Home tab.
+  // Classic bar mode: render MiniPlayer on every tab/screen.
+  const showMiniPlayer = miniPlayerStyle === 'island'
+    ? currentRoute === 'Home'
+    : true;
 
   return (
     <NavigationContainer
@@ -95,8 +103,8 @@ export const RootNavigator: React.FC = () => {
           />
         </Stack.Navigator>
         
-        {/* Hide MiniPlayer on Luvs tab; restrict island to Home tab only */}
-        {currentRoute !== 'Luvs' && <MiniPlayer isHomeTab={currentRoute === 'Home'} />}
+        {/* Island mode: Home tab only. Bar mode: all tabs. */}
+        {showMiniPlayer && <MiniPlayer isHomeTab={currentRoute === 'Home'} />}
         <BackgroundDownloader />
       </View>
     </NavigationContainer>
