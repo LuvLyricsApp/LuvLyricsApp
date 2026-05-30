@@ -8,6 +8,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceMicButton } from './VoiceMicButton';
+import { useSettingsStore } from '../store/settingsStore';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -17,6 +18,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
   navigation,
 }) => {
   const insets = useSafeAreaInsets();
+  const micEnabled = useSettingsStore(s => s.micEnabled);
   const midpoint = Math.ceil(state.routes.length / 2);
   const leftRoutes = state.routes.slice(0, midpoint);
   const rightRoutes = state.routes.slice(midpoint);
@@ -48,8 +50,8 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
   };
 
   return (
-    <View style={[styles.outerContainer, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
-      <View style={styles.container}>
+    <View style={styles.outerContainer} pointerEvents="box-none">
+      <View style={[styles.container, { height: 64 + insets.bottom }]}>
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
@@ -57,9 +59,11 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
           </View>
 
           {/* Center mic button — inline, inside the bar */}
-          <View style={styles.micSlot}>
-            <VoiceMicButton variant="inline" />
-          </View>
+          {micEnabled && (
+            <View style={styles.micSlot}>
+              <VoiceMicButton variant="inline" />
+            </View>
+          )}
 
           {/* Right tabs */}
           <View style={styles.tabGroup}>

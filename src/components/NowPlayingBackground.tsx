@@ -72,7 +72,15 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
     return <AuroraHeader colors={gradientColors} animated={animateBackground} />;
   }
 
-  return null;
+  /* Light mode fallback: soft gradient so the screen never looks empty */
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={gradientColors.length >= 2 ? [gradientColors[0], gradientColors[1]] : ['#f0f0f5', '#e0e0ea']}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
 };
 
 export default React.memo(NowPlayingBackground);
