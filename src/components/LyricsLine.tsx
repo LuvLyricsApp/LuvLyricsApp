@@ -3,6 +3,8 @@ import { StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  Easing,
   SharedValue,
 } from 'react-native-reanimated';
 import { useThemeColors } from '../contexts/ThemeContext';
@@ -27,11 +29,11 @@ export const LyricsLine: React.FC<LyricsLineProps> = memo(({
   const fontSizes = FONT_SIZE_MAP[lyricsFontSize];
   const lh = LINE_SPACING_MAP[lineSpacing];
 
-  // Capture primitive values for worklet closure
-  const activeFontSize = fontSizes.current;
-  const inactiveFontSize = fontSizes.other;
-  const activeLineHeight = fontSizes.current * lh;
-  const inactiveLineHeight = fontSizes.other * lh;
+  // Use active font size for all lines — scale transform handles the inactive shrink.
+  // fontSize/lineHeight must NOT live in useAnimatedStyle: they trigger a layout
+  // recalculation on every line change, which stalls the UI thread.
+  const fontSize = fontSizes.current;
+  const lineHeight = fontSize * lh;
 
   // Capture color strings as primitives so worklet can use them
   const colorCurrent = colors.lyricCurrent;
@@ -48,19 +50,23 @@ export const LyricsLine: React.FC<LyricsLineProps> = memo(({
         ? 0.4
         : Math.max(0.5 - dist * 0.05, 0.2);
 
+    // translateY: inactive lines sit 6px below, active line springs up to natural position.
     return {
-      transform: [{ scale: withTiming(isActive ? 1.05 : 0.95, { duration: 300 }) }],
-      opacity: withTiming(targetOpacity, { duration: 300 }),
-      fontSize: isActive ? activeFontSize : inactiveFontSize,
-      lineHeight: isActive ? activeLineHeight : inactiveLineHeight,
-      fontWeight: (isActive ? '800' : '700') as '800' | '700',
+      transform: [{ translateY: withSpring(isActive ? 0 : 6, { damping: 20, stiffness: 260, mass: 0.7 }) }],
+      opacity: withTiming(targetOpacity, { duration: 180, easing: Easing.out(Easing.quad) }),
       color: isActive ? colorCurrent : isPrevious ? colorPrevious : colorUpcoming,
     };
   });
 
   return (
     <Pressable style={styles.container} onPress={onPress}>
-      <Animated.Text style={[styles.text, animatedStyle]}>{text}</Animated.Text>
+      <Animated.Text style={[
+        styles.text,
+        { fontSize, lineHeight, fontWeight: '800' },
+        animatedStyle,
+      ]}>
+        {text}
+      </Animated.Text>
     </Pressable>
   );
 });

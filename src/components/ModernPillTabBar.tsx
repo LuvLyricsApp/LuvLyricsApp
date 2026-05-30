@@ -23,6 +23,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 }) => {
   const coverImageUri = usePlayerStore(s => s.currentSong?.coverImageUri);
   const isDynamicIsland = useSettingsStore(s => s.miniPlayerStyle === 'island');
+  const micEnabled = useSettingsStore(s => s.micEnabled);
   const isDark = useIsDark();
   const colors = useThemeColors();
 
@@ -121,9 +122,11 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
             </View>
 
             {/* Center mic button — inline inside the pill */}
-            <View style={styles.centerSlot}>
-              <VoiceMicButton variant="inline" />
-            </View>
+            {micEnabled && (
+              <View style={styles.centerSlot}>
+                <VoiceMicButton variant="inline" />
+              </View>
+            )}
 
             {/* Right tabs */}
             <View style={styles.tabGroup}>

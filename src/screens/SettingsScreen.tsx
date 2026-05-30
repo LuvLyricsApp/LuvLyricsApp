@@ -753,11 +753,18 @@ const SettingsScreen: React.FC<Props> = () => {
             if (next === 'modern-pill') settings.setMiniPlayerStyle('island');
           }}
         />
-        <SettingsRow
-          icon="mic-outline" label="Voice Button Mode"
-          value={(settings.voiceMode ?? 'hold') === 'hold' ? 'Hold to Talk' : 'Tap to Talk'}
-          onPress={() => settings.setVoiceMode((settings.voiceMode ?? 'hold') === 'hold' ? 'tap' : 'hold')}
+        <SettingsRowSwitch
+          icon="mic-outline" label="Voice Button"
+          value={settings.micEnabled ?? true}
+          onToggle={settings.setMicEnabled}
         />
+        {(settings.micEnabled ?? true) && (
+          <SettingsRow
+            icon="mic-outline" label="Voice Button Mode"
+            value={(settings.voiceMode ?? 'hold') === 'hold' ? 'Hold to Talk' : 'Tap to Talk'}
+            onPress={() => settings.setVoiceMode((settings.voiceMode ?? 'hold') === 'hold' ? 'tap' : 'hold')}
+          />
+        )}
         <SettingsRowSwitch icon="sunny-outline" label="Keep Screen On" value={settings.keepScreenOn} onToggle={settings.setKeepScreenOn} />
         <View style={styles.sliderRow}>
           <View style={styles.sliderHeader}>

@@ -27,6 +27,7 @@ import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, playerControls } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
@@ -146,7 +147,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  
+  const isDark = useIsDark();
+
   // Use store instead of navigation state to avoid root-level crashes
   const isNowPlaying = hideMiniPlayer;
 
@@ -753,14 +755,17 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                      style={StyleSheet.absoluteFill}
                    />
                  </View>
-              ) : !libraryFocusMode && currentSong.coverImageUri ? (
-                 <Image
-                   source={{ uri: currentSong.coverImageUri }}
-                   style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
-                   resizeMode="cover"
-                   blurRadius={22}
-                 />
-              ) : null}
+               ) : !libraryFocusMode && currentSong.coverImageUri ? (
+                  <Image
+                    source={{ uri: currentSong.coverImageUri }}
+                    style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
+                    resizeMode="cover"
+                    blurRadius={22}
+                  />
+               ) : (
+                  /* Solid fallback when no cover art — prevents transparent look */
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1a1a2e' : '#e8e8f0' }]} />
+               )}
 
               {/* Vignette for text readability */}
               <LinearGradient
