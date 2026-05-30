@@ -20,8 +20,8 @@ if (Platform.OS === 'android') {
     const { requireNativeModule, EventEmitter } = require('expo-modules-core');
     DownloaderModule = requireNativeModule('Downloader');
     downloaderEmitter = new EventEmitter(DownloaderModule);
-  } catch (e) {
-    console.error('[DownloadManager] Failed to load native DownloaderModule:', e);
+  } catch {
+    // Downloader native module not available — FileSystem fallback active
   }
 }
 

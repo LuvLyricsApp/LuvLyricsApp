@@ -14,6 +14,12 @@ interface AudioDownloaderProps {
         goBack: () => void;
         navigate: (screen: string, params?: Record<string, unknown>) => void;
     };
+    route: {
+        params?: {
+            voiceQuery?: string;
+            autoDownload?: boolean;
+        };
+    };
 }
 
 type ShellTab = 'search' | 'queue';
@@ -31,9 +37,11 @@ const QueueBadge = () => {
     );
 };
 
-export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigation }) => {
+export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigation, route }) => {
     const [activeShellTab, setActiveShellTab] = useState<ShellTab>('search');
     const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
+    const voiceQuery = route.params?.voiceQuery;
+    const autoDownload = route.params?.autoDownload;
 
     useEffect(() => {
         setMiniPlayerHidden(true);
@@ -98,7 +106,10 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
 
                 {/* Isolated tab trees — both stay mounted; inactive one hidden via display:none */}
                 <View style={[styles.tabContent, activeShellTab !== 'search' && styles.hidden]}>
-                    <AudioDownloaderSearchTab />
+                    <AudioDownloaderSearchTab
+                        autoSearchQuery={voiceQuery}
+                        autoDownload={autoDownload}
+                    />
                 </View>
                 <View style={[styles.tabContent, activeShellTab !== 'queue' && styles.hidden]}>
                     <AudioDownloaderQueueTab />

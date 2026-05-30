@@ -17,8 +17,8 @@ if (Platform.OS === 'android') {
     const { requireNativeModule, EventEmitter } = require('expo-modules-core');
     LuvsPlayerModule = requireNativeModule('LuvsPlayer');
     luvsEventEmitter = new EventEmitter(LuvsPlayerModule);
-  } catch (e) {
-    console.error('[LuvsBufferManager] Failed to load native LuvsPlayer:', e);
+  } catch {
+    // LuvsPlayer native module not available — expo-av fallback active
   }
 }
 

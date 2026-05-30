@@ -115,8 +115,13 @@ const BulkHeader: React.FC<BulkHeaderProps> = memo((props) => (
 
 // --- Main SearchTab ---
 
+interface AudioDownloaderSearchTabProps {
+    autoSearchQuery?: string;
+    autoDownload?: boolean;
+}
+
 // Isolated: no props — reads from stores directly, never re-renders on queue progress
-export const AudioDownloaderSearchTab = memo(() => {
+export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload }: AudioDownloaderSearchTabProps) => {
     const colors = useThemeColors();
 
     // --- Store ---
@@ -149,27 +154,33 @@ export const AudioDownloaderSearchTab = memo(() => {
     const previewSoundRef = useRef<Audio.Sound | null>(null);
     const downloadContextRef = useRef<'single' | 'selected' | 'bulk'>('single');
     const pendingSingleRef = useRef<UnifiedSong | null>(null);
+    const hasAutoSearchedRef = useRef(false);
+    const hasAutoDownloadedRef = useRef(false);
 
     // --- Other stores ---
     const existingSongs = useSongsStore(state => state.songs);
     const { addToQueue } = useDownloadQueueStore();
 
     // --- Handlers ---
-    const handleSearch = useCallback(async () => {
-        const query = searchMode === 'title' ? titleQuery.trim() : artistQuery.trim();
-        if (!query) return;
+    const runSearchWithQuery = useCallback(async (q: string, mode: 'title' | 'artist' = 'title') => {
+        if (!q.trim()) return;
         updateTab(activeTabId, { isSearching: true, status: 'Searching...', results: [], remixResults: [] });
         try {
             const results = await MultiSourceSearchService.searchMusic(
-                query,
-                searchMode === 'artist' ? query : undefined,
+                q,
+                mode === 'artist' ? q : undefined,
                 (status) => updateTab(activeTabId, { status })
             );
             updateTab(activeTabId, { isSearching: false, results, status: '' });
         } catch {
             updateTab(activeTabId, { isSearching: false, status: 'Search failed' });
         }
-    }, [searchMode, titleQuery, artistQuery, activeTabId, updateTab]);
+    }, [activeTabId, updateTab]);
+
+    const handleSearch = useCallback(() => {
+        const query = searchMode === 'title' ? titleQuery.trim() : artistQuery.trim();
+        runSearchWithQuery(query, searchMode);
+    }, [searchMode, titleQuery, artistQuery, runSearchWithQuery]);
 
     const handlePreviewToggle = useCallback(async (song: UnifiedSong) => {
         if (playingPreviewId === song.id) {
@@ -306,6 +317,24 @@ export const AudioDownloaderSearchTab = memo(() => {
         await Clipboard.setStringAsync('Return a JSON array: [{"title": "Song Name", "artist": "Artist Name"}]');
         setToast({ visible: true, message: 'Prompt copied!', type: 'success' });
     }, []);
+
+    // --- Auto-search / auto-download from voice ---
+    useEffect(() => {
+        if (autoSearchQuery && !hasAutoSearchedRef.current) {
+            hasAutoSearchedRef.current = true;
+            setSearchMode('title');
+            setTitleQuery(autoSearchQuery);
+            runSearchWithQuery(autoSearchQuery, 'title');
+        }
+    }, [autoSearchQuery, setTitleQuery, runSearchWithQuery]);
+
+    useEffect(() => {
+        if (autoDownload && activeTab.results.length > 0 && !hasAutoDownloadedRef.current) {
+            hasAutoDownloadedRef.current = true;
+            addToQueue([activeTab.results[0]]);
+            setToast({ visible: true, message: `Added ${activeTab.results[0].title} to download queue`, type: 'success' });
+        }
+    }, [autoDownload, activeTab.results, addToQueue]);
 
     const sharedHeaderProps = {
         tabs, activeTabId, setActiveTab, closeTab, createTab,
