@@ -19,10 +19,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val id = inputData.getString("id") ?: return Result.failure()
         val audioUrl = inputData.getString("audioUrl") ?: return Result.failure()
         val coverUrl = inputData.getString("coverUrl")
-        val songDirStr = inputData.getString("songDir") ?: return Result.failure()
+        val rawSongDir = inputData.getString("songDir") ?: return Result.failure()
         val lyrics = inputData.getString("lyrics")
         val safDir = inputData.getString("safDir")
 
+        // Expo's FileSystem.documentDirectory returns a file:// URI; File() needs a plain path
+        val songDirStr = Uri.parse(rawSongDir).path ?: rawSongDir
         val songDir = File(songDirStr)
         if (!songDir.exists()) {
             songDir.mkdirs()
