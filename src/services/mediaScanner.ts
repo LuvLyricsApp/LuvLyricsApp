@@ -7,6 +7,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { generateId } from '../utils/formatters';
 import { DEFAULT_GRADIENT_ID } from '../constants/gradients';
 import { Song } from '../types/song';
+import { handleAsyncError } from '../utils/errorHandler';
 
 export interface AudioFile {
   id: string;
@@ -47,7 +48,7 @@ export const scanAudioFiles = async (): Promise<AudioFile[]> => {
       albumArt: undefined,
     }));
   } catch (error) {
-    console.error('Failed to scan audio files:', error);
+    handleAsyncError('mediaScanner.scanAudioFiles', error);
     throw error;
   }
 };

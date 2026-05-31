@@ -6,7 +6,7 @@ import {
   cancelPruneTimer,
   schedulePruneTimer,
 } from '../store/lyricsScanQueueStore';
-
+import { handleAsyncError } from '../utils/errorHandler';
 const COMPLETED_JOB_TTL_MS = 5 * 60 * 1000;
 
 /**
@@ -106,7 +106,7 @@ export async function processLyricsScanQueue(): Promise<void> {
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        if (__DEV__) console.error(`[ScanWorker] Error processing "${nextJob.title}":`, error);
+        handleAsyncError(`lyricsScanWorker.processJob.${nextJob.songId}`, error);
         updateJob(nextJob.songId, prev => ({
           status: 'failed' as const,
           log: appendLog(prev.log, `Error: ${message}`),
@@ -116,7 +116,7 @@ export async function processLyricsScanQueue(): Promise<void> {
       await delay(500);
     }
   } catch (error) {
-    if (__DEV__) console.error('[ScanWorker] Queue processor error:', error);
+    handleAsyncError('lyricsScanWorker.processQueue', error);
   } finally {
     useLyricsScanQueueStore.getState().setProcessing(false);
   }

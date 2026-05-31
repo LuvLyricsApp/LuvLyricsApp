@@ -5,6 +5,7 @@
 
 import { lyricaService, LyricaResult } from './LyricaService';
 import { SmartLyricMatcher } from './SmartLyricMatcher';
+import { handleAsyncError } from '../utils/errorHandler';
 
 export interface SearchResult {
   id: string;
@@ -81,7 +82,7 @@ export const LyricsRepository = {
 
       onProgress?.(`Found ${results.length} lyric options`);
     } catch (error) {
-      console.error('[LyricsRepository] Error:', error);
+      handleAsyncError('LyricsRepository.searchSmart', error);
       onProgress?.('Search failed');
     }
 

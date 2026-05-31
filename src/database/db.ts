@@ -67,7 +67,9 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
       // Recovery: delete and recreate
       try {
         if (db) {
-          await db.closeAsync().catch(() => {});
+          await db.closeAsync().catch(e => {
+            if (__DEV__) console.error('[DB] closeAsync during recovery failed', e);
+          });
           db = null;
         }
         
@@ -244,9 +246,12 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
 export const closeDatabase = async (): Promise<void> => {
   log('closeDatabase() called');
   
-  if (initPromise) {
+    if (initPromise) {
     log('Waiting for init to complete before closing...');
-    await initPromise.catch(() => undefined);
+    await initPromise.catch(e => {
+      if (__DEV__) console.error('[DB] closeDatabase waiting for init failed', e);
+      return undefined;
+    });
   }
 
   if (db) {
@@ -281,7 +286,10 @@ export const withDbRetry = async <T>(operation: (db: Awaited<ReturnType<typeof g
     }
 
     log('Detected native NPE, attempting recovery...');
-    await closeDatabase().catch(() => undefined);
+    await closeDatabase().catch(e => {
+      if (__DEV__) console.error('[DB] withDbRetry closeDatabase failed', e);
+      return undefined;
+    });
     await initDatabase();
     const recoveredDb = await getDatabase();
     log('Retrying operation after recovery...');
@@ -294,7 +302,9 @@ let dbOperationQueue: Promise<void> = Promise.resolve();
 const withSerializedDbAccess = async <T>(operation: () => Promise<T>): Promise<T> => {
   const result = dbOperationQueue.then(operation);
   // Append catch to ensure queue continues even if op fails
-  dbOperationQueue = result.then(() => {}).catch(() => {});
+  dbOperationQueue = result.then(() => {}).catch(e => {
+    if (__DEV__) console.error('[DB] serialized operation failure', e);
+  });
   return result;
 };
 

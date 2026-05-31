@@ -5,6 +5,7 @@
  * No API Key required.
  */
 
+
 export interface ImageSearchResult {
     id: string; // collectionId or trackId
     uri: string; // The high-res image URL
@@ -56,7 +57,7 @@ class ImageSearchServiceImpl {
             }).filter((img: any) => img.uri); 
 
         } catch (error) {
-            console.error('Image search failed:', error);
+            if (__DEV__) console.error('[ImageSearchService.searchImages] Async error:', error);
             return [];
         }
     }
@@ -77,7 +78,7 @@ class ImageSearchServiceImpl {
             }
             return [];
         } catch (e) {
-            console.warn('[ImageSearchService] iTunes search failed:', e);
+            if (__DEV__) console.error('[ImageSearchService.searchItunes] Async error:', e);
             return [];
         }
     }

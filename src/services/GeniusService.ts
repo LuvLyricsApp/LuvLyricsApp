@@ -5,6 +5,7 @@
 
 import { LyricLine } from '../types/song';
 import { GeniusHitResponse, GeniusSearchResponse } from '../types/providerResponses';
+import { handleAsyncError } from '../utils/errorHandler';
 
 const GENIUS_API_URL = 'https://api.genius.com';
 const ACCESS_TOKEN = 'rKvOqiyrZIcfa6i3E6z2Q2LMSr79s89XOYzJJkiQ5OOsncR23Uf6ZoUhW_nh6sJR'; // Provided by user
@@ -17,9 +18,6 @@ export interface GeniusTrack {
   albumArt: string;
   plainLyrics: string;
 }
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 export const GeniusService = {
   /**
@@ -41,7 +39,7 @@ export const GeniusService = {
       ]) as Response;
 
       if (!response.ok) {
-        console.warn(`[GeniusService] Search failed: ${response.status}`);
+        handleAsyncError('GeniusService.searchGenius.httpError', new Error(`HTTP ${response.status}`));
         return [];
       }
 
@@ -59,11 +57,7 @@ export const GeniusService = {
       }));
 
     } catch (error: unknown) {
-      if (getErrorMessage(error) === 'TIMEOUT') {
-          console.warn('[GeniusService] Search timed out');
-      } else {
-          console.error('[GeniusService] Search error:', error);
-      }
+      handleAsyncError('GeniusService.searchGenius', error);
       return [];
     }
   },
@@ -107,7 +101,7 @@ export const GeniusService = {
       }
 
       if (!lyricsHtml) {
-        console.warn('[GeniusService] No lyrics container found in HTML');
+        handleAsyncError('GeniusService.scrapeGeniusLyrics.noContainer', new Error('No lyrics container found'));
         return null;
       }
 
@@ -153,14 +147,14 @@ export const GeniusService = {
       const finalLyrics = cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
       if (!finalLyrics) {
-        console.warn('[GeniusService] Lyrics extracted but empty after cleaning');
+        handleAsyncError('GeniusService.scrapeGeniusLyrics.emptyAfterClean', new Error('Lyrics empty after cleaning'));
         return null;
       }
 
       return finalLyrics;
 
     } catch (error) {
-      console.error('[GeniusService] Scrape error:', error);
+      handleAsyncError('GeniusService.scrapeGeniusLyrics', error);
       return null;
     }
   },

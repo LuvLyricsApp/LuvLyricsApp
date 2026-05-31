@@ -6,6 +6,7 @@
  * Bypasses Piped/Invidious APIs entirely.
  */
 
+
 export interface NativeSearchResult {
     id: string;
     title: string;
@@ -90,7 +91,7 @@ class NativeSearchServiceImpl {
             return results;
 
         } catch (error) {
-            console.error('[NativeSearch] Failed:', error);
+            if (__DEV__) console.error('[NativeSearchService.search] Async error:', error);
             return [];
         }
     }

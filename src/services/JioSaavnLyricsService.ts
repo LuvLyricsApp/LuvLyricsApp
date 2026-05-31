@@ -4,6 +4,7 @@
  */
 
 import { LyricLine } from '../types/song';
+import { handleAsyncError } from '../utils/errorHandler';
 
 const BASE_URL = 'https://saavn.sumit.co';
 
@@ -82,7 +83,7 @@ export const JioSaavnLyricsService = {
       ]) as Response;
       
       if (!searchResponse.ok) {
-        console.error('[JioSaavn] Search failed:', searchResponse.status, searchResponse.statusText);
+        handleAsyncError('JioSaavnLyricsService.searchGenius.httpError', new Error(`HTTP ${searchResponse.status} ${searchResponse.statusText}`));
         return null;
       }
       
@@ -135,7 +136,7 @@ export const JioSaavnLyricsService = {
       if (error.message === 'TIMEOUT' || error.name === 'AbortError') {
           console.warn('[JioSaavn] Search timed out');
       } else {
-          console.error('[JioSaavn] Error:', error);
+          handleAsyncError('JioSaavnLyricsService.getLyrics', error);
       }
       return null;
     }
@@ -173,7 +174,7 @@ export const JioSaavnLyricsService = {
         ]) as Response;
         
         if (!response.ok) {
-          console.log(`[JioSaavn] ${endpoint} returned ${response.status}`);
+          handleAsyncError(`JioSaavnLyricsService.fetchLyricsData.${endpoint}.httpError`, new Error(`HTTP ${response.status}`));
           continue;
         }
         
@@ -206,7 +207,7 @@ export const JioSaavnLyricsService = {
         if (error.name === 'AbortError') {
              console.warn(`[JioSaavn] ${endpoint} timed out`);
         } else {
-             console.log(`[JioSaavn] ${endpoint} error:`, error);
+             handleAsyncError(`JioSaavnLyricsService.fetchLyricsData.${endpoint}`, error);
         }
         continue;
       }

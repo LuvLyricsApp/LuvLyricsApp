@@ -4,6 +4,7 @@
  */
 
 import { LyricLine } from '../types/song';
+import { handleAsyncError } from '../utils/errorHandler';
 
 const BASE_URL = 'https://test-0k.onrender.com/lyrics';
 
@@ -68,7 +69,7 @@ class LyricaService {
       console.log('[Lyrica] All strategies exhausted');
       return null;
     } catch (error) {
-      console.error('[Lyrica] Fetch error:', error);
+      handleAsyncError('LyricaService.fetchLyrics', error);
       throw error;
     }
   }

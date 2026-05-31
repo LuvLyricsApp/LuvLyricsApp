@@ -363,7 +363,9 @@ export function useNowPlayingLogic(songId: string) {
         swatches.vibrant?.color ?? swatches.dominant?.color ?? '#333',
         swatches.darkMuted?.color ?? '#000',
       ]);
-    }).catch(() => {});
+    }).catch(error => {
+      if (__DEV__) console.error('[useNowPlayingLogic] extractAlbumColors failed', error);
+    });
   }, [currentSong?.coverImageUri, isDynamicTheme]);
 
   const gradientColors = !isDynamicTheme || !currentSong?.coverImageUri

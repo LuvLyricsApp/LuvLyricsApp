@@ -181,16 +181,24 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     }, [searchMode, titleQuery, artistQuery, runSearchWithQuery]);
 
     const handlePreviewToggle = useCallback(async (song: UnifiedSong) => {
-        if (playingPreviewId === song.id) {
-            await previewSoundRef.current?.stopAsync().catch(() => {});
-            await previewSoundRef.current?.unloadAsync().catch(() => {});
-            previewSoundRef.current = null;
-            setPlayingPreviewId(null);
-            return;
-        }
+                if (playingPreviewId === song.id) {
+                        await previewSoundRef.current?.stopAsync().catch(error => {
+                            if (__DEV__) console.error('[AudioDownloaderSearchTab] stop preview failed', error);
+                        });
+                        await previewSoundRef.current?.unloadAsync().catch(error => {
+                            if (__DEV__) console.error('[AudioDownloaderSearchTab] unload preview failed', error);
+                        });
+                        previewSoundRef.current = null;
+                        setPlayingPreviewId(null);
+                        return;
+                }
         if (previewSoundRef.current) {
-            await previewSoundRef.current.stopAsync().catch(() => {});
-            await previewSoundRef.current.unloadAsync().catch(() => {});
+                        await previewSoundRef.current.stopAsync().catch(error => {
+                            if (__DEV__) console.error('[AudioDownloaderSearchTab] stop preview failed', error);
+                        });
+                        await previewSoundRef.current.unloadAsync().catch(error => {
+                            if (__DEV__) console.error('[AudioDownloaderSearchTab] unload preview failed', error);
+                        });
             previewSoundRef.current = null;
         }
         const url = song.streamUrl || song.downloadUrl;

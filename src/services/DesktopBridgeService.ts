@@ -31,6 +31,7 @@ import { usePositionStore } from '../store/positionStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
 import { trustedPairingService } from './TrustedPairingService';
+import { handleAsyncError } from '../utils/errorHandler';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -272,18 +273,21 @@ class DesktopBridgeService {
   private seenNonIdempotentIds = new Set<string>();
   private controlPort = DEFAULT_WS_PORT;
   private logServerError(tag: string, err: unknown): void {
+    // Log through standardized handler
+    handleAsyncError(`DesktopBridgeService.${tag}`, err);
+    
+    // Additional context-specific formatting (preserved for backward compatibility)
     if (err instanceof Error) {
-      console.error(`[DesktopBridge] ${tag} server error: ${err.message}`, err);
+      if (__DEV__) console.error(`[DesktopBridge] ${tag} details:`, err.stack);
       return;
     }
     if (typeof err === 'string') {
-      console.error(`[DesktopBridge] ${tag} server error: ${err}`);
       return;
     }
     try {
-      console.error(`[DesktopBridge] ${tag} server error:`, JSON.stringify(err));
+      if (__DEV__) console.error(`[DesktopBridge] ${tag} details:`, JSON.stringify(err));
     } catch {
-      console.error(`[DesktopBridge] ${tag} server error:`, err);
+      // Silently ignore stringify errors
     }
   }
 
@@ -752,7 +756,7 @@ class DesktopBridgeService {
           }
           trustedPairingService
             .markSeen(parsed.desktopDeviceId)
-            .catch(() => undefined);
+            .catch(e => handleAsyncError('DesktopBridgeService.httpPing', e));
           socket.write(
             'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\n\r\n{"ok":true}'
           );
@@ -1139,13 +1143,14 @@ class DesktopBridgeService {
             .then((records) => {
               client.trusted = records.some((r) => r.desktopDeviceId === desktopDeviceId);
               if (client.trusted) {
-                trustedPairingService.markSeen(desktopDeviceId).catch(() => undefined);
+                trustedPairingService.markSeen(desktopDeviceId).catch(e => handleAsyncError('DesktopBridgeService.markSeenAfterTrust', e));
                 this.sendSnapshotToClient(client);
               } else {
                 client.socket.destroy();
               }
             })
-            .catch(() => {
+            .catch(e => {
+              handleAsyncError('DesktopBridgeService.listTrustedDesktops', e);
               client.socket.destroy();
             });
         } else {
@@ -1196,7 +1201,7 @@ class DesktopBridgeService {
           break;
 
         case 'NEXT':
-          playerStore.nextInPlaylist().catch(() => {});
+          playerStore.nextInPlaylist().catch(e => handleAsyncError('DesktopBridgeService.nextCommand', e));
           break;
 
         case 'PREV':
