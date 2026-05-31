@@ -236,7 +236,7 @@ export const deleteSong = async (id: string): Promise<void> => {
       // 1. Delete physical files from disk if they are in the app's document directory
       if (song.audioUri && song.audioUri.includes(FileSystem.documentDirectory!)) {
         try {
-          console.log(`[QUERIES] Deleting physical audio file: ${song.audioUri}`);
+          if (__DEV__) console.log(`[QUERIES] Deleting physical audio file: ${song.audioUri}`);
           await FileSystem.deleteAsync(song.audioUri, { idempotent: true });
         } catch {
           console.warn('[QUERIES] Failed to delete audio file, it might not exist');
@@ -245,7 +245,7 @@ export const deleteSong = async (id: string): Promise<void> => {
       
       if (song.coverImageUri && (song.coverImageUri.includes(FileSystem.documentDirectory!) || song.coverImageUri.includes('file:///'))) {
         try {
-          console.log(`[QUERIES] Deleting physical cover image: ${song.coverImageUri}`);
+          if (__DEV__) console.log(`[QUERIES] Deleting physical cover image: ${song.coverImageUri}`);
           await FileSystem.deleteAsync(song.coverImageUri, { idempotent: true });
         } catch {
           console.warn('[QUERIES] Failed to delete cover image');
