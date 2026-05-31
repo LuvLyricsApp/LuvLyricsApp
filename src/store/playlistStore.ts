@@ -249,7 +249,6 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
 
   // Check if song is liked (O(1))
   isSongLiked: (songId) => {
-    // console.log('Checking if liked:', songId, get().likedSongIds.has(songId));
     return get().likedSongIds.has(songId);
   },
 

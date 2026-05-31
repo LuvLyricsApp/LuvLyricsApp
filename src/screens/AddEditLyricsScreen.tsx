@@ -26,10 +26,7 @@ import { lyricaService } from '../services/LyricaService';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-// import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
-// import * as DocumentPicker from 'expo-document-picker';
-// import { TabScreenProps } from '../types/navigation';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
 import { GradientPicker, AIGeneratorModal } from '../components';
@@ -39,13 +36,11 @@ import { DEFAULT_GRADIENT_ID } from '../constants/gradients';
 import { parseTimestampedLyrics, calculateDuration, lyricsToRawText } from '../utils/timestampParser';
 import { generateId } from '../utils/formatters';
 import { formatTime } from '../utils/formatters';
-// import { getAutoTimestampService, AutoTimestampResult } from '../services/autoTimestampServiceV2'; // Legacy / Hidden
 import { Song } from '../types/song';
 import { LrcSearchModal } from '../components/LrcSearchModal';
 import { SearchResult } from '../services/LyricsRepository';
 import { GeniusService } from '../services/GeniusService';
 import { TransliterationService } from '../services/TransliterationService';
-// import { SmartLyricMatcher } from '../services/SmartLyricMatcher';
 
 // Helper to parse duration string (mm:ss or seconds)
 const parseDurationInput = (input: string): number => {
@@ -468,8 +463,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                    </View>
                    {/* Sync Button */}
                    <Pressable 
-                      style={[styles.magicButtonSmall, { backgroundColor: '#4ADE80' }]} 
-                      onPress={() => {/* Sync Modal logic or remove if unused */}}
+                     style={[styles.magicButtonSmall, { backgroundColor: '#4ADE80' }]} 
                    >
                      <Ionicons name="timer-outline" size={16} color="#000" />
                      <Text style={[styles.magicButtonText, { color: '#000' }]}>Sync</Text>
