@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0, 
   },
   islandContainer: {
-    top: Platform.OS === 'ios' ? 58 : 40, 
+    top: Platform.OS === 'ios' ? 58 : 40, // 58 = iOS Dynamic Island clearance, 40 = Android status bar height
     marginLeft: 12,
     marginRight: 8,
     alignItems: 'flex-end', // Right-aligned

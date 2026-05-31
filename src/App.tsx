@@ -23,6 +23,7 @@ import { ensureSearchIndex } from './services/NativeSearch';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
 
+// Each bar has a different dur (ms) so they animate out of phase, creating the equalizer effect
 const LOADER_BARS = [
   { initH: 16, max: 44, min: 8,  dur: 550 },
   { initH: 36, max: 48, min: 12, dur: 420 },
