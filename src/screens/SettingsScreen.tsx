@@ -276,7 +276,15 @@ const SettingsRowSwitch: React.FC<SettingsRowSwitchProps> = ({ icon, label, valu
     <View style={[styles.settingsRow, { borderBottomColor: dividerColor }]}>
       <Ionicons name={icon} size={22} color={colors.textSecondary} />
       <Text style={[styles.settingsLabel, { color: colors.textPrimary }]}>{label}</Text>
-      <Switch value={value} onValueChange={onToggle} trackColor={{ false: '#39393D', true: '#34C759' }} thumbColor="#fff" />
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ false: '#39393D', true: '#34C759' }}
+        thumbColor="#fff"
+        accessibilityLabel={label}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value }}
+      />
     </View>
   );
 };
@@ -292,7 +300,12 @@ const SettingsRow: React.FC<SettingsRowProps> = ({ icon, label, value, onPress }
   const dividerColor = useSettingsDividerColor();
   const colors = useThemeColors();
   return (
-    <Pressable style={[styles.settingsRow, { borderBottomColor: dividerColor }]} onPress={onPress}>
+    <Pressable
+      style={[styles.settingsRow, { borderBottomColor: dividerColor }]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <Ionicons name={icon} size={22} color={colors.textSecondary} />
       <Text style={[styles.settingsLabel, { color: colors.textPrimary }]}>{label}</Text>
       {value ? (
@@ -318,7 +331,12 @@ const MenuRow: React.FC<MenuRowProps> = ({ icon, iconColor, label, badge, onPres
   const dividerColor = useSettingsDividerColor();
   const colors = useThemeColors();
   return (
-    <Pressable style={[styles.menuRow, { borderBottomColor: dividerColor }, isLast && styles.menuRowLast]} onPress={onPress}>
+    <Pressable
+      style={[styles.menuRow, { borderBottomColor: dividerColor }, isLast && styles.menuRowLast]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <View style={[styles.menuIcon, { backgroundColor: iconColor + '22' }]}>
         <Ionicons name={icon} size={20} color={iconColor} />
       </View>
