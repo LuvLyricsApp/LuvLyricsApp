@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, Image,
@@ -22,6 +22,11 @@ const QueueRow = memo(({ item }: { item: QueueItem }) => {
   const pauseItem   = useDownloadQueueStore(s => s.pauseItem);
   const resumeItem  = useDownloadQueueStore(s => s.resumeItem);
   const retryItem   = useDownloadQueueStore(s => s.retryItem);
+
+  const handlePause = useCallback(() => pauseItem(item.id), [pauseItem, item.id]);
+  const handleResume = useCallback(() => resumeItem(item.id), [resumeItem, item.id]);
+  const handleRetry = useCallback(() => retryItem(item.id), [retryItem, item.id]);
+  const handleRemove = useCallback(() => removeItem(item.id), [removeItem, item.id]);
 
   if (!item?.song) return null;
 
@@ -67,21 +72,21 @@ const QueueRow = memo(({ item }: { item: QueueItem }) => {
 
       <View style={styles.actions}>
         {item.status === 'downloading' && (
-          <TouchableOpacity onPress={() => pauseItem(item.id)} style={styles.actionBtn}>
+          <TouchableOpacity onPress={handlePause} style={styles.actionBtn}>
             <Ionicons name="pause" size={20} color="#fff" />
           </TouchableOpacity>
         )}
         {item.status === 'paused' && (
-          <TouchableOpacity onPress={() => resumeItem(item.id)} style={styles.actionBtn}>
+          <TouchableOpacity onPress={handleResume} style={styles.actionBtn}>
             <Ionicons name="play" size={20} color="#4CAF50" />
           </TouchableOpacity>
         )}
         {item.status === 'failed' && (
-          <TouchableOpacity onPress={() => retryItem(item.id)} style={styles.actionBtn}>
+          <TouchableOpacity onPress={handleRetry} style={styles.actionBtn}>
             <Ionicons name="refresh" size={20} color="#2196F3" />
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.actionBtn}>
+        <TouchableOpacity onPress={handleRemove} style={styles.actionBtn}>
           <Ionicons name="close-circle" size={24} color="#666" />
         </TouchableOpacity>
       </View>

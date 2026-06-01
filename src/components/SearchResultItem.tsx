@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Image, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { getGradientById } from '../constants/gradients';
@@ -22,10 +22,20 @@ interface SearchResultItemProps {
 
 const SearchResultItem: React.FC<SearchResultItemProps> = React.memo(({ item, onPress, toggleLike, isDark, colors }) => {
   const isLiked = useIsSongLiked(item.id);
+
+  const handlePress = useCallback(() => {
+    onPress(item);
+  }, [onPress, item]);
+
+  const handleToggleLike = useCallback((e: GestureResponderEvent) => {
+    e.stopPropagation();
+    toggleLike(item.id);
+  }, [toggleLike, item.id]);
+
   return (
     <Pressable
       style={[styles.resultItem, { backgroundColor: isDark ? 'transparent' : colors.card }]}
-      onPress={() => onPress(item)}
+      onPress={handlePress}
     >
       <View style={[styles.resultThumbnail, { backgroundColor: isDark ? '#0B1F3A' : colors.cardHover }]}>
         {item.coverImageUri ? (
@@ -46,10 +56,7 @@ const SearchResultItem: React.FC<SearchResultItemProps> = React.memo(({ item, on
       </View>
 
       <Pressable
-        onPress={(e) => {
-          e.stopPropagation();
-          toggleLike(item.id);
-        }}
+        onPress={handleToggleLike}
         style={({ pressed }) => [
           styles.heartGlow,
           pressed && { transform: [{ scale: 1.2 }] },
