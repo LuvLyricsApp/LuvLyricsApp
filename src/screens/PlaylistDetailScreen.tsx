@@ -47,7 +47,6 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, playerControls } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { usePositionStore } from '../store/positionStore';
-// import { usePlaylistStore } from '../store/playlistStore'; // Currently unused
 import * as playlistQueries from '../database/playlistQueries';
 import { PlaylistItem } from '../components/PlaylistItem';
 import { CustomMenu } from '../components/CustomMenu';

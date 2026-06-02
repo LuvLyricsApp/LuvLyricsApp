@@ -9,7 +9,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { navigationRef } from '../utils/navigationService';
-// import { Colors } from '../constants/colors'; // Currently unused
 
 // Import navigators and screens
 import TabNavigator from './TabNavigator';

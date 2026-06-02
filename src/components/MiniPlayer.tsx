@@ -254,8 +254,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
 
 
-  // ProgressBar width state (kept for classic mode)
-  // const [progressBarWidth] = useState(0);
   // Cleanup seekLock
   useEffect(() => {
     return () => {

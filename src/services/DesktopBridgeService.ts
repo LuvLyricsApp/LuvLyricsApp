@@ -114,7 +114,6 @@ function decodeFrames(buf: Buffer): { messages: string[]; remaining: Buffer } {
   while (offset + 2 <= buf.length) {
     const firstByte = buf[offset];
     const secondByte = buf[offset + 1];
-    // const fin = (firstByte & 0x80) !== 0;
     const opcode = firstByte & 0x0f;
     const masked = (secondByte & 0x80) !== 0;
     let payloadLen = secondByte & 0x7f;
@@ -564,7 +563,6 @@ class DesktopBridgeService {
         desktopDeviceId: null,
       };
       this.clients.set(id, client);
-      // console.log('[DesktopBridge] Client connected:', id);
 
       socket.on('data', (data: Buffer) => {
         client.buffer = Buffer.concat([client.buffer, data]);
@@ -646,8 +644,6 @@ class DesktopBridgeService {
 
     this.sendPresenceToClient(client);
     this.markDesktopConnected();
-
-    // console.log('[DesktopBridge] Handshake complete for client', id);
   }
 
   private sendToClient(client: WsClient, msg: string): void {

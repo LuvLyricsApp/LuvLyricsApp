@@ -15,8 +15,6 @@ import { getGradientForSong } from '../constants/gradients';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_SIZE = 220;
-// const SPACING = 20; 
-// const FULL_ITEM_WIDTH = COVER_SIZE + SPACING; 
 
 interface CoverFlowProps {
   currentSong: Song | null;
