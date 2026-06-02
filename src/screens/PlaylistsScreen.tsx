@@ -15,6 +15,7 @@ import { CustomMenu } from '../components';
 import { MosaicCover } from '../components/MosaicCover';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useSettingsStore } from '../store/settingsStore';
+import { PlaylistsStrings } from '../constants/uiStrings';
 import { useDailyStatsStore } from '../store/dailyStatsStore';
 import { useSongsStore } from '../store/songsStore';
 import { getGradientColors } from '../constants/gradients';
@@ -203,7 +204,7 @@ export const PlaylistsScreen: React.FC = () => {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* ... Header ... */}
         <View style={styles.header}>
-          <Text style={styles.title}>Your Library</Text>
+          <Text style={styles.title}>{PlaylistsStrings.yourLibrary}</Text>
           <Pressable onPress={handleCreatePlaylist} style={styles.addButton}>
             <Ionicons name="add-circle-outline" size={28} color={colors.textPrimary} />
           </Pressable>
@@ -216,11 +217,11 @@ export const PlaylistsScreen: React.FC = () => {
         ) : playlists.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-open-outline" size={80} color={isDark ? 'rgba(255,255,255,0.2)' : colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No playlists yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{PlaylistsStrings.noPlaylistsYet}</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Create your first playlist to get started</Text>
             <Pressable style={styles.createButton} onPress={handleCreatePlaylist}>
               <Ionicons name="add" size={24} color="#fff" />
-              <Text style={styles.createButtonText}>Create Playlist</Text>
+              <Text style={styles.createButtonText}>{PlaylistsStrings.createPlaylist}</Text>
             </Pressable>
           </View>
         ) : (

@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import SearchResultItem from './SearchResultItem';
+import { SearchResultsStrings } from '../constants/uiStrings';
 import { Song } from '../types/song';
 
 interface SearchResultsListProps {
@@ -37,7 +38,7 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({ results, onSongPr
       contentContainerStyle={styles.resultsContent}
       ListEmptyComponent={
         <View style={styles.emptyResults}>
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No results found</Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>{SearchResultsStrings.noResultsFound}</Text>
         </View>
       }
     />

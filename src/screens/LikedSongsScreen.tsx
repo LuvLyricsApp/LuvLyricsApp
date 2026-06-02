@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
+import { LikedSongsStrings } from '../constants/uiStrings';
 import { useSettingsStore } from '../store/settingsStore';
 import { AuroraHeader } from '../components';
 import { useThemeColors } from '../contexts/ThemeContext';
@@ -65,14 +66,14 @@ export const LikedSongsScreen: React.FC = () => {
           <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.title}>Liked Songs</Text>
+          <Text style={styles.title}>{LikedSongsStrings.likedSongs}</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {likedSongs.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="heart-outline" size={80} color="rgba(255,255,255,0.2)" />
-            <Text style={styles.emptyTitle}>No liked songs yet</Text>
+            <Text style={styles.emptyTitle}>{LikedSongsStrings.noLikedSongsYet}</Text>
             <Text style={styles.emptySubtitle}>Songs you like will appear here</Text>
           </View>
         ) : (

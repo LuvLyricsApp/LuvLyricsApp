@@ -24,6 +24,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { usePlayerStore } from '../store/playerStore';
+import { YoutubeBrowserStrings } from '../constants/uiStrings';
 import { WebView, WebViewNavigation, WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -298,13 +299,13 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
         {loadError ? (
           <View style={styles.errorContainer}>
             <Ionicons name="cloud-offline-outline" size={48} color="#666" />
-            <Text style={styles.errorTitle}>Connection Failed</Text>
+            <Text style={styles.errorTitle}>{YoutubeBrowserStrings.connectionFailed}</Text>
             <Text style={styles.errorMessage}>{loadError}</Text>
             <Pressable style={styles.retryButton} onPress={() => {
               setLoadError(null);
               webViewRef.current?.reload();
             }}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>{YoutubeBrowserStrings.retry}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -349,7 +350,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
         {isExtracting && (
           <View style={styles.detectingBadge}>
             <ActivityIndicator size="small" color="#FFD700" />
-            <Text style={styles.detectingText}>Analyzing stream...</Text>
+            <Text style={styles.detectingText}>{YoutubeBrowserStrings.analyzingStream}</Text>
           </View>
         )}
 
@@ -364,7 +365,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
             >
               <Ionicons name="download-outline" size={22} color="#fff" />
               <View style={styles.fabTextContainer}>
-                <Text style={styles.fabTitle}>Download this Song</Text>
+                <Text style={styles.fabTitle}>{YoutubeBrowserStrings.downloadThisSong}</Text>
                 {videoInfo && (
                   <Text style={styles.fabSubtitle} numberOfLines={1}>
                     {videoInfo.title.substring(0, 35)} • {videoInfo.audioBitrate}kbps

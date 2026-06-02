@@ -13,6 +13,7 @@ import { initDatabase } from './database/db';
 import { useSongsStore } from './store/songsStore';
 import { usePlayerStore } from './store/playerStore';
 import { DarkColors } from './constants/colors';
+import { AppStrings } from './constants/uiStrings';
 import { PlayerProvider } from './contexts/PlayerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { setAudioModeAsync } from 'expo-audio';
@@ -184,8 +185,8 @@ const App: React.FC = () => {
       <View style={styles.loadingContainer}>
         <StatusBar style="light" backgroundColor="#000" />
         <Ionicons name="musical-notes" size={48} color="#2F8CFF" style={{ marginBottom: 20 }} />
-        <Text style={styles.loadingTitle}>LuvLyrics</Text>
-        <Text style={styles.loadingSubtitle}>Your music, your lyrics</Text>
+        <Text style={styles.loadingTitle}>{AppStrings.appTitle}</Text>
+        <Text style={styles.loadingSubtitle}>{AppStrings.loadingSubtitle}</Text>
         <View style={{ height: 48 }} />
         <MusicLoader />
       </View>
@@ -196,7 +197,7 @@ const App: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" backgroundColor={DarkColors.background} />
-        <Text style={styles.errorText}>⚠️ Initialization Failed</Text>
+        <Text style={styles.errorText}>{AppStrings.initializationFailed}</Text>
         <Text style={styles.errorMessage}>{error}</Text>
         <Pressable 
           style={styles.retryButton}
@@ -206,7 +207,7 @@ const App: React.FC = () => {
             setRetryKey(k => k + 1);
           }}
         >
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.retryButtonText}>{AppStrings.retry}</Text>
         </Pressable>
       </View>
     );
