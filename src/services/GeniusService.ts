@@ -5,7 +5,6 @@
 
 import { LyricLine } from '../types/song';
 import { GeniusHitResponse, GeniusSearchResponse } from '../types/providerResponses';
-import { handleAsyncError } from '../utils/errorHandler';
 
 const GENIUS_API_URL = 'https://api.genius.com';
 const ACCESS_TOKEN = 'rKvOqiyrZIcfa6i3E6z2Q2LMSr79s89XOYzJJkiQ5OOsncR23Uf6ZoUhW_nh6sJR'; // Provided by user
@@ -39,7 +38,7 @@ export const GeniusService = {
       ]) as Response;
 
       if (!response.ok) {
-        handleAsyncError('GeniusService.searchGenius.httpError', new Error(`HTTP ${response.status}`));
+        if (__DEV__) console.error('[GeniusService.searchGenius.httpError] HTTP error:', new Error(`HTTP ${response.status}`));
         return [];
       }
 
@@ -57,7 +56,7 @@ export const GeniusService = {
       }));
 
     } catch (error: unknown) {
-      handleAsyncError('GeniusService.searchGenius', error);
+      if (__DEV__) console.error('[GeniusService.searchGenius] Async error:', error);
       return [];
     }
   },
@@ -101,7 +100,7 @@ export const GeniusService = {
       }
 
       if (!lyricsHtml) {
-        handleAsyncError('GeniusService.scrapeGeniusLyrics.noContainer', new Error('No lyrics container found'));
+        if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics.noContainer] No lyrics container found');
         return null;
       }
 
@@ -147,14 +146,14 @@ export const GeniusService = {
       const finalLyrics = cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
       if (!finalLyrics) {
-        handleAsyncError('GeniusService.scrapeGeniusLyrics.emptyAfterClean', new Error('Lyrics empty after cleaning'));
+        if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics.emptyAfterClean] Lyrics empty after cleaning');
         return null;
       }
 
       return finalLyrics;
 
     } catch (error) {
-      handleAsyncError('GeniusService.scrapeGeniusLyrics', error);
+      if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics] Async error:', error);
       return null;
     }
   },

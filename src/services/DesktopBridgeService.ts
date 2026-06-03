@@ -31,7 +31,6 @@ import { usePositionStore } from '../store/positionStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
 import { trustedPairingService } from './TrustedPairingService';
-import { handleAsyncError } from '../utils/errorHandler';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -273,9 +272,6 @@ class DesktopBridgeService {
   private seenNonIdempotentIds = new Set<string>();
   private controlPort = DEFAULT_WS_PORT;
   private logServerError(tag: string, err: unknown): void {
-    // Log through standardized handler
-    handleAsyncError(`DesktopBridgeService.${tag}`, err);
-    
     // Additional context-specific formatting (preserved for backward compatibility)
     if (err instanceof Error) {
       if (__DEV__) console.error(`[DesktopBridge] ${tag} details:`, err.stack);
@@ -756,7 +752,7 @@ class DesktopBridgeService {
           }
           trustedPairingService
             .markSeen(parsed.desktopDeviceId)
-            .catch(e => handleAsyncError('DesktopBridgeService.httpPing', e));
+            .catch(e => { if (__DEV__) console.error('[DesktopBridgeService.httpPing] Async error:', e); });
           socket.write(
             'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\n\r\n{"ok":true}'
           );
@@ -1143,14 +1139,14 @@ class DesktopBridgeService {
             .then((records) => {
               client.trusted = records.some((r) => r.desktopDeviceId === desktopDeviceId);
               if (client.trusted) {
-                trustedPairingService.markSeen(desktopDeviceId).catch(e => handleAsyncError('DesktopBridgeService.markSeenAfterTrust', e));
+                trustedPairingService.markSeen(desktopDeviceId).catch(e => { if (__DEV__) console.error('[DesktopBridgeService.markSeenAfterTrust] Async error:', e); });
                 this.sendSnapshotToClient(client);
               } else {
                 client.socket.destroy();
               }
             })
             .catch(e => {
-              handleAsyncError('DesktopBridgeService.listTrustedDesktops', e);
+              if (__DEV__) console.error('[DesktopBridgeService.listTrustedDesktops] Async error:', e);
               client.socket.destroy();
             });
         } else {
@@ -1201,7 +1197,7 @@ class DesktopBridgeService {
           break;
 
         case 'NEXT':
-          playerStore.nextInPlaylist().catch(e => handleAsyncError('DesktopBridgeService.nextCommand', e));
+          playerStore.nextInPlaylist().catch(e => { if (__DEV__) console.error('[DesktopBridgeService.nextCommand] Async error:', e); });
           break;
 
         case 'PREV':

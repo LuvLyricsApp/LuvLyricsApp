@@ -118,9 +118,7 @@ const App: React.FC = () => {
                 isLoading: false,
               });
               // Background: populate likedSongIds Set (heart icons) without blocking render
-              usePlaylistStore.getState().fetchPlaylists().catch(e => {
-                if (__DEV__) console.error('[APP] fetchPlaylists background failure', e);
-              });
+              usePlaylistStore.getState().fetchPlaylists().catch(() => {});
             }
             if (preloaded.lastPlayedId) {
               const last = preloaded.songs.find(s => s.id === preloaded.lastPlayedId);
@@ -141,9 +139,7 @@ const App: React.FC = () => {
           import('./services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.prefetch()).catch(console.error);
 
           // Build/verify FTS5 search index in background (Android only; no-op on iOS)
-          ensureSearchIndex().catch(e => {
-            if (__DEV__) console.error('[APP] ensureSearchIndex background failure', e);
-          });
+          ensureSearchIndex().catch(() => {});
 
           console.log('[APP] Initialization successful');
           setIsReady(true);

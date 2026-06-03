@@ -6,7 +6,7 @@ import {
   cancelPruneTimer,
   schedulePruneTimer,
 } from '../store/lyricsScanQueueStore';
-import { handleAsyncError } from '../utils/errorHandler';
+// helper removed; using DEV-guard logging for background errors
 const COMPLETED_JOB_TTL_MS = 5 * 60 * 1000;
 
 /**
@@ -105,8 +105,8 @@ export async function processLyricsScanQueue(): Promise<void> {
           removeFromQueue(nextJob.songId);
         });
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        handleAsyncError(`lyricsScanWorker.processJob.${nextJob.songId}`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (__DEV__) console.error(`'[lyricsScanWorker.processJob.${nextJob.songId}] Async error:`, error);
         updateJob(nextJob.songId, prev => ({
           status: 'failed' as const,
           log: appendLog(prev.log, `Error: ${message}`),
@@ -116,7 +116,7 @@ export async function processLyricsScanQueue(): Promise<void> {
       await delay(500);
     }
   } catch (error) {
-    handleAsyncError('lyricsScanWorker.processQueue', error);
+    if (__DEV__) console.error('[lyricsScanWorker.processQueue] Async error:', error);
   } finally {
     useLyricsScanQueueStore.getState().setProcessing(false);
   }

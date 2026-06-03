@@ -141,7 +141,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         await queries.updateSong(updatedSong);
         addRecentArt(uri);
       } catch (e) {
-        if (__DEV__) console.error('[NowPlaying] Failed to save cover:', e);
+        console.error('[NowPlaying] Failed to save cover:', e);
       }
     }
   }, [currentSong, updateCurrentSong, addRecentArt, setShowCoverSearch]);

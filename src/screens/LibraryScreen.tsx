@@ -330,7 +330,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           await FileSystem.copyAsync({ from: uriToShare, to: tempFile });
           uriToShare = tempFile;
         } catch (copyError) {
-          if (__DEV__) console.error('Failed to copy content URI for sharing:', copyError);
+          console.error('Failed to copy content URI for sharing:', copyError);
         }
       }
       await Sharing.shareAsync(uriToShare, {
@@ -339,7 +339,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
         UTI: 'public.audio'
       });
     } catch (error) {
-      if (__DEV__) console.error('Share error:', error);
+      console.error('Share error:', error);
       setToast({ visible: true, message: 'Failed to share song', type: 'error' });
     }
   };

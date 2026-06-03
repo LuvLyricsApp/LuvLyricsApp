@@ -6,7 +6,6 @@
 import { LyricLine } from '../types/song';
 import { LrcLibTrackResponse } from '../types/providerResponses';
 import { parseTimestampedLyrics, hasValidTimestamps } from '../utils/timestampParser';
-import { handleAsyncError } from '../utils/errorHandler';
 
 
 const BASE_URL = 'https://lrclib.net/api';
@@ -56,7 +55,7 @@ export const LrcLibService = {
       if (isAbortError(error)) {
          console.warn('[LrcLibService] Search timed out');
       } else {
-         handleAsyncError('LrcLibService.search', error);
+        if (__DEV__) console.error('[LrcLibService.search] Async error:', error);
       }
       return [];
     }
@@ -101,7 +100,7 @@ export const LrcLibService = {
       if (isAbortError(error)) {
          console.warn('[LrcLibService] GetLyrics timed out');
       } else {
-         handleAsyncError('LrcLibService.getLyrics', error);
+        if (__DEV__) console.error('[LrcLibService.getLyrics] Async error:', error);
       }
       return null;
     }

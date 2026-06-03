@@ -6,7 +6,7 @@ import { usePositionStore } from '../store/positionStore';
 import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
-import { handleAsyncError } from '../utils/errorHandler';
+// Intentionally keep some background promise catches silent in PlayerContext
 
 const PlayerContext = createContext<any>(null);
 
@@ -122,7 +122,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (__DEV__) console.log('[PlayerContext] Remote command received:', event.command);
       const store = usePlayerStore.getState();
       if (event.command === 'next') {
-        store.nextInPlaylist().catch(e => handleAsyncError('PlayerContext.iosRemoteCommand', e));
+        store.nextInPlaylist().catch(() => {});
       } else if (event.command === 'previous') {
         store.previousInPlaylist();
       }
@@ -170,7 +170,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (shouldAdvance) {
       endHandledForSongIdRef.current = activeSongId;
       store.setIsPlaying(true);
-      store.nextInPlaylist().catch(e => handleAsyncError('PlayerContext.iosAutoNext', e));
+      store.nextInPlaylist().catch(() => {});
       return;
     }
 
@@ -211,7 +211,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (shouldAdvance) {
         endHandledForSongIdRef.current = activeSongId;
         store.setIsPlaying(true);
-        store.nextInPlaylist().catch(e => handleAsyncError('PlayerContext.androidAutoNext', e));
+        store.nextInPlaylist().catch(() => {});
         return;
       }
 
@@ -224,7 +224,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (__DEV__) console.log('[PlayerContext] Android native remote command:', event.command);
       const store = usePlayerStore.getState();
       if (event.command === 'next') {
-        store.nextInPlaylist().catch(e => handleAsyncError('PlayerContext.androidRemoteCommand', e));
+        store.nextInPlaylist().catch(() => {});
       } else if (event.command === 'previous') {
         store.previousInPlaylist();
       }

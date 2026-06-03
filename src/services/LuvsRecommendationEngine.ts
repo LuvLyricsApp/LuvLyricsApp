@@ -9,7 +9,6 @@ import { UnifiedSong, Song } from '../types/song';
 import { useLuvsPreferencesStore, LanguagePreference } from '../store/luvsPreferencesStore';
 import { useSongsStore } from '../store/songsStore';
 import { MultiSourceSearchService } from './MultiSourceSearchService';
-import { handleAsyncError } from '../utils/errorHandler';
 
 interface GeneratedQuery {
   query: string;
@@ -187,12 +186,12 @@ class LuvsRecommendationEngine {
     try {
       // Search Saavn
       const saavnResults = await MultiSourceSearchService.searchSaavn(query).catch(e => {
-        handleAsyncError('LuvsRecommendationEngine.searchSaavn', e);
+        if (__DEV__) console.error('[LuvsRecommendationEngine.searchSaavn] Async error:', e);
         return [] as UnifiedSong[];
       });
       results.push(...saavnResults);
     } catch (error) {
-      handleAsyncError('LuvsRecommendationEngine.searchSaavnOnly', error);
+      if (__DEV__) console.error('[LuvsRecommendationEngine.searchSaavnOnly] Async error:', error);
     }
 
     return results;
@@ -337,7 +336,7 @@ class LuvsRecommendationEngine {
       setFeedSongs(newFeed);
       if (__DEV__) console.log(`[LuvsReco] 🪄 Injected ${toInject.length} similar songs.`);
     } catch (error) {
-      handleAsyncError('LuvsRecommendationEngine.discoverSimilar', error);
+      if (__DEV__) console.error('[LuvsRecommendationEngine.discoverSimilar] Async error:', error);
     }
   }
 
