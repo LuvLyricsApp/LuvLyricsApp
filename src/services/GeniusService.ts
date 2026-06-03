@@ -7,7 +7,14 @@ import { LyricLine } from '../types/song';
 import { GeniusHitResponse, GeniusSearchResponse } from '../types/providerResponses';
 
 const GENIUS_API_URL = 'https://api.genius.com';
-const ACCESS_TOKEN = 'rKvOqiyrZIcfa6i3E6z2Q2LMSr79s89XOYzJJkiQ5OOsncR23Uf6ZoUhW_nh6sJR'; // Provided by user
+const ACCESS_TOKEN = process.env.EXPO_PUBLIC_GENIUS_ACCESS_TOKEN ?? '';
+
+if (!ACCESS_TOKEN && __DEV__) {
+  console.warn(
+    '[GeniusService] EXPO_PUBLIC_GENIUS_ACCESS_TOKEN is not set. ' +
+    'Copy .env.example to .env and add your token.'
+  );
+}
 
 export interface GeniusTrack {
   id: number;
