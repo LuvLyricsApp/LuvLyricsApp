@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { usePlayerStore, playerControls } from '../store/playerStore';
+import { usePlayerStore, playerControls, consumeQueuedPlayerControl } from '../store/playerStore';
 import { usePositionStore } from '../store/positionStore';
 import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
@@ -62,6 +62,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Binding playerControls Play/Pause/Seek globally
   useEffect(() => {
+    let controlsReady = false;
+
     if (Platform.OS === 'android') {
       playerControls.play = () => setTimeout(() => androidPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => androidPlayer.pause(), 0);
@@ -69,6 +71,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastSeekAtRef.current = Date.now();
         setTimeout(() => androidPlayer.seekTo(pos), 0);
       };
+      controlsReady = true;
     } else if (iosPlayer) {
       playerControls.play = () => setTimeout(() => iosPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => iosPlayer.pause(), 0);
@@ -76,6 +79,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastSeekAtRef.current = Date.now();
         setTimeout(() => iosPlayer.seekTo(pos), 0);
       };
+      controlsReady = true;
+    }
+
+    if (controlsReady) {
+      const queuedControl = consumeQueuedPlayerControl();
+      if (queuedControl?.type === 'play') {
+        playerControls.play();
+      } else if (queuedControl?.type === 'pause') {
+        playerControls.pause();
+      } else if (queuedControl?.type === 'seekTo') {
+        playerControls.seekTo(queuedControl.position);
+      }
     }
   }, [iosPlayer, androidPlayer]);
 
