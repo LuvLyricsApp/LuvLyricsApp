@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Animated from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomMenu from './CustomMenu';
 
 interface NowPlayingHeaderProps {
@@ -36,10 +36,12 @@ const NowPlayingHeader: React.FC<NowPlayingHeaderProps> = ({
   colors,
   isDark,
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
     <Animated.View style={[styles.headerContainer, animatedStyle]} pointerEvents={controlsVisible ? 'auto' : 'none'}>
       <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.blurContainer}>
-        <SafeAreaView edges={['top']} style={styles.headerContent}>
+        <View style={[styles.headerContent, { paddingTop: insets.top + 10 }]}>
           <Pressable onPress={onGoBack} style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
             <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
           </Pressable>
@@ -60,7 +62,7 @@ const NowPlayingHeader: React.FC<NowPlayingHeaderProps> = ({
               <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
             </Pressable>
           </View>
-        </SafeAreaView>
+        </View>
       </BlurView>
     </Animated.View>
   );
@@ -84,8 +86,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    paddingTop: Platform.OS === 'android' ? 20 : 0,
+    paddingBottom: 10,
   },
   headerTitle: {
     fontSize: 16,

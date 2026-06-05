@@ -12,6 +12,7 @@ import NowPlayingHeader from '../components/NowPlayingHeader';
 import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { GestureDetector } = GestureHandler;
 
@@ -20,6 +21,7 @@ type Props = RootStackScreenProps<'NowPlaying'>;
 const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const colors = useThemeColors();
   const isDark = useIsDark();
+  const insets = useSafeAreaInsets();
   const { songId } = route.params;
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
 
@@ -183,7 +185,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           onSelect={handleCoverSelect}
         />
 
-        <View style={styles.contentArea}>
+        <View style={[styles.contentArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <NowPlayingLyricsArea
             showLyrics={showLyrics}
             processedLyrics={processedLyrics}
