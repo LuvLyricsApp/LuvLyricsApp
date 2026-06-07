@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './navigation';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { initDatabase } from './database/db';
 import { useSongsStore } from './store/songsStore';
 import { usePlayerStore } from './store/playerStore';
@@ -216,12 +217,14 @@ const App: React.FC = () => {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <StatusBar style="light" />
-          <PlayerProvider>
-            <RootNavigator />
-          </PlayerProvider>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <ThemeProvider>
+            <StatusBar style="light" />
+            <PlayerProvider>
+              <RootNavigator />
+            </PlayerProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
