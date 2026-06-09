@@ -16,14 +16,14 @@ export const updateJobStatus = async (id: string, status: string, error?: string
   await withDbWrite(async (db) => {
     await db.execAsync(`
       UPDATE download_jobs SET status = '${status}', error = ${error ? `'${esc(error)}'` : 'NULL'}, updated_at = '${new Date().toISOString()}'
-      WHERE id = '${id}'
+      WHERE id = '${esc(id)}'
     `);
   });
 };
 
 export const deleteJob = async (id: string): Promise<void> => {
   await withDbWrite(async (db) => {
-    await db.execAsync(`DELETE FROM download_jobs WHERE id = '${id}'`);
+    await db.execAsync(`DELETE FROM download_jobs WHERE id = '${esc(id)}'`);
   });
 };
 
