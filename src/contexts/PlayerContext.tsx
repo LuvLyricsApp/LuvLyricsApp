@@ -84,14 +84,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
  
   useEffect(() => {
     if (Platform.OS === 'android') {
-     
+      playerControls.play = () => setTimeout(() => androidPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => androidPlayer.pause(), 0);
       playerControls.seekTo = (pos: number) => {
         lastSeekAtRef.current = Date.now();
         setTimeout(() => androidPlayer.seekTo(pos), 0);
       };
     } else if (iosPlayer) {
-      
       playerControls.play = () => setTimeout(() => iosPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => iosPlayer.pause(), 0);
       playerControls.seekTo = (pos: number) => {
@@ -112,7 +111,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           albumTitle: currentSong.album || ''
         });
       } else {
-        
         setTimeout(() => {
           androidPlayer.pause();
         }, 0);
@@ -129,8 +127,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           showSeekForward: true
         });
       } else {
-        // Defensive defer — useEffect already runs post-commit, but keeps the pattern
-        // consistent with playerControls bindings above. Safe to remove if verified on device.
         setTimeout(() => {
           iosPlayer.pause();
         }, 0);
