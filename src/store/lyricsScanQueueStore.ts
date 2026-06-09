@@ -58,6 +58,7 @@ interface LyricsScanQueueState {
   setProcessing: (processing: boolean) => void;
   updateJob: (songId: string, updates: Partial<ScanJob> | ((prev: ScanJob) => Partial<ScanJob>)) => void;
   getJobStatus: (songId: string) => ScanJob | undefined;
+  hydrateFromDb: () => Promise<void>;
 }
 
 export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) => ({
@@ -93,6 +94,11 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
             },
           },
         }));
+        import('../database/scanQueueQueries').then(m => {
+          // Use upsertScanJob: completed jobs have their DB row deleted, so UPDATE would silently no-op
+          const updatedJob = get().queue[song.id];
+          if (updatedJob) m.upsertScanJob(updatedJob).catch(() => {});
+        }).catch(() => {});
       }
       return;
     }
@@ -112,10 +118,14 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
     };
 
     set({ queue: { ...queue, [song.id]: newJob } });
+    import('../database/scanQueueQueries').then(m => {
+      m.upsertScanJob(newJob).catch(() => {});
+    }).catch(() => {});
   },
 
   removeFromQueue: (songId: string) => {
     cancelPruneTimer(songId);
+    import('../database/scanQueueQueries').then(m => m.deleteScanJob(songId)).catch(() => {});
     set(state => {
       const rest = { ...state.queue };
       delete rest[songId];
@@ -128,6 +138,11 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
       .filter(job => job.status === 'completed')
       .map(job => job.songId);
     completedIds.forEach(cancelPruneTimer);
+    if (completedIds.length > 0) {
+      import('../database/scanQueueQueries').then(m => {
+        completedIds.forEach(id => m.deleteScanJob(id).catch(() => {}));
+      }).catch(() => {});
+    }
     set(state => ({
       queue: Object.fromEntries(
         Object.entries(state.queue).filter(([, job]) => job.status !== 'completed')
@@ -136,6 +151,14 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
   },
 
   clearFailed: () => {
+    const failedIds = Object.values(get().queue)
+      .filter(job => job.status === 'failed')
+      .map(job => job.songId);
+    if (failedIds.length > 0) {
+      import('../database/scanQueueQueries').then(m => {
+        failedIds.forEach(id => m.deleteScanJob(id).catch(() => {}));
+      }).catch(() => {});
+    }
     set(state => ({
       queue: Object.fromEntries(
         Object.entries(state.queue).filter(([, job]) => job.status !== 'failed')
@@ -157,18 +180,35 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
   setProcessing: (processing: boolean) => set({ processing }),
 
   updateJob: (songId: string, updates: Partial<ScanJob> | ((prev: ScanJob) => Partial<ScanJob>)) => {
+    const prev = get().queue[songId];
+    if (!prev) return;
+    const newValues = typeof updates === 'function' ? updates(prev) : updates;
+
+    if (newValues.status) {
+      import('../database/scanQueueQueries').then(m => {
+        if (newValues.status === 'completed') {
+          m.deleteScanJob(songId).catch(() => {});
+        } else {
+          m.updateScanJobStatus(
+            songId,
+            newValues.status!,
+            newValues.attempts ?? prev.attempts
+          ).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+
+    const nextStatus = newValues.status ?? prev.status;
+    const isTerminal = nextStatus === 'completed' || nextStatus === 'failed';
+    const timestamp = Date.now();
     set(state => {
-      const prev = state.queue[songId];
-      if (!prev) return state;
-      const newValues = typeof updates === 'function' ? updates(prev) : updates;
-      const nextStatus = newValues.status ?? prev.status;
-      const isTerminal = nextStatus === 'completed' || nextStatus === 'failed';
-      const timestamp = Date.now();
+      const current = state.queue[songId];
+      if (!current) return state;
       return {
         queue: {
           ...state.queue,
           [songId]: {
-            ...prev,
+            ...current,
             ...newValues,
             updatedAt: timestamp,
             finishedAt: isTerminal ? (newValues.finishedAt ?? timestamp) : undefined,
@@ -179,4 +219,25 @@ export const useLyricsScanQueueStore = create<LyricsScanQueueState>((set, get) =
   },
 
   getJobStatus: (songId: string) => get().queue[songId],
+
+  hydrateFromDb: async () => {
+    try {
+      const { loadPendingScanJobs, pruneOldFailedJobs } = await import('../database/scanQueueQueries');
+      await pruneOldFailedJobs(30 * 24 * 60 * 60 * 1000);
+      const jobs = await loadPendingScanJobs();
+      if (jobs.length > 0) {
+        set(state => {
+          const merged: Record<string, ScanJob> = { ...state.queue };
+          jobs.forEach(job => {
+            if (!merged[job.songId]) {
+              merged[job.songId] = job;
+            }
+          });
+          return { queue: merged };
+        });
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[LyricsScanQueueStore] hydrateFromDb failed:', e);
+    }
+  },
 }));

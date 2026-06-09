@@ -111,6 +111,11 @@ const App: React.FC = () => {
             .then(m => m.useDownloadQueueStore.getState().hydrateFromDb())
             .catch(() => {});
 
+          // Restore any lyrics scan jobs that were pending when the app was last killed
+          import('./store/lyricsScanQueueStore')
+            .then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb())
+            .catch(() => {});
+
           const { usePlaylistStore } = await import('./store/playlistStore');
 
           if (preloaded && preloaded.songs.length > 0) {
