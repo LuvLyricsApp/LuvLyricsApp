@@ -172,6 +172,18 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS lyrics_scan_jobs (
+      song_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      duration INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      is_forced_synced INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title);
     CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist);
     CREATE INDEX IF NOT EXISTS idx_lyrics_song_id ON lyrics(song_id);
