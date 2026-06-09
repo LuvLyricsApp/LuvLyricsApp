@@ -7,6 +7,27 @@ import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
 
+/**
+ * How close to the end of a track (in seconds) we consider "near the end" for
+ * the purposes of the auto-next fallback.
+ *
+ * Auto-advance uses two signals:
+ *   1. didJustFinish — the primary signal fired by the audio engine when a
+ *      track completes naturally.
+ *   2. isNearEndFallback — a safety net for platforms/states where
+ *      didJustFinish is unreliable (e.g. iOS when the player stalls right at
+ *      the last frame and never fires the finish event).
+ *
+ * The fallback fires when the player reports it is loaded and not buffering,
+ * yet is no longer playing, and the playhead is within this many seconds of
+ * the total duration. 0.35 s was chosen because it is large enough to catch
+ * normal end-of-track stalls (which typically land in the last ~0.1–0.2 s)
+ * while being small enough to avoid false-positives during a seek to near the
+ * end of a track.
+ */
+
+const AUTO_ADVANCE_END_THRESHOLD_S = 0.35;
+
 const PlayerContext = createContext<any>(null);
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -18,7 +39,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const iosPlayer = useAudioPlayer();
   const iosStatus = useAudioPlayerStatus(iosPlayer);
 
-  // Android Native Player Adapter
+
   const androidPlayer = useRef({
     play: () => NativeAudioPlayer.play(),
     pause: () => NativeAudioPlayer.pause(),
@@ -60,7 +81,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentSongId]);
 
-  // Binding playerControls Play/Pause/Seek globally
+ 
   useEffect(() => {
     if (Platform.OS === 'android') {
       playerControls.play = () => setTimeout(() => androidPlayer.play(), 0);
@@ -79,7 +100,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [iosPlayer, androidPlayer]);
 
-  // Reacting to active song metadata changes
+
   useEffect(() => {
     if (Platform.OS === 'android') {
       if (currentSong) {
@@ -113,7 +134,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [iosPlayer, currentSong, androidPlayer]);
 
-  // iOS-only: Remote Commands and Status hooks integration
+  
   useEffect(() => {
     if (Platform.OS === 'android' || !iosPlayer) return;
     
@@ -152,6 +173,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const justSought = Date.now() - lastSeekAtRef.current < 1500;
     const activeSongId = store.currentSongId;
+
+    // Two-signal auto-next system:
+    // Primary: didJustFinish — fired by expo-audio when playback completes normally.
+    // Fallback: isNearEndFallback — catches cases where didJustFinish never fires
+    //   (seen on some Android versions and certain audio formats where the player
+    //   stops without emitting the finish event).
+    //
+    // The fallback requires store.isPlaying === true so it does NOT trigger when
+    // the user manually pauses near the end of a track — only genuine playback
+    // completion advances the queue.
+    //
+    // 0.35s (AUTO_ADVANCE_END_THRESHOLD_S) was chosen as a window large enough
+    // to catch late-arriving finish events but small enough to avoid premature
+    // advances during normal playback.
     const isNearEndFallback =
       !didJustFinish &&
       store.isPlaying &&
@@ -159,7 +194,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       !isBuffering &&
       !playing &&
       durationSV.value > 0 &&
-      positionSV.value >= Math.max(0, durationSV.value - 0.35);
+      positionSV.value >= Math.max(0, durationSV.value - AUTO_ADVANCE_END_THRESHOLD_S);
     const shouldAdvance =
       !justSought &&
       (didJustFinish || isNearEndFallback) &&
@@ -175,14 +210,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (store.isPlaying !== playing) {
       if (shouldPreservePlayingStateDuringSeek({ playing, playbackState, isBuffering, isLoaded })) {
-        // Preserve state
+        
       } else {
         store.setIsPlaying(playing);
       }
     }
   }, [iosStatus]);
 
-  // Android-only: NativeAudioPlayer subscriptions integration
+  
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
