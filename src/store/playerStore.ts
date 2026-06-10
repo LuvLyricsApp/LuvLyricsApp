@@ -6,10 +6,30 @@ import { useSettingsStore } from './settingsStore';
 
 // Module-level controls ref — written by PlayerContext at mount, read everywhere else.
 // Keeps imperative player commands out of Zustand state so they don't trigger re-renders.
+type QueuedPlayerControl =
+  | { type: 'play' }
+  | { type: 'pause' }
+  | { type: 'seekTo'; position: number };
+
+let queuedPlayerControl: QueuedPlayerControl | null = null;
+
+const queuePlayerControl = (control: QueuedPlayerControl) => {
+  queuedPlayerControl = control;
+  if (__DEV__) {
+    console.warn(`[playerControls] Player not initialized; queued ${control.type}`);
+  }
+};
+
 export const playerControls = {
-  play: () => { if (__DEV__) console.warn('[playerControls] Player not initialized'); },
-  pause: () => { if (__DEV__) console.warn('[playerControls] Player not initialized'); },
-  seekTo: (_pos: number) => { if (__DEV__) console.warn('[playerControls] Player not initialized'); },
+  play: () => queuePlayerControl({ type: 'play' }),
+  pause: () => queuePlayerControl({ type: 'pause' }),
+  seekTo: (position: number) => queuePlayerControl({ type: 'seekTo', position }),
+};
+
+export const consumeQueuedPlayerControl = (): QueuedPlayerControl | null => {
+  const control = queuedPlayerControl;
+  queuedPlayerControl = null;
+  return control;
 };
 
 // Injected by songsStore at init — breaks the circular require in nextInPlaylist
