@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackScreenProps } from '../types/navigation';
@@ -111,6 +111,26 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       onPress: () => {
         setMenuVisible(false);
         navigation.navigate('AddEditLyrics', { songId: currentSong?.id });
+      }
+    },
+    {
+      label: 'Export LRC',
+      icon: 'download-outline',
+      onPress: async () => {
+        setMenuVisible(false);
+        if (!currentSong) return;
+        try {
+          const { exportSongAsLrc, shareExportedFile } = await import('../utils/exportImport');
+          const filePath = await exportSongAsLrc(currentSong);
+          await shareExportedFile(
+            filePath,
+            'text/plain',
+            'Export LRC File',
+          );
+          Alert.alert('Exported', `LRC file saved successfully.`);
+        } catch (e) {
+          Alert.alert('Export Failed', 'Could not export LRC file.');
+        }
       }
     },
     {
