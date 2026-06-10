@@ -122,7 +122,12 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         try {
           const { exportSongAsLrc, shareExportedFile } = await import('../utils/exportImport');
           const filePath = await exportSongAsLrc(currentSong);
-          await shareExportedFile(filePath);
+          await shareExportedFile(
+            filePath,
+            'text/plain',
+            'Export LRC File',
+          );
+          Alert.alert('Exported', `LRC file saved successfully.`);
         } catch (e) {
           Alert.alert('Export Failed', 'Could not export LRC file.');
         }

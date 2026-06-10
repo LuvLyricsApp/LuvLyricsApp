@@ -80,14 +80,20 @@ export const exportAllSongs = async (): Promise<string> => {
 /**
  * Share exported file
  * @param fileUri - URI of file to share
+ * @param mimeType - MIME type of the file (default: application/json)
+ * @param dialogTitle - Title for the share dialog
  */
-export const shareExportedFile = async (fileUri: string): Promise<void> => {
+export const shareExportedFile = async (
+  fileUri: string,
+  mimeType: string = 'application/json',
+  dialogTitle: string = 'Export LyricFlow Backup',
+): Promise<void> => {
   const isAvailable = await Sharing.isAvailableAsync();
 
   if (isAvailable) {
     await Sharing.shareAsync(fileUri, {
-      mimeType: 'application/json',
-      dialogTitle: 'Export LyricFlow Backup',
+      mimeType,
+      dialogTitle,
     });
   } else {
     throw new Error('Sharing is not available on this device');
@@ -167,6 +173,26 @@ export function serializeLrc(song: Song): string {
 }
 
 /**
+ * Resolve a unique file URI by appending a suffix if the path already exists.
+ */
+async function resolveUniqueUri(baseUri: string): Promise<string> {
+  const info = await FileSystem.getInfoAsync(baseUri);
+  if (!info.exists) return baseUri;
+
+  const dotIndex = baseUri.lastIndexOf('.');
+  const stem = dotIndex > 0 ? baseUri.slice(0, dotIndex) : baseUri;
+  const ext = dotIndex > 0 ? baseUri.slice(dotIndex) : '';
+
+  for (let i = 1; i < 100; i++) {
+    const candidate = `${stem} (${i})${ext}`;
+    const candidateInfo = await FileSystem.getInfoAsync(candidate);
+    if (!candidateInfo.exists) return candidate;
+  }
+
+  return `${stem} (${Date.now()})${ext}`;
+}
+
+/**
  * Export a single song as an .lrc file
  * @returns File URI of exported LRC file
  */
@@ -176,7 +202,7 @@ export const exportSongAsLrc = async (song: Song): Promise<string> => {
   const artist = song.artist || 'Unknown Artist';
   const title = song.title || 'Unknown Title';
   const fileName = `${sanitizeFilename(artist)} - ${sanitizeFilename(title)}.lrc`;
-  const fileUri = FileSystem.documentDirectory + fileName;
+  const fileUri = await resolveUniqueUri(FileSystem.documentDirectory + fileName);
 
   await FileSystem.writeAsStringAsync(fileUri, lrcContent, {
     encoding: FileSystem.EncodingType.UTF8,

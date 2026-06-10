@@ -2,7 +2,7 @@ jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///documents/',
   writeAsStringAsync: jest.fn(),
   readAsStringAsync: jest.fn(),
-  getInfoAsync: jest.fn(),
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
   EncodingType: {
     UTF8: 'utf8',
   },
@@ -24,8 +24,9 @@ jest.mock('../database/queries', () => ({
 }));
 
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { getAllSongsWithLyrics } from '../database/queries';
-import { exportAllSongs, sanitizeFilename, serializeLrc, exportSongAsLrc } from './exportImport';
+import { exportAllSongs, sanitizeFilename, serializeLrc, exportSongAsLrc, shareExportedFile } from './exportImport';
 
 const mockedWriteAsStringAsync = jest.mocked(FileSystem.writeAsStringAsync);
 const mockedGetAllSongsWithLyrics = jest.mocked(getAllSongsWithLyrics);
@@ -188,6 +189,86 @@ describe('exportSongAsLrc', () => {
     const fileUri = await exportSongAsLrc(song);
 
     expect(fileUri).toContain('AC_DC - Song_ Reprise_Final.lrc');
+  });
+});
+
+describe('shareExportedFile', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('uses default JSON mime type when not specified', async () => {
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(true);
+    const shareAsync = jest.mocked(Sharing.shareAsync).mockResolvedValue();
+
+    await shareExportedFile('file:///test.json');
+
+    expect(shareAsync).toHaveBeenCalledWith('file:///test.json', {
+      mimeType: 'application/json',
+      dialogTitle: 'Export LyricFlow Backup',
+    });
+  });
+
+  it('accepts custom mime type and dialog title', async () => {
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(true);
+    const shareAsync = jest.mocked(Sharing.shareAsync).mockResolvedValue();
+
+    await shareExportedFile('file:///test.lrc', 'text/plain', 'Export LRC File');
+
+    expect(shareAsync).toHaveBeenCalledWith('file:///test.lrc', {
+      mimeType: 'text/plain',
+      dialogTitle: 'Export LRC File',
+    });
+  });
+
+  it('throws when sharing is unavailable', async () => {
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(false);
+
+    await expect(shareExportedFile('file:///test.lrc')).rejects.toThrow('Sharing is not available on this device');
+  });
+});
+
+describe('exportSongAsLrc dedup', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.mocked(FileSystem.writeAsStringAsync).mockReset();
+  });
+
+  it('appends (1) suffix when file already exists', async () => {
+    jest.mocked(FileSystem.getInfoAsync)
+      .mockResolvedValueOnce({ exists: true } as any)
+      .mockResolvedValueOnce({ exists: false } as any);
+    jest.mocked(FileSystem.writeAsStringAsync).mockResolvedValue();
+
+    const song = {
+      id: 's1',
+      title: 'Test Song',
+      artist: 'Test Artist',
+      lyrics: [],
+    } as any;
+
+    const fileUri = await exportSongAsLrc(song);
+
+    expect(fileUri).toBe('file:///documents/Test Artist - Test Song (1).lrc');
+  });
+
+  it('increments suffix until a free name is found', async () => {
+    jest.mocked(FileSystem.getInfoAsync)
+      .mockResolvedValueOnce({ exists: true } as any)
+      .mockResolvedValueOnce({ exists: true } as any)
+      .mockResolvedValueOnce({ exists: false } as any);
+    jest.mocked(FileSystem.writeAsStringAsync).mockResolvedValue();
+
+    const song = {
+      id: 's2',
+      title: 'Test Song',
+      artist: 'Test Artist',
+      lyrics: [],
+    } as any;
+
+    const fileUri = await exportSongAsLrc(song);
+
+    expect(fileUri).toBe('file:///documents/Test Artist - Test Song (2).lrc');
   });
 });
 
