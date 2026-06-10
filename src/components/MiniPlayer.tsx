@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -31,8 +31,11 @@ import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
+const ISLAND_TOP_CONTENT_GAP = 12;
+const MIN_ISLAND_TOP_OFFSET = 40;
 
 // Create Animated Pressable
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -148,6 +151,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isDark = useIsDark();
+  const insets = useSafeAreaInsets();
 
   // Use store instead of navigation state to avoid root-level crashes
   const isNowPlaying = hideMiniPlayer;
@@ -681,11 +685,17 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const isActuallyVisible = currentSong && !isNowPlaying;
   
   if (!isActuallyVisible) return <View style={{ height: 0, opacity: 0 }} />;
+
+  const islandTopOffset = Math.max(
+    insets.top + ISLAND_TOP_CONTENT_GAP,
+    MIN_ISLAND_TOP_OFFSET
+  );
   
   return (
     <View style={[
       styles.container, 
       isIsland ? styles.islandContainer : styles.barContainer,
+      isIsland && { top: islandTopOffset },
       isIsland && expanded && { alignItems: 'center', marginHorizontal: 12, marginRight: 12 } // Expanded: Force Center & Symmetry. Override container margins.
     ]}>
       {/* Classic Scrubber (Gapless & Animated) */}
@@ -986,7 +996,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 0, 
   },
   islandContainer: {
-    top: Platform.OS === 'ios' ? 58 : 40, // 58 = iOS Dynamic Island clearance, 40 = Android status bar height
     marginLeft: 12,
     marginRight: 8,
     alignItems: 'flex-end', // Right-aligned

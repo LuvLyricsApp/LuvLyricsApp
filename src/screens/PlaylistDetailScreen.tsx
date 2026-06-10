@@ -99,6 +99,10 @@ export const PlaylistDetailScreen: React.FC = () => {
   const duration = usePositionStore(state => state.duration);
   
   const activeIsPlaying = currentPlaylistId === playlistId;
+  const listContentContainerStyle = useMemo(
+    () => ({ paddingBottom: 150 + insets.bottom, paddingTop: 50 + insets.top }),
+    [insets.bottom, insets.top]
+  );
 
 
   const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
@@ -832,7 +836,7 @@ export const PlaylistDetailScreen: React.FC = () => {
             renderItem={({ item, index }: { item: Song, index: number }) => renderItem({ item, getIndex: () => index, drag: undefined, isActive: false } as any)}
             onScroll={scrollHandler}
             scrollEventThrottle={1}
-            contentContainerStyle={{ paddingBottom: 150, paddingTop: 50 + insets.top }}
+            contentContainerStyle={listContentContainerStyle}
             ListHeaderComponent={renderHeader()}
         />
       ) : (
@@ -844,7 +848,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         renderItem={renderItem}
         onScroll={scrollHandler}
         scrollEventThrottle={1} // Use 1 for maximum update frequency
-        contentContainerStyle={{ paddingBottom: 150, paddingTop: 50 + insets.top }} 
+        contentContainerStyle={listContentContainerStyle}
         ListHeaderComponent={renderHeader()}
       />
       )}
