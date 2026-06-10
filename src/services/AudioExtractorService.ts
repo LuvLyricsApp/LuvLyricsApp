@@ -108,7 +108,7 @@ class AudioExtractorService {
             return mappedFormats.sort((a: any, b: any) => b.bitrate - a.bitrate);
 
         } catch (error) {
-            console.error('[AudioExtractor] Error:', error);
+            if (__DEV__) console.error('[AudioExtractorService.getAudioFormats] Async error:', error);
             // Polyfill might be missing if this crashes on 'crypto' or 'stream'
             return [];
         }

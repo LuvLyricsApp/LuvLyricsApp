@@ -34,7 +34,7 @@ class DownloadManager {
                 DownloaderModule.cancel(id);
                 if (__DEV__) console.log(`[DownloadManager] Android Download Canceled/Paused: ${id}`);
             } catch (e) {
-                if (__DEV__) console.error(`[DownloadManager] Android cancel failed: ${id}`, e);
+                if (__DEV__) console.error('[DownloadManager.pauseDownload.android] Async error:', e);
             }
             return;
         }
@@ -45,7 +45,7 @@ class DownloadManager {
                 await download.pauseAsync();
                 if (__DEV__) console.log(`[DownloadManager] Paused: ${id}`);
             } catch (e) {
-                if (__DEV__) console.error(`[DownloadManager] Pause failed: ${id}`, e);
+                if (__DEV__) console.error('[DownloadManager.pauseDownload] Async error:', e);
             }
         }
     }
@@ -62,7 +62,7 @@ class DownloadManager {
                 await download.resumeAsync();
                 if (__DEV__) console.log(`[DownloadManager] Resumed: ${id}`);
             } catch (e) {
-                if (__DEV__) console.error(`[DownloadManager] Resume failed: ${id}`, e);
+                if (__DEV__) console.error('[DownloadManager.resumeDownload] Async error:', e);
             }
         }
     }
@@ -231,7 +231,7 @@ class DownloadManager {
                     if (__DEV__) console.log(`[DownloadManager] SAF export success. URI: ${safUri.substring(0, 80)}...`);
                 }
             } catch (e) {
-                if (__DEV__) console.warn('[DownloadManager] SAF Export Failed (using internal storage):', e);
+                if (__DEV__) console.error('[DownloadManager.safExport] Async error:', e);
             }
 
             const newSong: Song = {

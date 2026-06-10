@@ -6,6 +6,7 @@ import { usePositionStore } from '../store/positionStore';
 import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
+// Intentionally keep some background promise catches silent in PlayerContext
 
 const PlayerContext = createContext<any>(null);
 

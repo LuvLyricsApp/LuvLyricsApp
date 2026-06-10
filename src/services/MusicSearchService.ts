@@ -15,6 +15,7 @@ export interface Lyrics {
   copyright: string;
 }
 
+
 const API_BASE = 'https://saavn.dev/api';
 
 export const MusicSearchService = {
@@ -57,7 +58,7 @@ export const MusicSearchService = {
       });
 
     } catch (error) {
-      console.error('[MusicSearchService] Search Error:', error);
+      if (__DEV__) console.error('[MusicSearchService.searchSongs] Async error:', error);
       return [];
     }
   },
@@ -80,7 +81,7 @@ export const MusicSearchService = {
         copyright: data.data.copyright || '',
       };
     } catch (error) {
-      console.error('[MusicSearchService] Lyrics Error:', error);
+      if (__DEV__) console.error('[MusicSearchService.getLyrics] Async error:', error);
       return null;
     }
   }

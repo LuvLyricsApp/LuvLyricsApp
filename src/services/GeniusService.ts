@@ -25,9 +25,6 @@ export interface GeniusTrack {
   plainLyrics: string;
 }
 
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
 export const GeniusService = {
   /**
    * 1. Search Genius API for a song to get its URL
@@ -48,7 +45,7 @@ export const GeniusService = {
       ]) as Response;
 
       if (!response.ok) {
-        console.warn(`[GeniusService] Search failed: ${response.status}`);
+        if (__DEV__) console.error('[GeniusService.searchGenius.httpError] HTTP error:', new Error(`HTTP ${response.status}`));
         return [];
       }
 
@@ -66,11 +63,7 @@ export const GeniusService = {
       }));
 
     } catch (error: unknown) {
-      if (getErrorMessage(error) === 'TIMEOUT') {
-          console.warn('[GeniusService] Search timed out');
-      } else {
-          console.error('[GeniusService] Search error:', error);
-      }
+      if (__DEV__) console.error('[GeniusService.searchGenius] Async error:', error);
       return [];
     }
   },
@@ -114,7 +107,7 @@ export const GeniusService = {
       }
 
       if (!lyricsHtml) {
-        console.warn('[GeniusService] No lyrics container found in HTML');
+        if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics.noContainer] No lyrics container found');
         return null;
       }
 
@@ -160,14 +153,14 @@ export const GeniusService = {
       const finalLyrics = cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
       if (!finalLyrics) {
-        console.warn('[GeniusService] Lyrics extracted but empty after cleaning');
+        if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics.emptyAfterClean] Lyrics empty after cleaning');
         return null;
       }
 
       return finalLyrics;
 
     } catch (error) {
-      console.error('[GeniusService] Scrape error:', error);
+      if (__DEV__) console.error('[GeniusService.scrapeGeniusLyrics] Async error:', error);
       return null;
     }
   },

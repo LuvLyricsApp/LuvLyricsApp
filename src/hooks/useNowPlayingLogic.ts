@@ -362,8 +362,8 @@ export function useNowPlayingLogic(songId: string) {
         swatches.darkVibrant?.color ?? swatches.dominant?.color ?? '#111',
         swatches.vibrant?.color ?? swatches.dominant?.color ?? '#333',
         swatches.darkMuted?.color ?? '#000',
-      ]);
-    }).catch(() => {});
+      ]); 
+      }).catch(() => {});
   }, [currentSong?.coverImageUri, isDynamicTheme]);
 
   const gradientColors = !isDynamicTheme || !currentSong?.coverImageUri

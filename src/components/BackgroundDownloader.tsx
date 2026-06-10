@@ -222,7 +222,7 @@ export const BackgroundDownloader = () => {
                         // Trigger store refresh
                         await usePlaylistStore.getState().fetchPlaylists();
                     } catch {
-                         if (__DEV__) console.error(`[BackgroundDownloader] Failed to add to playlist`);
+                         console.error(`[BackgroundDownloader] Failed to add to playlist`);
                     }
                 }
 

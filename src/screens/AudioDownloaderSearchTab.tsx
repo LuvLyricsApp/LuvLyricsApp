@@ -181,13 +181,13 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     }, [searchMode, titleQuery, artistQuery, runSearchWithQuery]);
 
     const handlePreviewToggle = useCallback(async (song: UnifiedSong) => {
-        if (playingPreviewId === song.id) {
-            await previewSoundRef.current?.stopAsync().catch(() => {});
-            await previewSoundRef.current?.unloadAsync().catch(() => {});
-            previewSoundRef.current = null;
-            setPlayingPreviewId(null);
-            return;
-        }
+                if (playingPreviewId === song.id) {
+                        await previewSoundRef.current?.stopAsync().catch(() => {});
+                        await previewSoundRef.current?.unloadAsync().catch(() => {});
+                        previewSoundRef.current = null;
+                        setPlayingPreviewId(null);
+                        return;
+                }
         if (previewSoundRef.current) {
             await previewSoundRef.current.stopAsync().catch(() => {});
             await previewSoundRef.current.unloadAsync().catch(() => {});

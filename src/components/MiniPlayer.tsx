@@ -287,7 +287,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             if (__DEV__) console.log('[MiniPlayer] User selected song - auto-playing');
           }
         } catch (error) {
-          if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
+          console.error('[MiniPlayer] Failed to sync audio:', error);
         }
       }
     };

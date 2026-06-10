@@ -3,6 +3,7 @@
  * Regional priority for latest Tamil songs
  */
 
+
 export interface Tamil2LyricsResult {
   lyrics: string;
   language: 'tamil' | 'english';
@@ -39,7 +40,7 @@ class Tamil2LyricsService {
       const songUrl = linkMatch[1];
       return await this.fetchLyrics(songUrl);
     } catch (error) {
-      console.error('[Tamil2Lyrics] Search failed:', error);
+      if (__DEV__) console.error('[Tamil2LyricsService.searchAndFetch] Async error:', error);
       return null;
     }
   }
@@ -88,7 +89,7 @@ class Tamil2LyricsService {
         source: 'Tamil2Lyrics',
       };
     } catch (error) {
-      console.error('[Tamil2Lyrics] Fetch failed:', error);
+      if (__DEV__) console.error('[Tamil2LyricsService.fetchLyrics] Async error:', error);
       return null;
     }
   }

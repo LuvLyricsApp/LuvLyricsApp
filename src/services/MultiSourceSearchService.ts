@@ -111,7 +111,7 @@ async function searchGaana(query: string): Promise<UnifiedSong[]> {
       .filter((s: UnifiedSong) => s.downloadUrl);
 
   } catch (error: unknown) {
-    console.warn(`[Gaana] Search failed: ${getErrorMessage(error)}`);
+    if (__DEV__) console.error('[MultiSourceSearchService.searchGaana] Async error:', error);
     return [];
   }
 }
@@ -136,7 +136,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
     ]) as Response;
 
     if (!response.ok) {
-        console.warn(`[Saavn] API Error: ${response.status}`);
+        if (__DEV__) console.error('[MultiSourceSearchService.searchSaavn.httpError] HTTP error:', new Error(`HTTP ${response.status}`));
         return [];
     }
 
@@ -151,7 +151,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
       .filter((s: UnifiedSong) => s.downloadUrl);
 
   } catch (error: unknown) {
-    console.warn(`[Saavn] Search failed: ${getErrorMessage(error)}`);
+    if (__DEV__) console.error('[MultiSourceSearchService.searchSaavn] Async error:', error);
     return [];
   }
 }
@@ -195,7 +195,7 @@ export async function searchMusic(query: string, artistName?: string, onProgress
       if (message === 'TIMEOUT' || name === 'AbortError' || message.includes('Network request failed')) {
           console.warn(`[SearchEngine] Network timeout/error for "${query}".`);
       } else {
-          console.error(`[SearchEngine] ⚠️ Search Failed:`, error);
+          if (__DEV__) console.error('[MultiSourceSearchService.searchMusic] Async error:', error);
       }
       return [];
   }

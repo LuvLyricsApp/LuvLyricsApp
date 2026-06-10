@@ -183,10 +183,13 @@ class LuvsRecommendationEngine {
 
     try {
       // Search Saavn
-      const saavnResults = await MultiSourceSearchService.searchSaavn(query).catch(() => [] as UnifiedSong[]);
+      const saavnResults = await MultiSourceSearchService.searchSaavn(query).catch(e => {
+        if (__DEV__) console.error('[LuvsRecommendationEngine.searchSaavn] Async error:', e);
+        return [] as UnifiedSong[];
+      });
       results.push(...saavnResults);
     } catch (error) {
-      if (__DEV__) console.warn(`[LuvsRecoEngine] Search failed for "${query}":`, error);
+      if (__DEV__) console.error('[LuvsRecommendationEngine.searchSaavnOnly] Async error:', error);
     }
 
     return results;
@@ -331,7 +334,7 @@ class LuvsRecommendationEngine {
       setFeedSongs(newFeed);
       if (__DEV__) console.log(`[LuvsReco] 🪄 Injected ${toInject.length} similar songs.`);
     } catch (error) {
-      if (__DEV__) console.error('[LuvsReco] Discover similar failed:', error);
+      if (__DEV__) console.error('[LuvsRecommendationEngine.discoverSimilar] Async error:', error);
     }
   }
 

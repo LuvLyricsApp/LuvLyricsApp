@@ -63,7 +63,7 @@ export class TransliterationService {
             
             raw = academic;
         } catch (err) {
-            console.error('[Transliteration] Error:', err);
+            if (__DEV__) console.error('[TransliterationService.processLine] Async error:', err);
             // Fallback: If Sanscript fails, return original text
             return text; 
         }

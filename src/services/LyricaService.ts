@@ -68,7 +68,7 @@ class LyricaService {
       console.log('[Lyrica] All strategies exhausted');
       return null;
     } catch (error) {
-      console.error('[Lyrica] Fetch error:', error);
+      if (__DEV__) console.error('[LyricaService.fetchLyrics] Async error:', error);
       throw error;
     }
   }

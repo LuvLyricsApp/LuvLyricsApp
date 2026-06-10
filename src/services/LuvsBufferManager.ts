@@ -68,7 +68,7 @@ class LuvsBufferManager {
       
       this.isInitialized = true;
     } catch (error) {
-      console.error('[LuvsBuffer] Failed to set audio mode:', error);
+      if (__DEV__) console.error('[LuvsBufferManager.setAudioMode] Async error:', error);
     }
   }
 
@@ -100,7 +100,7 @@ class LuvsBufferManager {
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           if (!errorMsg.includes('Player does not exist')) {
-            console.warn(`[LuvsBuffer] Unload failed for slot ${index}:`, errorMsg);
+            if (__DEV__) console.error(`[LuvsBufferManager.unloadSlot[${index}]] Async error:`, error);
           }
         }
       }
@@ -119,7 +119,7 @@ class LuvsBufferManager {
         playsInSilentModeIOS: true,
       });
     } catch (error) {
-      console.error('[LuvsBuffer] Failed to reset audio mode:', error);
+      if (__DEV__) console.error('[LuvsBufferManager.resetAudioMode] Async error:', error);
     }
   }
 
@@ -158,16 +158,16 @@ class LuvsBufferManager {
         if (lastSlot?.sound) {
             try {
                 lastSlot.sound.setOnPlaybackStatusUpdate(null);
-                lastSlot.sound.stopAsync().catch(() => {});
-            } catch {}
+                lastSlot.sound.stopAsync().catch(e => { if (__DEV__) console.error('[LuvsBufferManager.stopLastSlot] Async error:', e); });
+              } catch (e) {
+                if (__DEV__) console.error('[LuvsBufferManager.stopLastSlot] Async error:', e);
+              }
         }
     }
 
     await this.playActiveSlot(newIndex, feedSongs, shouldPlay);
     
-    this.manageBuffer(newIndex, feedSongs).catch(e => 
-        console.error('[LuvsBuffer] Buffer management failed:', e)
-    );
+    this.manageBuffer(newIndex, feedSongs).catch(e => { if (__DEV__) console.error('[LuvsBufferManager.manageBuffer] Async error:', e); });
   }
 
   private async playActiveSlot(index: number, feedSongs: UnifiedSong[], shouldPlay: boolean = true) {
@@ -185,7 +185,7 @@ class LuvsBufferManager {
       try {
         if (this.activeStatusCallback) {
             activeSlot.sound.setOnPlaybackStatusUpdate(this.activeStatusCallback);
-            activeSlot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(() => {});
+            activeSlot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(e => { if (__DEV__) console.error('[LuvsBufferManager.setStatusAsync] Async error:', e); });
         }
 
         const status = await activeSlot.sound.getStatusAsync();
@@ -232,7 +232,7 @@ class LuvsBufferManager {
                     sound.setOnPlaybackStatusUpdate(this.activeStatusCallback);
                 }
             } else {
-                await sound.unloadAsync().catch(() => {});
+                await sound.unloadAsync().catch(e => { if (__DEV__) console.error('[LuvsBufferManager.unloadAsync] Async error:', e); });
             }
         } catch {
             this.slots.set(localTargetIndex, { sound: null, song, isLoaded: false });
@@ -308,7 +308,7 @@ class LuvsBufferManager {
     for (const [, slot] of this.slots.entries()) {
         if (slot.sound) {
             try {
-                await slot.sound.stopAsync().catch(() => {});
+                await slot.sound.stopAsync().catch(e => { if (__DEV__) console.error('[LuvsBufferManager.stopAsync] Async error:', e); });
                 slot.sound.setOnPlaybackStatusUpdate(null);
             } catch {}
         }
@@ -372,7 +372,7 @@ class LuvsBufferManager {
     if (slot?.sound) {
       try {
         slot.sound.setOnPlaybackStatusUpdate(callback);
-        slot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(() => {});
+        slot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(e => { if (__DEV__) console.error('[LuvsBufferManager.setStatusAsyncFeed] Async error:', e); });
       } catch {}
     }
   }

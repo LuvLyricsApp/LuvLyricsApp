@@ -295,7 +295,7 @@ export const useLuvsPreferencesStore = create<LuvsPreferencesState>((set, get) =
         if (__DEV__) console.log('[LuvsPrefs] Loaded preferences from storage');
       }
     } catch (error) {
-      if (__DEV__) console.error('[ReelsPrefs] Failed to load preferences:', error);
+      console.error('[ReelsPrefs] Failed to load preferences:', error);
     }
   },
 
@@ -311,7 +311,7 @@ export const useLuvsPreferencesStore = create<LuvsPreferencesState>((set, get) =
         explicitLikes,
       }));
     } catch (error) {
-      if (__DEV__) console.error('[ReelsPrefs] Failed to save preferences:', error);
+      console.error('[ReelsPrefs] Failed to save preferences:', error);
     }
   },
 }));

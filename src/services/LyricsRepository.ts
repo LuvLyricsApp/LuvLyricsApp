@@ -81,7 +81,7 @@ export const LyricsRepository = {
 
       onProgress?.(`Found ${results.length} lyric options`);
     } catch (error) {
-      console.error('[LyricsRepository] Error:', error);
+      if (__DEV__) console.error('[LyricsRepository.searchSmart] Async error:', error);
       onProgress?.('Search failed');
     }
 

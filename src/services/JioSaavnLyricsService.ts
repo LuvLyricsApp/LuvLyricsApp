@@ -82,7 +82,7 @@ export const JioSaavnLyricsService = {
       ]) as Response;
       
       if (!searchResponse.ok) {
-        console.error('[JioSaavn] Search failed:', searchResponse.status, searchResponse.statusText);
+        if (__DEV__) console.error('[JioSaavnLyricsService.searchGenius.httpError] HTTP error:', new Error(`HTTP ${searchResponse.status} ${searchResponse.statusText}`));
         return null;
       }
       
@@ -135,7 +135,7 @@ export const JioSaavnLyricsService = {
       if (error.message === 'TIMEOUT' || error.name === 'AbortError') {
           console.warn('[JioSaavn] Search timed out');
       } else {
-          console.error('[JioSaavn] Error:', error);
+          if (__DEV__) console.error('[JioSaavnLyricsService.getLyrics] Async error:', error);
       }
       return null;
     }
@@ -173,7 +173,7 @@ export const JioSaavnLyricsService = {
         ]) as Response;
         
         if (!response.ok) {
-          console.log(`[JioSaavn] ${endpoint} returned ${response.status}`);
+          if (__DEV__) console.error(`[JioSaavnLyricsService.fetchLyricsData.${endpoint}.httpError] HTTP error:`, new Error(`HTTP ${response.status}`));
           continue;
         }
         
@@ -206,7 +206,7 @@ export const JioSaavnLyricsService = {
         if (error.name === 'AbortError') {
              console.warn(`[JioSaavn] ${endpoint} timed out`);
         } else {
-             console.log(`[JioSaavn] ${endpoint} error:`, error);
+             if (__DEV__) console.error(`[JioSaavnLyricsService.fetchLyricsData.${endpoint}] Async error:`, error);
         }
         continue;
       }

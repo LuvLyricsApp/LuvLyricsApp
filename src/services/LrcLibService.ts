@@ -55,7 +55,7 @@ export const LrcLibService = {
       if (isAbortError(error)) {
          console.warn('[LrcLibService] Search timed out');
       } else {
-         console.error('[LrcLibService] Search error:', error);
+        if (__DEV__) console.error('[LrcLibService.search] Async error:', error);
       }
       return [];
     }
@@ -100,7 +100,7 @@ export const LrcLibService = {
       if (isAbortError(error)) {
          console.warn('[LrcLibService] GetLyrics timed out');
       } else {
-         console.error('[LrcLibService] GetLyrics error:', error);
+        if (__DEV__) console.error('[LrcLibService.getLyrics] Async error:', error);
       }
       return null;
     }
