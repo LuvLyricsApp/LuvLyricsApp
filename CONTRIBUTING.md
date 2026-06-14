@@ -107,6 +107,7 @@ Run the same checks that CI uses:
 npm run lint
 npm run typecheck
 npm run test:ci
+npm run test:providers
 ```
 
 Docs-only work, linting, typechecking, and unit tests usually do not require
@@ -151,6 +152,7 @@ Prefer conventional commits:
 npm run lint
 npm run typecheck
 npm run test:ci
+npm run test:providers
 ```
 
 6. Open PR using the template, fill every section, and put `Closes #<issue-number>` in the Related Issue field
