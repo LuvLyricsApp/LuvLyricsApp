@@ -184,7 +184,7 @@ Install these before starting:
 - Node.js 20 or newer
 - npm
 - Git
-- Android Studio (for Android builds)
+- Android Studio (for Android development)
 
 ---
 
