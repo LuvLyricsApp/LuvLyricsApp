@@ -416,17 +416,23 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     await usePlayerStore.getState().nextInPlaylist();
   }, []);
 
-  const skipBackward = useCallback((e?: any) => {
+  const skipBackward = useCallback(async (e?: any) => {
     e?.stopPropagation();
     if (positionSV.value > 3 && player) {
+        const wasPlaying = usePlayerStore.getState().isPlaying;
         isSeeking.value = true;
         positionSV.value = 0;
-        player.seekTo(0);
+        await player.seekTo(0);
+        if (wasPlaying) player.play();
 
         if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
         seekLockTimeout.current = setTimeout(() => {
             isSeeking.value = false;
         }, 1000);
+    } else {
+        usePlayerStore.getState().previousInPlaylist();
+    }
+  }, [player]);
     } else {
         usePlayerStore.getState().previousInPlaylist();
     }

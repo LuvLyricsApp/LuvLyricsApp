@@ -65,16 +65,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (Platform.OS === 'android') {
       playerControls.play = () => setTimeout(() => androidPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => androidPlayer.pause(), 0);
-      playerControls.seekTo = (pos: number) => {
+      playerControls.seekTo = async (pos: number) => {
         lastSeekAtRef.current = Date.now();
-        setTimeout(() => androidPlayer.seekTo(pos), 0);
+        const wasPlaying = usePlayerStore.getState().isPlaying;
+        await androidPlayer.seekTo(pos);
+        if (wasPlaying) androidPlayer.play();
       };
     } else if (iosPlayer) {
       playerControls.play = () => setTimeout(() => iosPlayer.play(), 0);
       playerControls.pause = () => setTimeout(() => iosPlayer.pause(), 0);
-      playerControls.seekTo = (pos: number) => {
+      playerControls.seekTo = async (pos: number) => {
         lastSeekAtRef.current = Date.now();
-        setTimeout(() => iosPlayer.seekTo(pos), 0);
+        const wasPlaying = usePlayerStore.getState().isPlaying;
+        await iosPlayer.seekTo(pos);
+        if (wasPlaying) iosPlayer.play();
       };
     }
   }, [iosPlayer, androidPlayer]);
@@ -204,8 +208,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
 
+      const justSought = Date.now() - lastSeekAtRef.current < 1500;
       const activeSongId = store.currentSongId;
-      const shouldAdvance = didJustFinish && !!activeSongId && endHandledForSongIdRef.current !== activeSongId;
+      const isNearEndFallback =
+        !didJustFinish &&
+        store.isPlaying &&
+        isPlaying &&
+        position >= Math.max(0, duration - 0.35);
+      const shouldAdvance =
+        !justSought &&
+        (didJustFinish || isNearEndFallback) &&
+        !!activeSongId &&
+        endHandledForSongIdRef.current !== activeSongId;
 
       if (shouldAdvance) {
         endHandledForSongIdRef.current = activeSongId;
