@@ -167,7 +167,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     
     // Fetch full song details (lyrics) for the starting song
     if (startSongId) {
-        get().loadSong(startSongId);
+        await get().loadSong(startSongId);
         playerControls.play();
     }
   },
@@ -265,7 +265,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     });
 
     // Trigger audio load
-    get().loadSong(prevSong.id);
+    await get().loadSong(prevSong.id);
     playerControls.play();
     if (__DEV__) {
       console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);
