@@ -71,9 +71,9 @@ class ImageSearchServiceImpl {
             const data = await response.json();
             
             if (data.resultCount > 0) {
-                return data.results.map((result: any) => {
-                    return result.artworkUrl100.replace('100x100bb', '1000x1000bb');
-                });
+                return data.results
+                    .filter((result: any) => result.artworkUrl100)
+                    .map((result: any) => result.artworkUrl100.replace('100x100bb', '1000x1000bb'));
             }
             return [];
         } catch (e) {

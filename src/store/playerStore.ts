@@ -184,6 +184,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     
     // If currently playing song was removed, stop playback
     if (state.currentSong?.id === songId) {
+      playerControls.pause();
       if (__DEV__) {
         console.log('[PLAYER] Currently playing song removed from queue, clearing');
       }
