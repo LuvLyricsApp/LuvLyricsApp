@@ -10,10 +10,6 @@ interface LibraryHeaderProps {
   onSongLongPress: (song: Song) => void;
   onLikePress: (id: string) => void;
   onMagicPress: (song: Song) => void;
-  activeDownloadsCount: number;
-  onOpenQueueModal: () => void;
-  onNavigateAudioDownloader: () => void;
-  onAddPress: () => void;
   searchQuery: string;
   onSearchQueryChange: (text: string) => void;
   isSearchFocused: boolean;
@@ -37,10 +33,6 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
   onSongLongPress,
   onLikePress,
   onMagicPress,
-  activeDownloadsCount,
-  onOpenQueueModal,
-  onNavigateAudioDownloader,
-  onAddPress,
   searchQuery,
   onSearchQueryChange,
   isSearchFocused,
@@ -66,25 +58,6 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
           currentSong={currentSong}
           style={styles.recentlyPlayedGrid}
         />
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : colors.textPrimary }]}>All Songs</Text>
-          <View style={styles.headerActions}>
-            <Pressable style={styles.actionButton} onPress={onOpenQueueModal}>
-              <Ionicons name="list" size={22} color={isDark ? '#fff' : colors.textSecondary} />
-              {activeDownloadsCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{activeDownloadsCount}</Text>
-                </View>
-              )}
-            </Pressable>
-            <Pressable style={styles.actionButton} onPress={onNavigateAudioDownloader}>
-              <Ionicons name="cloud-download-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
-            </Pressable>
-            <Pressable style={styles.actionButton} onPress={onAddPress}>
-              <Ionicons name="add" size={24} color={isDark ? '#fff' : colors.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
       </View>
       <View style={styles.searchRow}>
         <View style={[styles.searchBarContainer, styles.searchBarFlex, {
@@ -123,14 +96,8 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
 };
 
 const styles = StyleSheet.create({
-  recentlyPlayedGrid: { marginBottom: 8 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 8, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerActions: { flexDirection: 'row', gap: 16, paddingRight: 16 },
-  actionButton: { padding: 4, position: 'relative' },
-  badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#007AFF', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 20 },
+  recentlyPlayedGrid: { marginBottom: 4 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 4, marginBottom: 16 },
   searchBarFlex: { flex: 1, marginHorizontal: 0, marginBottom: 0 },
   searchBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, height: 48, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   searchIcon: { marginLeft: 12 },

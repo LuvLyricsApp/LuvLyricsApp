@@ -13,6 +13,7 @@ import {
   InteractionManager,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabScreenProps } from '../types/navigation';
 import { useSongsStore } from '../store/songsStore';
@@ -423,6 +424,23 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
                 LuvLyrics
               </Text>
             </Pressable>
+            {/* Moved up from the old "All Songs" row so the list starts higher. */}
+            <View style={styles.brandActions}>
+              <Pressable style={styles.brandActionButton} onPress={() => setShowQueueModal(true)}>
+                <Ionicons name="list" size={22} color={isDark ? '#fff' : colors.textSecondary} />
+                {activeDownloadsCount > 0 && (
+                  <View style={styles.brandBadge}>
+                    <Text style={styles.brandBadgeText}>{activeDownloadsCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable style={styles.brandActionButton} onPress={() => (navigation as any).navigate('AudioDownloader')}>
+                <Ionicons name="cloud-download-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.brandActionButton} onPress={handleAddPress}>
+                <Ionicons name="add" size={24} color={isDark ? '#fff' : colors.textSecondary} />
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -459,10 +477,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
               onSongLongPress={handleSongLongPress}
               onLikePress={toggleLike}
               onMagicPress={handleAddToQueue}
-              activeDownloadsCount={activeDownloadsCount}
-              onOpenQueueModal={() => setShowQueueModal(true)}
-              onNavigateAudioDownloader={() => (navigation as any).navigate('AudioDownloader')}
-              onAddPress={handleAddPress}
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
               isSearchFocused={isSearchFocused}
@@ -581,7 +595,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 8 : 4, paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandPressable: { alignSelf: 'flex-start', flexShrink: 0, maxWidth: '100%' },
+  brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
+  brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
+  brandActionButton: { padding: 4, position: 'relative' },
+  brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#007AFF', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
+  brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   brandName: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   recentArtContainer: { backgroundColor: '#06152B', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
