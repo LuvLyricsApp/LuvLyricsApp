@@ -41,7 +41,7 @@ import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { usePlaybackQueue } from '../hooks/usePlaybackQueue';
 import { FlashList, FlashListRef } from '@shopify/flash-list';
-import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import LibraryHeader from '../components/LibraryHeader';
 import LibraryEmptyState from '../components/LibraryEmptyState';
@@ -56,6 +56,11 @@ const setSongItemLayout = (layout: SongItemLayout) => {
   layout.size = 80;
   layout.span = 1;
 };
+
+// Scroll distance over which the cover-art background dissolves to black.
+// Short on purpose — a small flick should resolve it fully, and scrolling back
+// to the top brings it straight back.
+const AURORA_FADE_DISTANCE = 140;
 
 type Props = TabScreenProps<'Library'>;
 
@@ -114,9 +119,19 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     || libraryBackgroundMode === 'theme-blue';
 
   const headerAnimatedStyle = useAnimatedStyle(() => {
-    if (isSolidBg) return { transform: [{ translateY: 0 }] };
-    // Parallax — background scrolls 1:1 with list
-    return { transform: [{ translateY: -scrollY.value }] };
+    if (isSolidBg) return { opacity: 1, transform: [{ translateY: 0 }] };
+    // Fade in place rather than parallax-scrolling away. Translating the header
+    // made the colour slide upward and wipe black in behind it; fading dissolves
+    // it evenly so the artwork colour resolves to black across the whole area.
+    // Runs entirely on the UI thread off the scroll shared value, so it tracks
+    // the finger with no JS round trip.
+    const opacity = interpolate(
+      scrollY.value,
+      [0, AURORA_FADE_DISTANCE],
+      [1, 0],
+      Extrapolation.CLAMP
+    );
+    return { opacity, transform: [{ translateY: 0 }] };
   });
 
   const updateFocusMode = useCallback((shouldFocus: boolean) => {
