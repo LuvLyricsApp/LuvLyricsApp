@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { YtMiniPlayer } from './YtMiniPlayer';
 import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,7 +26,7 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls } from '../store/playerStore';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
@@ -140,7 +141,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
   const hideMiniPlayer = usePlayerStore(state => state.hideMiniPlayer);
   const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
-  const setStorePlaying = usePlayerStore(state => state.setIsPlaying);
+  const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
@@ -162,21 +163,19 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // togglePlay reads live store state so the callback stays stable across renders.
   // A stable callback means PlaybackControls (memo'd) never re-renders just because
   // the play/pause state changed ΓÇö only when the icon prop itself changes.
-  // Uses playerControls (setTimeout-wrapped) to avoid "accessed on wrong thread" on Android.
+  // requestPlayback routes through playerControls (setTimeout-wrapped) to avoid
+  // "accessed on wrong thread" on Android, and arms the status echo guard.
   const togglePlay = useCallback((e?: any) => {
       e?.stopPropagation();
       if (!currentSong) return;
-
-      const nextState = !usePlayerStore.getState().isPlaying;
 
       playButtonScale.value = withSequence(
           withTiming(0.82, { duration: 55 }),
           withSpring(1, { damping: 18, stiffness: 380 })
       );
 
-      setStorePlaying(nextState);
-      if (nextState) playerControls.play(); else playerControls.pause();
-  }, [currentSong, setStorePlaying, playButtonScale]);
+      requestPlayback(!usePlayerStore.getState().isPlaying);
+  }, [currentSong, requestPlayback, playButtonScale]);
 
   
   const [expanded, setExpanded] = useState(false);
@@ -184,6 +183,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const [fullLyricExpanded, setFullLyricExpanded] = useState(false);
   const [classicFullExpanded, setClassicFullExpanded] = useState(false);
   const [lyricExpandedAt, setLyricExpandedAt] = useState(0);
+  const [showYtButton, setShowYtButton] = useState(false);
+  const [showYtMini, setShowYtMini] = useState(false);
+  const ytButtonOpacity = useSharedValue(0);
+  const ytButtonScale = useSharedValue(0.6);
+  const ytButtonTimer = useRef<NodeJS.Timeout | null>(null);
+  const wasPlayingBeforeYt = useRef(false);
+  const ytVideoPreview = useSettingsStore(state => state.ytVideoPreview);
   
   // Animation values
   const expansionProgress = useSharedValue(0); // 0 = collapsed, 1 = half-opened (classic) or tray (island)
@@ -269,12 +275,16 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     const syncAudio = async () => {
       if (!currentSong || !player) return;
       
-      // If the player doesn't have this audio loaded, load it
+      // If the player doesn't have this audio loaded, load it.
+      // beginAudioLoad claims ownership so NowPlayingScreen — which watches the
+      // same loadedAudioId — doesn't replace() the same track in parallel.
       if (loadedAudioId !== currentSong.id && currentSong.audioUri) {
+        const songId = currentSong.id;
+        if (!beginAudioLoad(songId)) return;
         try {
           if (__DEV__) console.log('[MiniPlayer] Syncing audio for:', currentSong.title);
           await player.replace(currentSong.audioUri);
-          setLoadedAudioId(currentSong.id);
+          setLoadedAudioId(songId);
 
           // On app startup (first load), don't auto-play
           // On user-initiated song change, auto-play
@@ -282,19 +292,20 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             isInitialLoad.current = false;
             if (__DEV__) console.log('[MiniPlayer] Initial load - staying paused');
           } else {
-            setStorePlaying(true);
-            player.play();
+            requestPlayback(true);
             if (__DEV__) console.log('[MiniPlayer] User selected song - auto-playing');
           }
         } catch (error) {
           if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
+        } finally {
+          endAudioLoad(songId);
         }
       }
     };
-    
+
     syncAudio();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, setMiniPlayerHidden, setStorePlaying]);
+  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, setMiniPlayerHidden, requestPlayback]);
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
@@ -305,6 +316,28 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       setLyricExpandedAt(Date.now());
     }
   }, [expanded, lyricExpanded, fullLyricExpanded, classicFullExpanded]);
+
+  // Show YouTube button for 5s when classic bar expands (beta feature)
+  useEffect(() => {
+    if (!isIsland && expanded && ytVideoPreview && currentSong?.youtubeVideoId) {
+      setShowYtButton(true);
+      ytButtonOpacity.value = withSpring(1, { damping: 14, stiffness: 120 });
+      ytButtonScale.value = withSpring(1, { damping: 12, stiffness: 140 });
+      if (ytButtonTimer.current) clearTimeout(ytButtonTimer.current);
+      ytButtonTimer.current = setTimeout(() => {
+        ytButtonOpacity.value = withTiming(0, { duration: 400 });
+        ytButtonScale.value = withTiming(0.6, { duration: 400 });
+        setTimeout(() => setShowYtButton(false), 420);
+      }, 5000);
+    } else {
+      if (ytButtonTimer.current) clearTimeout(ytButtonTimer.current);
+      ytButtonOpacity.value = withTiming(0, { duration: 200 });
+      ytButtonScale.value = withTiming(0.6, { duration: 200 });
+      setShowYtButton(false);
+    }
+    return () => { if (ytButtonTimer.current) clearTimeout(ytButtonTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, isIsland, ytVideoPreview, currentSong?.youtubeVideoId]);
 
   // Classic Height Animation
   const animatedIslandStyle = useAnimatedStyle(() => {
@@ -421,7 +454,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     if (positionSV.value > 3 && player) {
         isSeeking.value = true;
         positionSV.value = 0;
+        // seekTo pauses on iOS — restart-track must not silently stop playback.
+        const wasPlaying = usePlayerStore.getState().isPlaying;
         player.seekTo(0);
+        if (wasPlaying) playerControls.play();
 
         if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
         seekLockTimeout.current = setTimeout(() => {
@@ -653,8 +689,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           fullExpansionProgress.value = withSpring(1);
           return; // Do NOT seek in half mode
       } 
-      // Only seek in Full Screen mode
+      // Only seek in Full Screen mode.
+      // seekTo pauses on iOS, so resume if the user was playing.
+      const wasPlaying = usePlayerStore.getState().isPlaying;
       playerControls.seekTo(timestamp);
+      if (wasPlaying) playerControls.play();
   }, [fullLyricExpanded, fullExpansionProgress]);
 
   const handleIslandSeek = useCallback(async (time: number) => {
@@ -964,10 +1003,53 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         />
                         <View style={styles.dragHandle} />
                     </Animated.View>
+
+                        {/* Beta: YouTube video preview button — floats above play/pause row */}
+                        {showYtButton && (
+                          <Animated.View
+                            style={[
+                              styles.ytPreviewBtn,
+                              {
+                                opacity: ytButtonOpacity,
+                                transform: [{ scale: ytButtonScale }],
+                              },
+                            ]}
+                          >
+                            <Pressable
+                              onPress={() => {
+                                if (ytButtonTimer.current) clearTimeout(ytButtonTimer.current);
+                                setShowYtButton(false);
+                                setShowYtMini(true);
+                              }}
+                              hitSlop={8}
+                            >
+                              <LinearGradient
+                                colors={['#FF0000', '#CC0000']}
+                                style={styles.ytPreviewBtnInner}
+                              >
+                                <Ionicons name="logo-youtube" size={18} color="#fff" />
+                              </LinearGradient>
+                            </Pressable>
+                          </Animated.View>
+                        )}
                 </View>
             </GestureDetector>
         )}
       </AnimatedPressable>
+      {showYtMini && currentSong?.youtubeVideoId && (
+        <YtMiniPlayer
+          videoId={currentSong.youtubeVideoId}
+          songTitle={currentSong.title}
+          onOpen={() => {
+            wasPlayingBeforeYt.current = usePlayerStore.getState().isPlaying;
+            if (wasPlayingBeforeYt.current) player?.pause();
+          }}
+          onDismiss={() => {
+            if (wasPlayingBeforeYt.current) player?.play();
+          }}
+          onClose={() => setShowYtMini(false)}
+        />
+      )}
     </View>
   );
 };
@@ -1150,6 +1232,24 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent', // Transparent to show blurred background
     paddingTop: 10,
+  },
+  ytPreviewBtn: {
+    position: 'absolute',
+    bottom: 78,
+    right: 16,
+    zIndex: 50,
+  },
+  ytPreviewBtnInner: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF0000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
   },
 
   coverThumbnail: {

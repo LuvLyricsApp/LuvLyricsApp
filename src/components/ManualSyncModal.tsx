@@ -30,7 +30,7 @@ export const ManualSyncModal: React.FC<ManualSyncModalProps> = ({
   visible, onClose, lyricsText, onSave, duration = 0
 }) => {
   const colors = useThemeColors();
-  const { play, pause, seekTo } = playerControls;
+  const { play, seekTo } = playerControls;
   const storePosition = usePositionStore(state => state.position);
   const storeDuration = usePositionStore(state => state.duration);
   const storePlaying = usePlayerStore(state => state.isPlaying);
@@ -87,8 +87,20 @@ export const ManualSyncModal: React.FC<ManualSyncModalProps> = ({
     setLines(newLines);
   };
 
-  const togglePlay = () => { if (isPlayingLocal) pause(); else play(); };
-  const handleSeek = (val: number) => { seekTo(val); setPositionLocal(val); };
+  // Route through the store so the icon updates immediately and the echo guard is
+  // armed — calling playerControls directly leaves the store stale until the next
+  // native status tick (up to 250ms of wrong icon).
+  const togglePlay = () => {
+    usePlayerStore.getState().requestPlayback(!usePlayerStore.getState().isPlaying);
+  };
+
+  const handleSeek = (val: number) => {
+    // seekTo pauses on iOS — dragging the sync slider must not stop playback.
+    const wasPlaying = usePlayerStore.getState().isPlaying;
+    seekTo(val);
+    if (wasPlaying) play();
+    setPositionLocal(val);
+  };
 
   const clearTimestamp = (index: number) => {
     const newLines = [...lines];
