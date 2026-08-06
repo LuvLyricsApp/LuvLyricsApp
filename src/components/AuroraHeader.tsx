@@ -111,10 +111,19 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
     ? [colors[0], colors[1], colors[2] || colors[0]]
     : [COLOR_1, COLOR_2, COLOR_3];
 
+  // Cover-art mode: an artwork image with no explicit palette. Callers leave
+  // `colors` undefined here, which would otherwise fall back to the default
+  // aurora blobs (teal COLOR_2) over BASE_DARK (navy) — showing as a blue band
+  // between the artwork and the black list background while scrolling.
+  // In this mode the artwork blends straight into black instead.
+  const isCoverArtMode = !!imageUri && !(colors && colors.length >= 1);
+
   // Base color: use the first custom color as backing when colors are provided,
   // so solid modes (Spotify Grey, purest black, dark navy, etc.) don't bleed BASE_DARK's blue tint.
-  // Falls back to BASE_DARK only for the default aurora palette.
-  const baseColor = (colors && colors.length >= 1) ? colors[0] : BASE_DARK;
+  // Falls back to BASE_DARK only for the default aurora palette with no artwork.
+  const baseColor = isCoverArtMode
+    ? '#000000'
+    : (colors && colors.length >= 1) ? colors[0] : BASE_DARK;
 
   // Cross-fade between previous and new colors
   const prevColorsRef = useRef<string[]>(activeColors);
@@ -152,13 +161,19 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: baseColor }]} pointerEvents="none">
       <View style={[styles.auroraArea, { backgroundColor: baseColor }]}>
-        {/* Previous colors layer — always underneath */}
-        <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+        {/* Aurora blobs are skipped in cover-art mode — their colours are what
+            produced the blue band under the artwork. */}
+        {!isCoverArtMode && (
+          <>
+            {/* Previous colors layer — always underneath */}
+            <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
 
-        {/* New colors layer — fades in on top */}
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
-          <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
-        </Animated.View>
+            {/* New colors layer — fades in on top */}
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
+              <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+            </Animated.View>
+          </>
+        )}
 
         {imageUri && (
           <RNImage
