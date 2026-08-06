@@ -10,7 +10,7 @@ import { Toast } from '../components/Toast';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { UnifiedSong } from '../types/song';
 import { useSongsStore } from '../store/songsStore';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import { useDownloaderTabStore, SearchTab as SearchTabState } from '../store/downloaderTabStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
@@ -149,7 +149,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     const [cyclingItemId, setCyclingItemId] = useState<string | null>(null);
 
     // --- Refs ---
-    const previewSoundRef = useRef<Audio.Sound | null>(null);
+    const previewSoundRef = useRef<AudioPlayer | null>(null);
     const downloadContextRef = useRef<'single' | 'selected' | 'bulk'>('single');
     const pendingSingleRef = useRef<UnifiedSong | null>(null);
     const hasAutoSearchedRef = useRef(false);
@@ -181,25 +181,25 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     }, [searchMode, titleQuery, artistQuery, runSearchWithQuery]);
 
     const handlePreviewToggle = useCallback(async (song: UnifiedSong) => {
+        // expo-audio has no stop(): remove() tears the player down outright.
         if (playingPreviewId === song.id) {
-            await previewSoundRef.current?.stopAsync().catch(() => {});
-            await previewSoundRef.current?.unloadAsync().catch(() => {});
+            previewSoundRef.current?.remove();
             previewSoundRef.current = null;
             setPlayingPreviewId(null);
             return;
         }
         if (previewSoundRef.current) {
-            await previewSoundRef.current.stopAsync().catch(() => {});
-            await previewSoundRef.current.unloadAsync().catch(() => {});
+            previewSoundRef.current.remove();
             previewSoundRef.current = null;
         }
         const url = song.streamUrl || song.downloadUrl;
         if (!url) return;
         try {
-            const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
+            const sound = createAudioPlayer({ uri: url });
             previewSoundRef.current = sound;
+            sound.play();
             setPlayingPreviewId(song.id);
-            sound.setOnPlaybackStatusUpdate(s => {
+            sound.addListener('playbackStatusUpdate', s => {
                 if (s.isLoaded && s.didJustFinish) { setPlayingPreviewId(null); previewSoundRef.current = null; }
             });
         } catch {}

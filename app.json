@@ -58,12 +58,6 @@
       "expo-sqlite",
       "expo-audio",
       [
-        "expo-av",
-        {
-          "microphonePermission": "Allow LuvLyrics to access your microphone for audio recording."
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Allow LuvLyrics to access your photos so you can set custom playlist covers."

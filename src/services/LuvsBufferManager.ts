@@ -2,11 +2,11 @@
  * Luvs Buffer Manager
  * Manages bi-directional audio buffer for instant swipe playback.
  * On Android, uses custom high-performance Kotlin LuvsPlayer pool to bypass JS bridge.
- * On iOS, uses standard expo-av sliding window player.
+ * On iOS, uses a standard expo-audio sliding window player.
  */
 
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { UnifiedSong } from '../types/song';
 
 let LuvsPlayerModule: any = null;
@@ -18,7 +18,7 @@ if (Platform.OS === 'android') {
     LuvsPlayerModule = requireNativeModule('LuvsPlayer');
     luvsEventEmitter = new EventEmitter(LuvsPlayerModule);
   } catch {
-    // LuvsPlayer native module not available — expo-av fallback active
+    // LuvsPlayer native module not available — expo-audio fallback active
   }
 }
 
@@ -27,10 +27,23 @@ const BUFFER_BEHIND = 1;
 const BUFFER_AHEAD = 4; 
 
 interface AudioSlot {
-  sound: Audio.Sound | null;
+  sound: AudioPlayer | null;
   song: UnifiedSong | null;
   isLoaded: boolean;
+  // expo-av had a settable onPlaybackStatusUpdate; expo-audio uses addListener,
+  // so each slot has to hold its subscription in order to detach it later.
+  sub: { remove: () => void } | null;
 }
+
+// expo-av's stopAsync() has no expo-audio equivalent — pause and rewind.
+const stopPlayer = (player: AudioPlayer) => {
+  try {
+    player.pause();
+    player.seekTo(0);
+  } catch {
+    // player already released
+  }
+};
 
 class LuvsBufferManager {
   // iOS properties
@@ -59,11 +72,11 @@ class LuvsBufferManager {
     if (__DEV__) console.log('[LuvsBuffer] Entering Luvs mode, setting up audio focus');
     
     try {
-      await Audio.setAudioModeAsync({
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        shouldPlayInBackground: false,
+        interruptionModeAndroid: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
+        playsInSilentMode: true,
       });
       
       this.isInitialized = true;
@@ -95,8 +108,9 @@ class LuvsBufferManager {
     for (const [index, slot] of slotsToCleanup) {
       if (slot.sound) {
         try {
-          slot.sound.setOnPlaybackStatusUpdate(null);
-          await slot.sound.unloadAsync();
+          slot.sub?.remove();
+          slot.sub = null;
+          slot.sound.remove();
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           if (!errorMsg.includes('Player does not exist')) {
@@ -112,11 +126,11 @@ class LuvsBufferManager {
     this.activeStatusCallback = null;
     
     try {
-      await Audio.setAudioModeAsync({
-        staysActiveInBackground: true,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        shouldPlayInBackground: true,
+        interruptionModeAndroid: 'doNotMix',
+        shouldRouteThroughEarpiece: false,
+        playsInSilentMode: true,
       });
     } catch (error) {
       console.error('[LuvsBuffer] Failed to reset audio mode:', error);
@@ -157,8 +171,9 @@ class LuvsBufferManager {
         const lastSlot = this.slots.get(lastIndex);
         if (lastSlot?.sound) {
             try {
-                lastSlot.sound.setOnPlaybackStatusUpdate(null);
-                lastSlot.sound.stopAsync().catch(() => {});
+                lastSlot.sub?.remove();
+                lastSlot.sub = null;
+                stopPlayer(lastSlot.sound);
             } catch {}
         }
     }
@@ -184,18 +199,20 @@ class LuvsBufferManager {
     if (activeSlot?.sound) {
       try {
         if (this.activeStatusCallback) {
-            activeSlot.sound.setOnPlaybackStatusUpdate(this.activeStatusCallback);
-            activeSlot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(() => {});
+            activeSlot.sub?.remove();
+            activeSlot.sub = activeSlot.sound.addListener(
+                'playbackStatusUpdate',
+                this.activeStatusCallback
+            );
         }
 
-        const status = await activeSlot.sound.getStatusAsync();
-        if (!status.isLoaded) return;
+        if (!activeSlot.sound.isLoaded) return;
         if (this.isSuspended) return;
 
         if (this.activeIndex === index) {
-            await activeSlot.sound.setPositionAsync(0);
+            activeSlot.sound.seekTo(0);
             if (shouldPlay) {
-                await activeSlot.sound.playAsync();
+                activeSlot.sound.play();
             }
         }
       } catch {}
@@ -213,29 +230,22 @@ class LuvsBufferManager {
     const localTargetIndex = index;
     const loadPromise = (async () => {
         try {
-            const { sound } = await Audio.Sound.createAsync(
-                { uri: audioUrl },
-                { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-                null
-            );
+            // updateInterval is milliseconds — same 100ms cadence as before.
+            const sound = createAudioPlayer({ uri: audioUrl }, { updateInterval: 100 });
 
             const isNeighbor = Math.abs(this.activeIndex - localTargetIndex) <= BUFFER_AHEAD;
 
-            if (this.loadingPromises.has(localTargetIndex) && isNeighbor) { 
-                this.slots.set(localTargetIndex, {
-                    sound,
-                    song,
-                    isLoaded: true,
-                });
-                
+            if (this.loadingPromises.has(localTargetIndex) && isNeighbor) {
+                const slot: AudioSlot = { sound, song, isLoaded: true, sub: null };
                 if (localTargetIndex === this.activeIndex && this.activeStatusCallback) {
-                    sound.setOnPlaybackStatusUpdate(this.activeStatusCallback);
+                    slot.sub = sound.addListener('playbackStatusUpdate', this.activeStatusCallback);
                 }
+                this.slots.set(localTargetIndex, slot);
             } else {
-                await sound.unloadAsync().catch(() => {});
+                sound.remove();
             }
         } catch {
-            this.slots.set(localTargetIndex, { sound: null, song, isLoaded: false });
+            this.slots.set(localTargetIndex, { sound: null, song, isLoaded: false, sub: null });
         } finally {
             this.loadingPromises.delete(localTargetIndex);
         }
@@ -251,8 +261,9 @@ class LuvsBufferManager {
     
     if (slot?.sound) {
       try {
-        slot.sound.setOnPlaybackStatusUpdate(null);
-        await slot.sound.unloadAsync();
+        slot.sub?.remove();
+        slot.sub = null;
+        slot.sound.remove();
       } catch {}
     }
   }
@@ -293,8 +304,7 @@ class LuvsBufferManager {
     const slot = this.slots.get(this.activeIndex);
     if (slot?.sound) {
       try {
-        const status = await slot.sound.getStatusAsync();
-        if (status.isLoaded) await slot.sound.pauseAsync();
+        if (slot.sound.isLoaded) slot.sound.pause();
       } catch {}
     }
   }
@@ -308,8 +318,9 @@ class LuvsBufferManager {
     for (const [, slot] of this.slots.entries()) {
         if (slot.sound) {
             try {
-                await slot.sound.stopAsync().catch(() => {});
-                slot.sound.setOnPlaybackStatusUpdate(null);
+                stopPlayer(slot.sound);
+                slot.sub?.remove();
+                slot.sub = null;
             } catch {}
         }
     }
@@ -325,8 +336,7 @@ class LuvsBufferManager {
     const slot = this.slots.get(this.activeIndex);
     if (slot?.sound) {
       try {
-        const status = await slot.sound.getStatusAsync();
-        if (status.isLoaded && !this.isSuspended) await slot.sound.playAsync();
+        if (slot.sound.isLoaded && !this.isSuspended) slot.sound.play();
       } catch {}
     }
   }
@@ -341,8 +351,8 @@ class LuvsBufferManager {
     const slot = this.slots.get(this.activeIndex);
     if (slot?.sound) {
       try {
-        const status = await slot.sound.getStatusAsync();
-        if (status.isLoaded) await slot.sound.setPositionAsync(millis);
+        // expo-av took milliseconds; expo-audio's seekTo takes seconds.
+        if (slot.sound.isLoaded) slot.sound.seekTo(millis / 1000);
       } catch {}
     }
   }
@@ -371,8 +381,8 @@ class LuvsBufferManager {
     const slot = this.slots.get(this.activeIndex);
     if (slot?.sound) {
       try {
-        slot.sound.setOnPlaybackStatusUpdate(callback);
-        slot.sound.setStatusAsync({ progressUpdateIntervalMillis: 100 }).catch(() => {});
+        slot.sub?.remove();
+        slot.sub = slot.sound.addListener('playbackStatusUpdate', callback);
       } catch {}
     }
   }

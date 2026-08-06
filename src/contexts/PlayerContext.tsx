@@ -10,49 +10,10 @@ import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
 
 const PlayerContext = createContext<any>(null);
 
-export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const lastSeekAtRef = useRef(0);
-  const lastZustandUpdateRef = useRef(0);
+// Shared by both providers: reset the "already advanced past the end" latch
+// whenever the active track changes.
+function useEndOfTrackLatch() {
   const endHandledForSongIdRef = useRef<string | null>(null);
-
-  // Call expo-audio hooks unconditionally to satisfy React Hook rules; ignored on Android in favor of NativeAudioPlayer
-  const iosPlayer = useAudioPlayer();
-  const iosStatus = useAudioPlayerStatus(iosPlayer);
-
-  // Android Native Player Adapter
-  const androidPlayer = useRef({
-    play: () => NativeAudioPlayer.play(),
-    pause: () => NativeAudioPlayer.pause(),
-    seekTo: (time: number) => {
-      lastSeekAtRef.current = Date.now();
-      NativeAudioPlayer.seekTo(time);
-    },
-    replace: (source: any) => {
-      const uri = typeof source === 'string' ? source : source?.uri;
-      if (!uri) return;
-      const store = usePlayerStore.getState();
-      const current = store.currentSong;
-      const metadata = {
-        title: current?.title || 'Unknown Title',
-        artist: current?.artist || 'Unknown Artist',
-        album: current?.album || '',
-        artworkUri: current?.coverImageUri || ''
-      };
-      return NativeAudioPlayer.load(uri, metadata);
-    },
-    setActiveForLockScreen: (active: boolean, metadata?: any, _options?: any) => {
-      if (active && metadata) {
-        NativeAudioPlayer.updateMetadata({
-          title: metadata.title || 'Unknown Title',
-          artist: metadata.artist || 'Unknown Artist',
-          album: metadata.albumTitle || '',
-          artworkUri: metadata.artworkUrl || ''
-        });
-      }
-    }
-  }).current;
-
-  const currentSong = usePlayerStore(state => state.currentSong);
   const currentSongId = usePlayerStore(state => state.currentSongId);
 
   useEffect(() => {
@@ -61,65 +22,109 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentSongId]);
 
-  // Binding playerControls Play/Pause/Seek globally
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      playerControls.play = () => setTimeout(() => androidPlayer.play(), 0);
-      playerControls.pause = () => setTimeout(() => androidPlayer.pause(), 0);
-      playerControls.seekTo = (pos: number) => {
-        lastSeekAtRef.current = Date.now();
-        setTimeout(() => androidPlayer.seekTo(pos), 0);
-      };
-    } else if (iosPlayer) {
-      playerControls.play = () => setTimeout(() => iosPlayer.play(), 0);
-      playerControls.pause = () => setTimeout(() => iosPlayer.pause(), 0);
-      playerControls.seekTo = (pos: number) => {
-        lastSeekAtRef.current = Date.now();
-        setTimeout(() => iosPlayer.seekTo(pos), 0);
-      };
-    }
-  }, [iosPlayer, androidPlayer]);
+  return endHandledForSongIdRef;
+}
 
-  // Reacting to active song metadata changes
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      if (currentSong) {
-        androidPlayer.setActiveForLockScreen(true, {
-          title: currentSong.title,
-          artist: currentSong.artist || 'Unknown Artist',
-          artworkUrl: currentSong.coverImageUri,
-          albumTitle: currentSong.album || ''
-        });
-      } else {
-        setTimeout(() => {
-          androidPlayer.pause();
-        }, 0);
-      }
-    } else if (iosPlayer) {
-      if (currentSong) {
-        iosPlayer.setActiveForLockScreen(true, {
-          title: currentSong.title,
-          artist: currentSong.artist || 'Unknown Artist',
-          artworkUrl: currentSong.coverImageUri,
-          albumTitle: currentSong.album || ''
-        }, {
-          showSeekBackward: true,
-          showSeekForward: true
-        });
-      } else {
-        setTimeout(() => {
-          iosPlayer.pause();
-        }, 0);
-      }
-    }
-  }, [iosPlayer, currentSong, androidPlayer]);
+// ─── Android ──────────────────────────────────────────────────────────────────
+// Media3 owns playback. Nothing here touches expo-audio, so its native module
+// is never constructed on Android — no second audio stack, no competing
+// MediaSessionService, no wasted init at startup.
 
-  // iOS-only: Remote Commands and Status hooks integration
+const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const lastZustandUpdateRef = useRef(0);
+  const endHandledForSongIdRef = useEndOfTrackLatch();
+  const currentSong = usePlayerStore(state => state.currentSong);
+
+  const player = useRef({
+    play: () => NativeAudioPlayer.play(),
+    pause: () => NativeAudioPlayer.pause(),
+    seekTo: (time: number) => NativeAudioPlayer.seekTo(time),
+    replace: (source: any) => {
+      const uri = typeof source === 'string' ? source : source?.uri;
+      if (!uri) return;
+      const current = usePlayerStore.getState().currentSong;
+      return NativeAudioPlayer.load(uri, {
+        title: current?.title || 'Unknown Title',
+        artist: current?.artist || 'Unknown Artist',
+        album: current?.album || '',
+        artworkUri: current?.coverImageUri || '',
+      });
+    },
+    setActiveForLockScreen: (active: boolean, metadata?: any, _options?: any) => {
+      if (active && metadata) {
+        NativeAudioPlayer.updateMetadata({
+          title: metadata.title || 'Unknown Title',
+          artist: metadata.artist || 'Unknown Artist',
+          album: metadata.albumTitle || '',
+          artworkUri: metadata.artworkUrl || '',
+        });
+      }
+    },
+  }).current;
+
   useEffect(() => {
-    if (Platform.OS === 'android' || !iosPlayer) return;
-    
-    const subscription = (iosPlayer as any).addListener('remoteCommand', (event: { command: string }) => {
-      if (__DEV__) console.log('[PlayerContext] Remote command received:', event.command);
+    playerControls.play = () => setTimeout(() => player.play(), 0);
+    playerControls.pause = () => setTimeout(() => player.pause(), 0);
+    playerControls.seekTo = (pos: number) => setTimeout(() => player.seekTo(pos), 0);
+  }, [player]);
+
+  // Media3 is the source of truth here — see requestPlayback.
+  useEffect(() => {
+    setNativeOwnsPlaybackState(true);
+    return () => setNativeOwnsPlaybackState(false);
+  }, []);
+
+  useEffect(() => {
+    if (currentSong) {
+      player.setActiveForLockScreen(true, {
+        title: currentSong.title,
+        artist: currentSong.artist || 'Unknown Artist',
+        artworkUrl: currentSong.coverImageUri,
+        albumTitle: currentSong.album || '',
+      });
+    } else {
+      setTimeout(() => player.pause(), 0);
+    }
+  }, [currentSong, player]);
+
+  useEffect(() => {
+    const statusSub = NativeAudioPlayer.addListener('onPlaybackStatus', (event: any) => {
+      const { position, duration, isPlaying, playWhenReady, didJustFinish } = event;
+      const store = usePlayerStore.getState();
+
+      if (!isSeeking.value) {
+        positionSV.value = position;
+      }
+      durationSV.value = duration;
+
+      const now = Date.now();
+      if (now - lastZustandUpdateRef.current >= 500) {
+        lastZustandUpdateRef.current = now;
+        const posStore = usePositionStore.getState();
+        if (posStore.position !== position || posStore.duration !== duration) {
+          posStore.updateProgress(position, duration);
+        }
+      }
+
+      const activeSongId = store.currentSongId;
+      if (didJustFinish && !!activeSongId && endHandledForSongIdRef.current !== activeSongId) {
+        endHandledForSongIdRef.current = activeSongId;
+        store.setIsPlaying(true);
+        store.nextInPlaylist().catch(() => {});
+        return;
+      }
+
+      // Adopted verbatim — no guard. playWhenReady is the user-facing transport
+      // state (flips the instant a command lands); isPlaying stays false while
+      // buffering. The fallback keeps this working against an older native build.
+      const transportPlaying = typeof playWhenReady === 'boolean' ? playWhenReady : isPlaying;
+      if (store.isPlaying !== transportPlaying) {
+        store.setIsPlaying(transportPlaying);
+      }
+    });
+
+    const commandSub = NativeAudioPlayer.addListener('onRemoteCommand', (event: any) => {
+      if (__DEV__) console.log('[PlayerContext] Android native remote command:', event.command);
       const store = usePlayerStore.getState();
       if (event.command === 'next') {
         store.nextInPlaylist().catch(() => {});
@@ -128,13 +133,74 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
-    return () => subscription.remove();
-  }, [iosPlayer]);
+    return () => {
+      statusSub.remove();
+      commandSub.remove();
+    };
+  }, [endHandledForSongIdRef]);
+
+  return <PlayerContext.Provider value={player}>{children}</PlayerContext.Provider>;
+};
+
+// ─── iOS ──────────────────────────────────────────────────────────────────────
+// Still JS-driven via expo-audio, so it keeps the optimistic update in
+// requestPlayback plus both status guards.
+
+const IosPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const lastSeekAtRef = useRef(0);
+  const lastZustandUpdateRef = useRef(0);
+  const endHandledForSongIdRef = useEndOfTrackLatch();
+  const currentSong = usePlayerStore(state => state.currentSong);
+
+  const player = useAudioPlayer();
+  const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
-    if (Platform.OS === 'android' || !iosStatus) return;
-    
-    const { currentTime, duration, playing, playbackState, isBuffering, isLoaded, didJustFinish } = iosStatus;
+    if (!player) return;
+    playerControls.play = () => setTimeout(() => player.play(), 0);
+    playerControls.pause = () => setTimeout(() => player.pause(), 0);
+    playerControls.seekTo = (pos: number) => {
+      lastSeekAtRef.current = Date.now();
+      setTimeout(() => player.seekTo(pos), 0);
+    };
+  }, [player]);
+
+  useEffect(() => {
+    if (!player) return;
+    if (currentSong) {
+      player.setActiveForLockScreen(
+        true,
+        {
+          title: currentSong.title,
+          artist: currentSong.artist || 'Unknown Artist',
+          artworkUrl: currentSong.coverImageUri,
+          albumTitle: currentSong.album || '',
+        },
+        { showSeekBackward: true, showSeekForward: true }
+      );
+    } else {
+      setTimeout(() => player.pause(), 0);
+    }
+  }, [player, currentSong]);
+
+  useEffect(() => {
+    if (!player) return;
+    const subscription = (player as any).addListener('remoteCommand', (event: { command: string }) => {
+      if (__DEV__) console.log('[PlayerContext] Remote command received:', event.command);
+      const store = usePlayerStore.getState();
+      if (event.command === 'next') {
+        store.nextInPlaylist().catch(() => {});
+      } else if (event.command === 'previous') {
+        store.previousInPlaylist();
+      }
+    });
+    return () => subscription.remove();
+  }, [player]);
+
+  useEffect(() => {
+    if (!status) return;
+
+    const { currentTime, duration, playing, playbackState, isBuffering, isLoaded, didJustFinish } = status;
     const store = usePlayerStore.getState();
 
     if (!isSeeking.value) {
@@ -189,77 +255,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     ) {
       store.setIsPlaying(playing);
     }
-  }, [iosStatus]);
+  }, [status, endHandledForSongIdRef]);
 
-  // Android-only: NativeAudioPlayer subscriptions integration
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    // Media3 is the source of truth on Android — see requestPlayback.
-    setNativeOwnsPlaybackState(true);
-    return () => setNativeOwnsPlaybackState(false);
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    const statusSub = NativeAudioPlayer.addListener('onPlaybackStatus', (event: any) => {
-      const { position, duration, isPlaying, playWhenReady, didJustFinish } = event;
-      const store = usePlayerStore.getState();
-
-      if (!isSeeking.value) {
-        positionSV.value = position;
-      }
-      durationSV.value = duration;
-
-      const now = Date.now();
-      if (now - lastZustandUpdateRef.current >= 500) {
-        lastZustandUpdateRef.current = now;
-        const posStore = usePositionStore.getState();
-        if (posStore.position !== position || posStore.duration !== duration) {
-          posStore.updateProgress(position, duration);
-        }
-      }
-
-      const activeSongId = store.currentSongId;
-      const shouldAdvance = didJustFinish && !!activeSongId && endHandledForSongIdRef.current !== activeSongId;
-
-      if (shouldAdvance) {
-        endHandledForSongIdRef.current = activeSongId;
-        store.setIsPlaying(true);
-        store.nextInPlaylist().catch(() => {});
-        return;
-      }
-
-      // Media3 owns transport state, so this is adopted verbatim — no guard.
-      // playWhenReady is the user-facing transport state (flips the instant a
-      // command lands); isPlaying stays false while buffering. Falling back to
-      // isPlaying keeps this working against an older native build.
-      const transportPlaying = typeof playWhenReady === 'boolean' ? playWhenReady : isPlaying;
-      if (store.isPlaying !== transportPlaying) {
-        store.setIsPlaying(transportPlaying);
-      }
-    });
-
-    const commandSub = NativeAudioPlayer.addListener('onRemoteCommand', (event: any) => {
-      if (__DEV__) console.log('[PlayerContext] Android native remote command:', event.command);
-      const store = usePlayerStore.getState();
-      if (event.command === 'next') {
-        store.nextInPlaylist().catch(() => {});
-      } else if (event.command === 'previous') {
-        store.previousInPlaylist();
-      }
-    });
-
-    return () => {
-      statusSub.remove();
-      commandSub.remove();
-    };
-  }, []);
-
-  const playerValue = Platform.OS === 'android' ? androidPlayer : iosPlayer;
-
-  return <PlayerContext.Provider value={playerValue}>{children}</PlayerContext.Provider>;
+  return <PlayerContext.Provider value={player}>{children}</PlayerContext.Provider>;
 };
+
+// Chosen at module scope: the unused provider is never rendered, so its hooks —
+// and the native modules behind them — are never touched on the other platform.
+export const PlayerProvider: React.FC<{ children: React.ReactNode }> =
+  Platform.OS === 'android' ? AndroidPlayerProvider : IosPlayerProvider;
 
 export const usePlayer = () => useContext(PlayerContext);
