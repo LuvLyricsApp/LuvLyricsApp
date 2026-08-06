@@ -52,27 +52,12 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
 
     return (
         <View style={styles.container}>
-            {/* Background gradients — app blue theme */}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#030912' }]} />
+            {/* Pure black base with a single neutral top wash — no colour cast. */}
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }]} />
             <LinearGradient
-                colors={['rgba(47,140,255,0.16)', 'transparent']}
+                colors={['rgba(255,255,255,0.05)', 'transparent']}
                 style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }} end={{ x: 0.75, y: 0.65 }}
-            />
-            <LinearGradient
-                colors={['rgba(30,100,220,0.12)', 'transparent']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 1, y: 1 }} end={{ x: 0.25, y: 0.35 }}
-            />
-            <LinearGradient
-                colors={['transparent', 'rgba(10,50,140,0.07)', 'transparent']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0.55 }} end={{ x: 1, y: 0.45 }}
-            />
-            <LinearGradient
-                colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.65)']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+                start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.45 }}
             />
 
             <SafeAreaView style={styles.safeArea}>
@@ -154,10 +139,17 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     tabBtnActive: {
-        backgroundColor: 'rgba(47,140,255,0.42)',
+        backgroundColor: 'rgba(255,255,255,0.11)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.14)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    tabBtnText: { color: '#666', fontSize: 13, fontWeight: '600' },
-    tabBtnTextActive: { color: '#fff' },
+    tabBtnText: { color: '#A1A1A1', fontSize: 13, fontWeight: '600' },
+    tabBtnTextActive: { color: '#EDEDED' },
     badge: {
         backgroundColor: DarkColors.primary,
         borderRadius: 10,

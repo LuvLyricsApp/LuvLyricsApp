@@ -53,7 +53,7 @@ export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps
                 <Text style={[styles.status, getStatusColor(item.status)]}>
                  {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Pending'}
                 </Text>
-                {item.status === 'failed' && item.error && (
+                {item.status === 'failed' && !!item.error && (
                   <Text style={styles.error} numberOfLines={1}> - {item.error}</Text>
                 )}
              </View>
@@ -73,7 +73,7 @@ export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps
           )}
           {item.status === 'failed' && (
             <TouchableOpacity onPress={() => retryItem(item.id)} style={styles.actionBtn}>
-              <Ionicons name="refresh" size={20} color="#2196F3" />
+              <Ionicons name="refresh" size={20} color="#A1A1A1" />
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.actionBtn}>
@@ -88,7 +88,7 @@ export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps
     switch (status) {
       case 'completed': return { color: '#4CAF50' };
       case 'failed': return { color: '#F44336' };
-      case 'downloading': return { color: '#2196F3' };
+      case 'downloading': return { color: '#A1A1A1' };
       case 'staging': return { color: '#FFC107' };
       case 'paused': return { color: '#FFA000' };
       default: return { color: '#999' };
