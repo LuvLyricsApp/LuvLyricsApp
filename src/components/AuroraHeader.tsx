@@ -11,7 +11,7 @@ import React, { useRef } from 'react';
 import { View, StyleSheet, Dimensions, Image as RNImage, Animated } from 'react-native';
 import { Canvas, Rect, Oval, BlurMask, vec, Group } from '@shopify/react-native-skia';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSharedValue, withRepeat, withTiming, useDerivedValue, Easing } from 'react-native-reanimated';
+import ReAnimated, { useSharedValue, withRepeat, withTiming, useDerivedValue, useAnimatedStyle, Easing, type SharedValue } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -34,6 +34,13 @@ interface AuroraBackgroundProps {
   imageUri?: string | null; // Optional blurred image background
   animated?: boolean; // Toggle animation
   isSolid?: boolean; // Toggle solid rendering with no gradients/blobs
+  /**
+   * 1 = artwork fully visible, 0 = fully dissolved to the base colour.
+   * Only the artwork/blob layer is faded — the base colour and the fade-to-black
+   * gradient stay opaque, so the blend looks identical at every value instead of
+   * dissolving along with the thing it is supposed to be blending.
+   */
+  artworkOpacity?: SharedValue<number>;
 }
 
 const AuroraCanvas: React.FC<{
@@ -90,6 +97,7 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   imageUri,
   animated = false,
   isSolid = false,
+  artworkOpacity,
 }) => {
   const rotation = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -154,6 +162,10 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   const [pc1, pc2, pc3] = prevColorsRef.current;
   const [c1, c2, c3] = activeColors;
 
+  const artworkStyle = useAnimatedStyle(() => ({
+    opacity: artworkOpacity ? artworkOpacity.value : 1,
+  }));
+
   if (isSolid) {
     return (
       <View style={[styles.container, { backgroundColor: baseColor }]} pointerEvents="none" />
@@ -165,26 +177,30 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
       <View style={[styles.auroraArea, { backgroundColor: baseColor }]}>
         {/* Aurora blobs are skipped in cover-art mode — their colours are what
             produced the blue band under the artwork. */}
-        {!isCoverArtMode && (
-          <>
-            {/* Previous colors layer — always underneath */}
-            <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+        {/* Everything inside this wrapper is the colour itself, and only it is
+            faded on scroll. The gradient and base colour below stay opaque. */}
+        <ReAnimated.View style={[StyleSheet.absoluteFill, artworkStyle]}>
+          {!isCoverArtMode && (
+            <>
+              {/* Previous colors layer — always underneath */}
+              <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
 
-            {/* New colors layer — fades in on top */}
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
-              <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
-            </Animated.View>
-          </>
-        )}
+              {/* New colors layer — fades in on top */}
+              <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
+                <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+              </Animated.View>
+            </>
+          )}
 
-        {imageUri && (
-          <RNImage
-            source={{ uri: imageUri }}
-            style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT, opacity: 0.6, transform: [{ scale: 1.2 }] }]}
-            blurRadius={90}
-            resizeMode="cover"
-          />
-        )}
+          {imageUri && (
+            <RNImage
+              source={{ uri: imageUri }}
+              style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT, opacity: 0.6, transform: [{ scale: 1.2 }] }]}
+              blurRadius={90}
+              resizeMode="cover"
+            />
+          )}
+        </ReAnimated.View>
 
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.05)', 'rgba(0,0,0,0.6)', baseColor]}

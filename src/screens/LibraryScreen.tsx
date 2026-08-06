@@ -41,7 +41,7 @@ import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { usePlaybackQueue } from '../hooks/usePlaybackQueue';
 import { FlashList, FlashListRef } from '@shopify/flash-list';
-import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, useDerivedValue, interpolate, Extrapolation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import LibraryHeader from '../components/LibraryHeader';
 import LibraryEmptyState from '../components/LibraryEmptyState';
@@ -118,21 +118,16 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     || libraryBackgroundMode === 'black'
     || libraryBackgroundMode === 'theme-blue';
 
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    if (isSolidBg) return { opacity: 1, transform: [{ translateY: 0 }] };
-    // Fade in place rather than parallax-scrolling away. Translating the header
-    // made the colour slide upward and wipe black in behind it; fading dissolves
-    // it evenly so the artwork colour resolves to black across the whole area.
-    // Runs entirely on the UI thread off the scroll shared value, so it tracks
-    // the finger with no JS round trip.
-    const opacity = interpolate(
-      scrollY.value,
-      [0, AURORA_FADE_DISTANCE],
-      [1, 0],
-      Extrapolation.CLAMP
-    );
-    return { opacity, transform: [{ translateY: 0 }] };
-  });
+  // The header itself stays put and fully opaque — only the artwork inside it
+  // fades (see AuroraHeader's artworkOpacity). Fading the whole layer dissolved
+  // the fade-to-black gradient along with the colour, which broke the blend.
+  const headerAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 0 }] }));
+
+  const auroraFade = useDerivedValue(() =>
+    isSolidBg
+      ? 1
+      : interpolate(scrollY.value, [0, AURORA_FADE_DISTANCE], [1, 0], Extrapolation.CLAMP)
+  );
 
   const updateFocusMode = useCallback((shouldFocus: boolean) => {
     // Solid static backgrounds don't use focus-mode header hiding
@@ -417,7 +412,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
       <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#000' : colors.background }]} />
       {isDark && (
         <Animated.View style={[StyleSheet.absoluteFill, headerAnimatedStyle]}>
-          <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} />
+          <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} artworkOpacity={auroraFade} />
         </Animated.View>
       )}
       <SafeAreaView style={styles.safeArea} edges={['top']}>
