@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { NativeVoiceInput } from '../services/NativeVoiceInput';
 import { parseVoiceIntent } from '../utils/voiceIntentParser';
-import { usePlayerStore, playerControls } from '../store/playerStore';
+import { usePlayerStore } from '../store/playerStore';
 import { useSongsStore } from '../store/songsStore';
 import { navigationRef } from '../utils/navigationService';
 
@@ -90,12 +90,12 @@ export function useVoiceCommands() {
         break;
 
       case 'PAUSE':
-        playerControls.pause();
+        store.requestPlayback(false);
         setState(s => ({ ...s, lastCommand: 'Paused' }));
         break;
 
       case 'RESUME':
-        playerControls.play();
+        store.requestPlayback(true);
         setState(s => ({ ...s, lastCommand: 'Playing' }));
         break;
 
@@ -114,7 +114,7 @@ export function useVoiceCommands() {
         if (queue && intent.index >= 0 && intent.index < queue.length) {
           const song = queue[intent.index];
           store.loadSong(song.id);
-          playerControls.play();
+          store.requestPlayback(true);
           setState(s => ({ ...s, lastCommand: `Playing ${song.title}` }));
         } else {
           setState(s => ({ ...s, error: 'Song not found at that position' }));
@@ -124,7 +124,7 @@ export function useVoiceCommands() {
 
       case 'PLAY_SONG':
         store.loadSong(intent.songId);
-        playerControls.play();
+        store.requestPlayback(true);
         setState(s => ({ ...s, lastCommand: `Playing ${intent.title}` }));
         break;
 

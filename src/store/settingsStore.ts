@@ -88,6 +88,12 @@ interface SettingsState {
   lyricsDelay: number;
   setLyricsDelay: (delay: number) => void;
 
+  // Beta
+  ytVideoPreview: boolean;
+  setYtVideoPreview: (enabled: boolean) => void;
+  youtubeApiKey: string;
+  setYoutubeApiKey: (key: string) => void;
+
   resetToDefaults: () => void;
 }
 
@@ -119,6 +125,8 @@ const DEFAULT_SETTINGS = {
   applyThemeToOtherPages: false,
   lyricsDelay: -1.2,
   quickPins: ['export', 'import', 'scan'] as [string, string, string],
+  ytVideoPreview: false,
+  youtubeApiKey: '',
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -177,6 +185,12 @@ export const useSettingsStore = create<SettingsState>()(
       // Advanced
       lyricsDelay: -1.2,
       setLyricsDelay: (lyricsDelay) => set({ lyricsDelay }),
+
+      // Beta
+      ytVideoPreview: false,
+      setYtVideoPreview: (ytVideoPreview) => set({ ytVideoPreview }),
+      youtubeApiKey: '',
+      setYoutubeApiKey: (youtubeApiKey) => set({ youtubeApiKey }),
     }),
     {
       name: 'lyricflow-settings',

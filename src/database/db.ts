@@ -36,7 +36,7 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   }
 
   // Wait for in-progress initialization
-  if (initPromise) {
+  if (initPromise !== null) {
     log('Waiting for in-progress initialization...');
     return initPromise;
   }
@@ -244,6 +244,11 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
         }
       }
     }
+    if (!columns.some(c => c.name === 'youtube_video_id')) {
+      log('Adding youtube_video_id column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN youtube_video_id TEXT');
+      log('Migration complete');
+    }
   } catch (e) {
     log('Migration check failed', e);
     throw e; // RETHROW to ensure init fails if schema is broken
@@ -256,7 +261,7 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
 export const closeDatabase = async (): Promise<void> => {
   log('closeDatabase() called');
   
-  if (initPromise) {
+  if (initPromise !== null) {
     log('Waiting for init to complete before closing...');
     await initPromise.catch(() => undefined);
   }

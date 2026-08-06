@@ -31,7 +31,8 @@ export interface Song {
   isLiked?: boolean; // Whether song is liked
   isHidden?: boolean; // Whether song is hidden
   transliteratedLyrics?: LyricLine[]; // Romanized/Colloquial lyrics
-  
+  youtubeVideoId?: string; // YouTube video ID for beta video preview feature
+
   // AI Karaoke fields removed
 }
 
