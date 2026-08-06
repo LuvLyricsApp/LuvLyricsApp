@@ -22,7 +22,6 @@
         ],
         "NSLocalNetworkUsageDescription": "LuvLyrics uses your local network to connect to the desktop app.",
         "UIBackgroundModes": [
-          "audio",
           "audio"
         ],
         "ITSAppUsesNonExemptEncryption": false
