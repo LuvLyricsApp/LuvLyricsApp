@@ -3,6 +3,7 @@ import * as queries from '../database/queries';
 import { Song } from '../types/song';
 import { useSongsStore } from './songsStore';
 import { useSettingsStore } from './settingsStore';
+import { setPlaybackIntent } from '../playback/playbackIntent';
 
 // Module-level controls ref — written by PlayerContext at mount, read everywhere else.
 // Keeps imperative player commands out of Zustand state so they don't trigger re-renders.
@@ -11,6 +12,31 @@ export const playerControls = {
   pause: () => { if (__DEV__) console.warn('[playerControls] Player not initialized'); },
   seekTo: (_pos: number) => { if (__DEV__) console.warn('[playerControls] Player not initialized'); },
 };
+
+// When the native player owns playback state (Android, via Media3), it echoes
+// playWhenReady back the instant a command lands, so JS must NOT optimistically
+// set isPlaying — there would be nothing for a status tick to contradict, and no
+// need for the echo guard. iOS still drives expo-audio from JS and keeps both.
+// PlayerContext sets this at mount.
+let nativeOwnsPlaybackState = false;
+export function setNativeOwnsPlaybackState(owns: boolean): void {
+  nativeOwnsPlaybackState = owns;
+}
+export function isNativeOwningPlaybackState(): boolean {
+  return nativeOwnsPlaybackState;
+}
+
+// Single owner for replace() calls. MiniPlayer and NowPlayingScreen both watch
+// loadedAudioId and would otherwise both load the same track at once.
+let audioLoadInFlight: string | null = null;
+export function beginAudioLoad(songId: string): boolean {
+  if (audioLoadInFlight === songId) return false;
+  audioLoadInFlight = songId;
+  return true;
+}
+export function endAudioLoad(songId: string): void {
+  if (audioLoadInFlight === songId) audioLoadInFlight = null;
+}
 
 // Injected by songsStore at init — breaks the circular require in nextInPlaylist
 let _getSongs: (() => Song[]) | null = null;
@@ -34,7 +60,8 @@ interface PlayerState {
   // Playback State (for UI updates)
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
-  
+  requestPlayback: (playing: boolean) => void;
+
   
   loadSong: (songId: string) => Promise<void>;
   setInitialSong: (song: Song) => void;
@@ -69,8 +96,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   
   isPlaying: false,
   
+  // setIsPlaying is the raw setter — reserved for PlayerContext syncing native
+  // status. UI buttons must use requestPlayback so the intent guard is armed.
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
-  
+
+  requestPlayback: (playing: boolean) => {
+    if (nativeOwnsPlaybackState) {
+      // Fire and let the player report back. playWhenReady flips synchronously
+      // inside ExoPlayer, so the round trip is a couple of frames.
+      if (playing) playerControls.play(); else playerControls.pause();
+      return;
+    }
+    setPlaybackIntent(playing);
+    if (get().isPlaying !== playing) set({ isPlaying: playing });
+    if (playing) playerControls.play(); else playerControls.pause();
+  },
+
   loadSong: async (songId: string) => {
     // 1. Optimistic Update: Get metadata + audioUri from Memory (Instant)
     // Save history if in a playlist
@@ -92,11 +133,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     // 2. Background Fetch: Get full lyrics from DB
     // This can take time, but UI/Audio are already running!
-    const fullSong = await queries.getSongById(songId);
-    
-    if (fullSong && get().currentSongId === songId) {
-         // Merge full details (lyrics) into current state
-         set({ currentSong: fullSong }); 
+    try {
+      const fullSong = await queries.getSongById(songId);
+      if (fullSong && get().currentSongId === songId) {
+        set({ currentSong: fullSong });
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[playerStore] getSongById failed:', err);
     }
   },
 
@@ -168,6 +211,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // Fetch full song details (lyrics) for the starting song
     if (startSongId) {
         get().loadSong(startSongId);
+        setPlaybackIntent(true);
         playerControls.play();
     }
   },
@@ -244,6 +288,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     
     // Trigger audio load
     await get().loadSong(nextSong.id);
+    setPlaybackIntent(true);
     playerControls.play();
     if (__DEV__) {
       console.log(`[PLAYER] Next in playlist: ${nextSong.title}`);
@@ -266,6 +311,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     // Trigger audio load
     get().loadSong(prevSong.id);
+    setPlaybackIntent(true);
     playerControls.play();
     if (__DEV__) {
       console.log(`[PLAYER] Previous in playlist: ${prevSong.title}`);

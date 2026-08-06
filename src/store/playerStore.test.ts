@@ -15,6 +15,7 @@ import {
   playerControls,
   beginAudioLoad,
   endAudioLoad,
+  setNativeOwnsPlaybackState,
 } from './playerStore';
 import { isStalePlayingEcho, clearPlaybackIntent } from '../playback/playbackIntent';
 
@@ -39,6 +40,7 @@ describe('requestPlayback', () => {
     playerControls.play = originalPlay;
     playerControls.pause = originalPause;
     clearPlaybackIntent();
+    setNativeOwnsPlaybackState(false);
   });
 
   it('updates the store and issues the matching command', () => {
@@ -56,6 +58,25 @@ describe('requestPlayback', () => {
   it('arms the echo guard so a contradicting status is rejected', () => {
     usePlayerStore.getState().requestPlayback(false);
     expect(isStalePlayingEcho(true)).toBe(true);
+  });
+
+  // On Android, Media3 echoes playWhenReady back immediately. Setting isPlaying
+  // here too would recreate the very race the echo guard exists to paper over.
+  describe('when the native player owns playback state', () => {
+    beforeEach(() => setNativeOwnsPlaybackState(true));
+
+    it('issues the command without touching the store', () => {
+      usePlayerStore.getState().requestPlayback(true);
+      expect(calls).toEqual(['play']);
+      expect(usePlayerStore.getState().isPlaying).toBe(false); // awaits native echo
+    });
+
+    it('does not arm the echo guard', () => {
+      usePlayerStore.getState().requestPlayback(false);
+      // Nothing optimistic was set, so a contradicting status is not "stale" —
+      // it is simply the truth, and must be adopted.
+      expect(isStalePlayingEcho(true)).toBe(false);
+    });
   });
 
   it('still issues the command when the store is already in the target state', () => {

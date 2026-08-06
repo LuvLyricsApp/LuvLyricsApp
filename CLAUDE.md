@@ -36,12 +36,19 @@ A load effect that reads `storePlaying` in its dep array and calls `play()` will
 re-fire on the user's own pause and immediately resume — pause appears to do nothing.
 Read play state via `usePlayerStore.getState()` inside the effect, never as a dep.
 
-**3. Native status is authoritative, but only once it's caught up.**
-Android's `PlayerBridge` polls every 250ms and `playerControls` is `setTimeout`-wrapped,
-so a tick carrying the *pre-transition* `isPlaying` lands after our optimistic update →
-icon flickers play → pause → play. Both status handlers must gate on
-`isStalePlayingEcho(nativePlaying)`, which self-clears once the player agrees or after
-`INTENT_WINDOW_MS` (1500ms), whichever comes first.
+**3. Who owns `isPlaying` differs by platform — don't unify them carelessly.**
+
+*Android:* Media3 owns it. `requestPlayback` only sends the command; it does **not**
+set the store. `PlayerBridge` emits `playWhenReady` (flips the instant a command is
+applied, unlike `isPlaying` which stays false while buffering) and JS adopts it
+verbatim. There is no optimistic update, so there is nothing for a status tick to
+contradict and no guard is needed. `setNativeOwnsPlaybackState(true)` selects this
+path at mount.
+
+*iOS:* still JS-driven via expo-audio, so it keeps the optimistic update plus both
+guards — `shouldPreservePlayingStateDuringSeek` and `isStalePlayingEcho`, which
+self-clears once the player agrees or after `INTENT_WINDOW_MS` (1500ms). Deleting
+`playbackIntent.ts` requires doing the equivalent native work on iOS first.
 
 ### Scrub/seek pattern (must follow everywhere)
 ```ts

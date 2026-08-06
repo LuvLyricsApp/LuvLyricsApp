@@ -26,11 +26,12 @@ class MainPlayerModule : Module() {
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
-            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, isBuffering, didJustFinish ->
+            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, playWhenReady, isBuffering, didJustFinish ->
                 sendEvent("onPlaybackStatus", mapOf(
                     "position" to position,
                     "duration" to duration,
                     "isPlaying" to isPlaying,
+                    "playWhenReady" to playWhenReady,
                     "isBuffering" to isBuffering,
                     "didJustFinish" to didJustFinish
                 ))

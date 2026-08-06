@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { usePlayerStore, playerControls } from '../store/playerStore';
+import { usePlayerStore, playerControls, setNativeOwnsPlaybackState } from '../store/playerStore';
 import { isStalePlayingEcho } from '../playback/playbackIntent';
 import { usePositionStore } from '../store/positionStore';
 import { shouldPreservePlayingStateDuringSeek, shouldAdoptNativePlayingState } from './playerStatusGuard';
@@ -195,8 +195,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
+    // Media3 is the source of truth on Android — see requestPlayback.
+    setNativeOwnsPlaybackState(true);
+    return () => setNativeOwnsPlaybackState(false);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
     const statusSub = NativeAudioPlayer.addListener('onPlaybackStatus', (event: any) => {
-      const { position, duration, isPlaying, didJustFinish } = event;
+      const { position, duration, isPlaying, playWhenReady, didJustFinish } = event;
       const store = usePlayerStore.getState();
 
       if (!isSeeking.value) {
@@ -223,19 +231,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      // The 250ms poller can emit a tick that predates a play/pause we just
-      // issued; adopting it would flip the icon back for one frame.
-      if (
-        shouldAdoptNativePlayingState({
-          storePlaying: store.isPlaying,
-          nativePlaying: isPlaying,
-          // Android reports buffering separately and never mid-seek here, so the
-          // seek guard doesn't apply — the echo guard carries this path.
-          preserveDuringSeek: false,
-          isStaleEcho: isStalePlayingEcho(isPlaying),
-        })
-      ) {
-        store.setIsPlaying(isPlaying);
+      // Media3 owns transport state, so this is adopted verbatim — no guard.
+      // playWhenReady is the user-facing transport state (flips the instant a
+      // command lands); isPlaying stays false while buffering. Falling back to
+      // isPlaying keeps this working against an older native build.
+      const transportPlaying = typeof playWhenReady === 'boolean' ? playWhenReady : isPlaying;
+      if (store.isPlaying !== transportPlaying) {
+        store.setIsPlaying(transportPlaying);
       }
     });
 

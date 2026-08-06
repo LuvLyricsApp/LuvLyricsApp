@@ -10,7 +10,14 @@ object PlayerBridge {
     private var activePlayerRef = WeakReference<ExoPlayer>(null)
     private var activeServiceRef = WeakReference<Context>(null)
 
-    var onStatusUpdate: ((position: Double, duration: Double, isPlaying: Boolean, isBuffering: Boolean, didJustFinish: Boolean) -> Unit)? = null
+    var onStatusUpdate: ((
+        position: Double,
+        duration: Double,
+        isPlaying: Boolean,
+        playWhenReady: Boolean,
+        isBuffering: Boolean,
+        didJustFinish: Boolean
+    ) -> Unit)? = null
     var onRemoteCommand: ((command: String) -> Unit)? = null
 
     private val playerListener = object : Player.Listener {
@@ -19,6 +26,12 @@ object PlayerBridge {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            emitStatus()
+        }
+
+        // Fires the moment play()/pause() is applied, before buffering resolves.
+        // This is what lets JS render the transport state without guessing.
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             emitStatus()
         }
     }
@@ -55,6 +68,7 @@ object PlayerBridge {
             position,
             if (duration < 0) 0.0 else duration,
             isPlaying,
+            player.playWhenReady,
             isBuffering,
             finished
         )
