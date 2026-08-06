@@ -2,8 +2,9 @@ import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { usePlayerStore, playerControls } from '../store/playerStore';
+import { isStalePlayingEcho } from '../playback/playbackIntent';
 import { usePositionStore } from '../store/positionStore';
-import { shouldPreservePlayingStateDuringSeek } from './playerStatusGuard';
+import { shouldPreservePlayingStateDuringSeek, shouldAdoptNativePlayingState } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
 
@@ -173,12 +174,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    if (store.isPlaying !== playing) {
-      if (shouldPreservePlayingStateDuringSeek({ playing, playbackState, isBuffering, isLoaded })) {
-        // Preserve state
-      } else {
-        store.setIsPlaying(playing);
-      }
+    if (
+      shouldAdoptNativePlayingState({
+        storePlaying: store.isPlaying,
+        nativePlaying: playing,
+        preserveDuringSeek: shouldPreservePlayingStateDuringSeek({
+          playing,
+          playbackState,
+          isBuffering,
+          isLoaded,
+        }),
+        isStaleEcho: isStalePlayingEcho(playing),
+      })
+    ) {
+      store.setIsPlaying(playing);
     }
   }, [iosStatus]);
 
@@ -214,7 +223,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      if (store.isPlaying !== isPlaying) {
+      // The 250ms poller can emit a tick that predates a play/pause we just
+      // issued; adopting it would flip the icon back for one frame.
+      if (
+        shouldAdoptNativePlayingState({
+          storePlaying: store.isPlaying,
+          nativePlaying: isPlaying,
+          // Android reports buffering separately and never mid-seek here, so the
+          // seek guard doesn't apply — the echo guard carries this path.
+          preserveDuringSeek: false,
+          isStaleEcho: isStalePlayingEcho(isPlaying),
+        })
+      ) {
         store.setIsPlaying(isPlaying);
       }
     });
