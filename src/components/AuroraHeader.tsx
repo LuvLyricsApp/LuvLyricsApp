@@ -15,8 +15,10 @@ import { useSharedValue, withRepeat, withTiming, useDerivedValue, Easing } from 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Extended height for smooth fade
-const AURORA_HEIGHT = SCREEN_HEIGHT * 1.0; // Increased to full height per user request
+// Colour occupies the top half only; the rest of the screen is the base colour
+// (black in cover-art mode). The fadeToBlack gradient below spans this height,
+// so the artwork has fully dissolved by the midpoint rather than at the bottom.
+const AURORA_HEIGHT = SCREEN_HEIGHT * 0.5;
 
 // REFINED COLORS: Brighter & Saturated
 const COLOR_1 = '#EA7980'; // Saturated but slightly softer Peach/Rose
