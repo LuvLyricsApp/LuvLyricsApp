@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { RecentlyPlayedGrid, RecentlyPlayedMode } from './RecentlyPlayedGrid';
 import { Song } from '../types/song';
 
@@ -11,7 +11,6 @@ interface LibraryHeaderProps {
   onMagicPress: (song: Song) => void;
   currentSong: Song | null;
   recentlyPlayedMode: RecentlyPlayedMode;
-  onHeaderLayout: (height: number) => void;
 }
 
 const LibraryHeader: React.FC<LibraryHeaderProps> = ({
@@ -22,24 +21,19 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
   onMagicPress,
   currentSong,
   recentlyPlayedMode,
-  onHeaderLayout,
 }) => {
   if (!hasSongs) return null;
 
   return (
-    <View>
-      <View onLayout={(e) => onHeaderLayout(e.nativeEvent.layout.height)}>
-        <RecentlyPlayedGrid
-          onSongPress={onSongPress}
-          onSongLongPress={onSongLongPress}
-          onLikePress={onLikePress}
-          onMagicPress={onMagicPress}
-          mode={recentlyPlayedMode}
-          currentSong={currentSong}
-          style={styles.recentlyPlayedGrid}
-        />
-      </View>
-    </View>
+    <RecentlyPlayedGrid
+      onSongPress={onSongPress}
+      onSongLongPress={onSongLongPress}
+      onLikePress={onLikePress}
+      onMagicPress={onMagicPress}
+      mode={recentlyPlayedMode}
+      currentSong={currentSong}
+      style={styles.recentlyPlayedGrid}
+    />
   );
 };
 

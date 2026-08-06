@@ -24,7 +24,7 @@ const AURORA_HEIGHT = SCREEN_HEIGHT * 0.5;
 const COLOR_1 = '#EA7980'; // Saturated but slightly softer Peach/Rose
 const COLOR_2 = '#1D728F'; // Saturated Deep Teal Blue
 const COLOR_3 = '#155252'; // Richer Dark Evergreen
-const BASE_DARK = '#020A16';
+const BASE_DARK = '#000000';
 
 export type AuroraPalette = 'library' | 'search' | 'settings' | 'nowPlaying';
 
@@ -202,9 +202,12 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
           )}
         </ReAnimated.View>
 
+        {/* Fully black by 0.8 — that lands just above the first song row, so the
+            list itself never sits on top of the colour blend. The last stop
+            holds solid black through to the bottom. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.05)', 'rgba(0,0,0,0.6)', baseColor]}
-          locations={[0.1, 0.45, 0.8, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.75)', baseColor, baseColor]}
+          locations={[0.05, 0.4, 0.65, 0.8, 1]}
           style={styles.fadeToBlack}
         />
       </View>

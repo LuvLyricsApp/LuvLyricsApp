@@ -11,7 +11,7 @@ export type RootStackParamList = {
   Main: undefined;
   NowPlaying: { songId: string };
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
-  Search: undefined;
+  Settings: undefined; // moved off the tab bar; reached from the Home header
   AudioDownloader: {
     fromBrowser?: boolean;
     videoTitle?: string;
@@ -37,7 +37,7 @@ export type TabParamList = {
   Home: undefined; // Was Library
   Luvs: undefined;
   Library: undefined; // Was Playlists
-  Settings: undefined;
+  Search: undefined; // replaced Settings in the tab bar
 };
 
 // Screen Props

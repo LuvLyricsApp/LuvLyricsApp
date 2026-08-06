@@ -14,7 +14,7 @@ import { navigationRef } from '../utils/navigationService';
 import TabNavigator from './TabNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
-import SearchScreen from '../screens/SearchScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
@@ -65,8 +65,8 @@ export const RootNavigator: React.FC = () => {
             component={AddEditLyricsScreen}
           />
           <Stack.Screen
-            name="Search"
-            component={SearchScreen}
+            name="Settings"
+            component={SettingsScreen}
           />
           <Stack.Screen
             name="CreatePlaylist"

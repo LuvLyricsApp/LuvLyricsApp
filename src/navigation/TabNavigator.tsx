@@ -12,7 +12,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import LibraryScreen from '../screens/LibraryScreen';
 import LuvsScreen from '../screens/LuvsScreen';
 import PlaylistsScreen from '../screens/PlaylistsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import SearchScreen from '../screens/SearchScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -30,8 +30,8 @@ const LibraryIcon = ({ color, focused }: { color: string; focused: boolean }) =>
   <Ionicons name={focused ? 'library' : 'library-outline'} size={24} color={color} />
 );
 
-const SettingsIcon = ({ color, focused }: { color: string; focused: boolean }) => (
-  <Ionicons name={focused ? 'settings' : 'settings-outline'} size={24} color={color} />
+const SearchIcon = ({ color, focused }: { color: string; focused: boolean }) => (
+  <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />
 );
 
 const renderModernPillTabBar = (props: BottomTabBarProps) => <ModernPillTabBar {...props} />;
@@ -67,7 +67,7 @@ export const TabNavigator: React.FC = () => {
       <Tab.Screen name="Home" component={LibraryScreen} options={{ tabBarLabel: 'Home', tabBarIcon: HomeIcon }} />
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
       <Tab.Screen name="Library" component={PlaylistsScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: SettingsIcon }} />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
     </Tab.Navigator>
   );
 };

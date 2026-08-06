@@ -12,12 +12,7 @@ import {
   Vibration,
   InteractionManager,
   Image,
-  TextInput,
 } from 'react-native';
-
-// Nav bar is 64pt tall; the classic mini player stacks directly above it.
-const NAV_BAR_HEIGHT = 64;
-const MINI_PLAYER_HEIGHT = 72;
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabScreenProps } from '../types/navigation';
@@ -108,15 +103,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const [showEditInfoModal, setShowEditInfoModal] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editArtist, setEditArtist] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentlyPlayedMode, setRecentlyPlayedMode] = useState<RecentlyPlayedMode>('recent');
   const [selectedSongForArt, setSelectedSongForArt] = useState<Song | null>(null);
 
   const scrollY = useSharedValue(0);
   const lastSentFocusMode = useSharedValue(false);
   const flatListRef = React.useRef<FlashListRef<Song>>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
 
   const isSolidBg = libraryBackgroundMode === 'purest-black'
     || libraryBackgroundMode === 'grey'
@@ -160,7 +152,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const activeDownloadsCount = useDownloadQueueStore(state => state.queue.filter(i => i.status === 'downloading' || i.status === 'pending' || i.status === 'staging').length);
   const addToScanQueue = useLyricsScanQueueStore(state => state.addToQueue);
 
-  const filteredSongs = useSortedSongs(songs, searchQuery, 'recent', 'desc');
+  const filteredSongs = useSortedSongs(songs, '', 'recent', 'desc');
 
   const handleAddToQueue = useCallback((song: Song) => {
     const currentQueue = useLyricsScanQueueStore.getState().queue;
@@ -193,17 +185,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     setRecentlyPlayedMode((currentMode) => currentMode === 'recent' ? 'artist' : 'recent');
   }, [playerCurrentSongId]);
 
-  const handleSearchFocus = useCallback(() => {
-    if (headerHeight > 0) {
-      flatListRef.current?.scrollToOffset({ offset: headerHeight, animated: true });
-    }
-  }, [headerHeight]);
-
-  const handleSearchCancel = useCallback(() => {
-    setIsSearchFocused(false);
-    setSearchQuery('');
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
 
   const playSong = usePlaybackQueue({
     playInMiniPlayerOnly,
@@ -422,7 +403,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
         </Animated.View>
       )}
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {!isSearchFocused && (
+        {(
           <View style={styles.brandHeader}>
             <Pressable onPress={handleBrandPress} hitSlop={12} style={styles.brandPressable}>
               <Text style={[styles.brandName, { color: isDark ? '#fff' : colors.textPrimary, textShadowColor: isDark ? 'rgba(0,0,0,0.3)' : 'transparent' }]} numberOfLines={1}>
@@ -463,7 +444,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
             paddingBottom: 208 + insets.bottom,
             paddingTop: 10,
           }}
-          extraData={[isSearchFocused]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
@@ -485,50 +465,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
               onMagicPress={handleAddToQueue}
               currentSong={playerCurrentSong}
               recentlyPlayedMode={recentlyPlayedMode}
-              onHeaderLayout={setHeaderHeight}
             />
           }
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         />
       </SafeAreaView>
-
-      {/* Search pinned above the nav bar. Sits higher when the mini player is
-          on screen so the two never overlap. */}
-      {songs.length > 0 && (
-        <View
-          style={[
-            styles.searchDock,
-            { bottom: insets.bottom + NAV_BAR_HEIGHT + (playerCurrentSong ? MINI_PLAYER_HEIGHT : 0) },
-          ]}
-        >
-          <View style={[styles.searchBarContainer, {
-            backgroundColor: isDark ? (isSearchFocused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)') : (isSearchFocused ? '#E0E0E5' : '#E8E8ED'),
-            borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-          }]}>
-            <Ionicons name="search" size={20} color={isDark ? '#FFF' : colors.textMuted} style={styles.searchIcon} />
-            <TextInput
-              style={[styles.searchInput, { color: isDark ? '#fff' : colors.textPrimary }]}
-              placeholder="Filter local library..."
-              placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : colors.textMuted}
-              value={searchQuery}
-              onFocus={handleSearchFocus}
-              returnKeyType="search"
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </Pressable>
-            ) : null}
-          </View>
-          {isSearchFocused && (
-            <Pressable onPress={handleSearchCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
 
       {/* Fade aurora gradient at bottom so it doesn't bleed below song list */}
       {isDark && (
@@ -632,13 +574,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 8 : 4, paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
-  searchDock: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', alignItems: 'center' },
-  searchBarContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 12, height: 48, borderWidth: 1 },
-  searchIcon: { marginLeft: 12 },
-  searchInput: { flex: 1, fontSize: 16, height: '100%', paddingHorizontal: 12 },
-  clearButton: { padding: 8 },
-  cancelButton: { marginLeft: 12 },
-  cancelText: { color: '#1DB954', fontSize: 16, fontWeight: '600' },
   brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
   brandActionButton: { padding: 4, position: 'relative' },
   brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#007AFF', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
