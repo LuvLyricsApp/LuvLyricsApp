@@ -493,16 +493,16 @@ export const PlaylistDetailScreen: React.FC = () => {
   }
 
   const menuOptions: MenuOption[] = [
-    { 
-        label: 'Choose from Library', 
-        icon: 'images', 
-        onPress: handlePickLibrary 
+    {
+        label: 'Choose from Library',
+        icon: 'images',
+        onPress: () => { handlePickLibrary(); }
     },
-    { 
-        label: 'Reset to Default', 
-        icon: 'refresh', 
+    {
+        label: 'Reset to Default',
+        icon: 'refresh',
         isDestructive: true,
-        onPress: handleResetCover 
+        onPress: () => { handleResetCover(); }
     }
   ];
 
@@ -683,12 +683,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                             style={styles.playButtonLarge} 
                             onPress={() => {
                                 if (activeIsPlaying) {
-                                    // Optimistic Update
-                                    const nextState = !isPlaying;
-                                    usePlayerStore.getState().setIsPlaying(nextState);
-
-                                    if (isPlaying) player?.pause();
-                                    else player?.play();
+                                    usePlayerStore.getState().requestPlayback(!isPlaying);
                                 } else {
                                     // Start from first song
                                     if (songs.length > 0) {

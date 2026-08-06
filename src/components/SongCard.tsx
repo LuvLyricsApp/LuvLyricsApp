@@ -162,7 +162,7 @@ export const SongCard: React.FC<SongCardProps> = memo(({
       <View style={styles.info}>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
-        {durationText && <Text style={[styles.duration, { color: colors.textMuted }]}>{durationText}</Text>}
+        {durationText.length > 0 && <Text style={[styles.duration, { color: colors.textMuted }]}>{durationText}</Text>}
       </View>
     </Pressable>
   );

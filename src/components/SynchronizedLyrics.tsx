@@ -90,13 +90,13 @@ const LyricLine = React.memo(({
     return (
       <Text>
         {prefix}
-        <Text style={{ backgroundColor: highlightColor || 'rgba(255,255,255,0.3)', color: '#FFFFFF', fontWeight: '900' }}>
-          {` ${match} `}
+        <Text style={styles.titleGlow}>
+          {match}
         </Text>
         {suffix}
       </Text>
     );
-  }, [text, songTitle, highlightColor]);
+  }, [text, songTitle]);
 
   return (
     <Pressable onPress={handlePress} onLayout={handleLayout}>
@@ -157,6 +157,11 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   const itemOffsets = useRef<number[]>([]);
   const itemOffsetsSV = useSharedValue<number[]>([]);
   const containerHeightSV = useSharedValue(SCREEN_HEIGHT);
+  const dragTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current); };
+  }, []);
 
   // SharedValue mirror of the isUserScrolling prop so worklets can read it
   const isUserScrollingSV = useSharedValue(false);
@@ -299,7 +304,8 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         }}
         onScrollEndDrag={() => {
           // Fallback resume for drag-without-momentum (no onMomentumEnd fires)
-          setTimeout(() => {
+          if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
+          dragTimeoutRef.current = setTimeout(() => {
             isUserScrollingSV.value = false;
             notifyScrollState(false);
           }, 2000);
@@ -325,6 +331,14 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     marginVertical: 16,
     paddingHorizontal: 32,
+  },
+  // Title words inside a lyric: no background block, just a white glow.
+  titleGlow: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    textShadowColor: 'rgba(255,255,255,0.9)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
 });
 

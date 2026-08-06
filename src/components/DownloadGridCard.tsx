@@ -60,7 +60,7 @@ export const DownloadGridCard = memo(({
           </Text>
         </Pressable>
         <View style={styles.metaRow}>
-          {song.duration && (
+          {!!song.duration && (
             <Text style={styles.metaText}>
               {Math.floor(song.duration / 60)}:{(song.duration % 60).toString().padStart(2, '0')}
             </Text>
