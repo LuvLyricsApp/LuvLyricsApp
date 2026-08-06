@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
-import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
@@ -28,6 +29,8 @@ import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useSongsStore } from '../store/songsStore';
+import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { RotatingVinyl } from './VinylRecord';
@@ -82,9 +85,44 @@ interface PlaybackControlsProps {
   variant: 'bar' | 'island-collapsed' | 'island-expanded';
   showSkipButtons?: boolean;
 }
+// Width the skip buttons occupy once fully grown (24px icon + 4px padding each side).
+const SKIP_BUTTON_WIDTH = 32;
+
 const PlaybackControls = memo(({
   playing, onToggle, onSkipBack, onSkipForward, animatedButtonStyle, variant, showSkipButtons = true,
 }: PlaybackControlsProps) => {
+  const isBar = variant === 'bar';
+
+  // Skip buttons unfurl from behind the play button as the classic bar expands.
+  // Width is animated alongside opacity so the row re-centres instead of the
+  // buttons snapping into reserved space. Hooks stay above every early return.
+  const skipProgress = useSharedValue(showSkipButtons ? 1 : 0);
+  useEffect(() => {
+    skipProgress.value = withSpring(showSkipButtons ? 1 : 0, {
+      damping: 18,
+      stiffness: 190,
+      mass: 0.6,
+    });
+  }, [showSkipButtons, skipProgress]);
+
+  const skipBackStyle = useAnimatedStyle(() => ({
+    width: skipProgress.value * SKIP_BUTTON_WIDTH,
+    opacity: skipProgress.value,
+    transform: [
+      { scale: 0.55 + skipProgress.value * 0.45 },
+      { translateX: (1 - skipProgress.value) * 14 },
+    ],
+  } as ViewStyle));
+
+  const skipForwardStyle = useAnimatedStyle(() => ({
+    width: skipProgress.value * SKIP_BUTTON_WIDTH,
+    opacity: skipProgress.value,
+    transform: [
+      { scale: 0.55 + skipProgress.value * 0.45 },
+      { translateX: (1 - skipProgress.value) * -14 },
+    ],
+  } as ViewStyle));
+
   if (variant === 'island-collapsed') {
     return (
       <View style={[styles.islandControls, { zIndex: 10 }]}>
@@ -96,36 +134,57 @@ const PlaybackControls = memo(({
       </View>
     );
   }
-  const isBar = variant === 'bar';
+
+  // Island expanded: skip buttons are always present, no growth animation needed.
+  if (!isBar) {
+    return (
+      <View style={styles.expandedControls}>
+        {showSkipButtons && (
+          <Pressable onPress={() => onSkipBack()} hitSlop={10}>
+            <Ionicons name="play-skip-back" size={24} color="#fff" />
+          </Pressable>
+        )}
+        <Pressable onPress={() => onToggle()} hitSlop={20}>
+          <Animated.View style={animatedButtonStyle}>
+            <Ionicons name={playing ? 'pause' : 'play'} size={32} color="#fff" />
+          </Animated.View>
+        </Pressable>
+        {showSkipButtons && (
+          <Pressable onPress={() => onSkipForward()} hitSlop={10}>
+            <Ionicons name="play-skip-forward" size={24} color="#fff" />
+          </Pressable>
+        )}
+      </View>
+    );
+  }
+
   return (
-    <View style={isBar ? { flexDirection: 'row', alignItems: 'center' } : styles.expandedControls}>
-      {showSkipButtons && (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Animated.View style={[styles.skipWrap, skipBackStyle]}>
         <Pressable
-          onPress={(e) => { if (isBar) e.stopPropagation(); onSkipBack(isBar ? e : undefined); }}
-          hitSlop={isBar ? undefined : 10}
-          style={isBar ? styles.controlButton : undefined}
+          onPress={(e) => { e.stopPropagation(); onSkipBack(e); }}
+          style={styles.controlButton}
         >
           <Ionicons name="play-skip-back" size={24} color="#fff" />
         </Pressable>
-      )}
+      </Animated.View>
       <Pressable
-        onPress={(e) => { if (isBar) e.stopPropagation(); onToggle(isBar ? e : undefined); }}
+        onPress={(e) => { e.stopPropagation(); onToggle(e); }}
         hitSlop={20}
-        style={isBar ? [styles.playButton, { marginHorizontal: showSkipButtons ? 12 : 0 }] : undefined}
+        style={[styles.playButton, { marginHorizontal: showSkipButtons ? 2 : 0 }]}
       >
         <Animated.View style={animatedButtonStyle}>
           <Ionicons name={playing ? 'pause' : 'play'} size={32} color="#fff" />
         </Animated.View>
       </Pressable>
-      {showSkipButtons && (
+      <Animated.View style={[styles.skipWrap, skipForwardStyle]}>
         <Pressable
-          onPress={(e) => { if (isBar) e.stopPropagation(); onSkipForward(isBar ? e : undefined); }}
-          hitSlop={isBar ? undefined : 10}
-          style={isBar ? styles.controlButton : undefined}
+          onPress={(e) => { e.stopPropagation(); onSkipForward(e); }}
+          style={styles.controlButton}
         >
           <Ionicons name="play-skip-forward" size={24} color="#fff" />
         </Pressable>
-      )}
+      </Animated.View>
     </View>
   );
 });
@@ -148,7 +207,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const isDark = useIsDark();
+  const toggleLike = useSongsStore(state => state.toggleLike);
+  const isLiked = useIsSongLiked(currentSong?.id);
 
   // Use store instead of navigation state to avoid root-level crashes
   const isNowPlaying = hideMiniPlayer;
@@ -249,7 +311,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       case 'grey':         return ['#121212', '#212121', '#121212'];
       case 'theme-blue':   return ['#0A1628', '#1A3A6B', '#2F8CFF'];
       case 'theme-subtle': return ['#0E1722', '#1E2A3A', '#0E1722'];
-      case 'aurora':       return ['#020A16', '#EA7980', '#1D728F'];
+      case 'aurora':       return ['#000000', '#EA7980', '#1D728F'];
       default:             return ['#080808', '#0A0A0A', '#080808'];
     }
   })();
@@ -725,8 +787,50 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     <View style={[
       styles.container, 
       isIsland ? styles.islandContainer : styles.barContainer,
+      // The tab bar is 64 tall plus the system inset, so a hardcoded offset
+      // leaves the pill either floating away from it or colliding with it.
+      !isIsland && { marginBottom: 64 + insets.bottom },
       isIsland && expanded && { alignItems: 'center', marginHorizontal: 12, marginRight: 12 } // Expanded: Force Center & Symmetry. Override container margins.
     ]}>
+      {/* Classic background lives OUT here, not inside styles.content — that
+          container sets overflow:'hidden' to clip expanded lyrics, which also
+          clipped this and stopped the artwork ever reaching the tab bar. One
+          image spans the player and the nav bar area, so there is no seam. */}
+      {!isIsland && (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
+        >
+          {useThemeBg ? (
+            <LinearGradient
+              colors={themePlayerColors}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : currentSong.coverImageUri ? (
+            <>
+              <Image
+                source={{ uri: currentSong.coverImageUri }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+                blurRadius={30}
+              />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
+            </>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
+          )}
+          {/* Short, light fade that lands on the same alpha the tab bar's
+              gradient starts at (0.10), so the pill and the bar meet at matching
+              values instead of a dark band butting against a lighter one.
+              The nav icons get their legibility from the tab bar's own gradient. */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.10)']}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 24 }}
+          />
+        </View>
+      )}
+
       {/* Classic Scrubber (Gapless & Animated) */}
       {!isIsland && (
          <TimelineScrubber
@@ -755,29 +859,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         ]}
       >
         {/* Dynamic Background for Classic Mode */}
-        {!isIsland && (
-           <View style={StyleSheet.absoluteFill}>
-               {useThemeBg ? (
-                  /* Theme palette gradient */
-                  <LinearGradient
-                    colors={themePlayerColors}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-               ) : currentSong.coverImageUri ? (
-                  <Image
-                    source={{ uri: currentSong.coverImageUri }}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                    blurRadius={30}
-                  />
-               ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
-               )}
-                {/* No vignette overlay — clean background */}
-           </View>
-        )}
-
         {isIsland && (
            <View style={[StyleSheet.absoluteFill, { borderRadius: expanded ? 40 : 30, overflow: 'hidden' }]}>
               {/* Frosted glass base — blurs app content behind the island pill */}
@@ -801,7 +882,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                   />
                ) : (
                   /* Solid fallback when no cover art — prevents transparent look */
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#1a1a2e' : '#e8e8f0' }]} />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
                )}
 
               {/* Vignette for text readability */}
@@ -953,7 +1034,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         ) : (
             // CLASSIC UNIFIED ΓÇö always column layout; height + opacity animation controls visibility
             <GestureDetector gesture={panGesture}>
-                <View style={{ width: '100%', height: '100%', flexDirection: 'column' }}>
+                {/* column-reverse keeps the track info + transport row pinned to the
+                    bottom next to the nav bar at every expansion stage; the lyrics
+                    grow upward above it instead of pushing it to the top. */}
+                <View style={{ width: '100%', height: '100%', flexDirection: 'column-reverse' }}>
                     <View style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -969,6 +1053,21 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             onPress={openNowPlaying}
                             onBodyPress={toggleExpand}
                         />
+                        {/* Like the currently playing song without leaving the bar. */}
+                        <Pressable
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                if (currentSong) toggleLike(currentSong.id);
+                            }}
+                            hitSlop={12}
+                            style={{ paddingHorizontal: 8 }}
+                        >
+                            <Ionicons
+                                name={isLiked ? 'checkmark-circle' : 'add-circle-outline'}
+                                size={24}
+                                color={isLiked ? '#1DB954' : '#fff'}
+                            />
+                        </Pressable>
                         <PlaybackControls
                             variant="bar"
                             playing={storePlaying}
@@ -1100,8 +1199,10 @@ const styles = StyleSheet.create({
   classicScrubberOverride: {
     position: 'absolute',
     top: -14,
-    left: 20,
-    right: 20,
+    // Edge-to-edge: seek mapping comes from the measured hit-area width,
+    // so widening the track rescales the gesture automatically.
+    left: 0,
+    right: 0,
     width: 'auto',
     zIndex: 200,
     paddingVertical: 0, 
@@ -1294,11 +1395,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   controlButton: {
-    padding: 8,
+    padding: 4,
+  },
+  // Clips the skip button while its width animates to zero on collapse.
+  skipWrap: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playButton: {
-    padding: 8,
-    marginHorizontal: 4,
+    padding: 4,
+    marginHorizontal: 2,
   },
   islandControls: {
     flexDirection: 'row',
