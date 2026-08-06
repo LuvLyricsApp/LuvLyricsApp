@@ -36,10 +36,11 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const activeIconColor = isDark ? '#FFFFFF' : colors.textPrimary;
   const inactiveIconColor = isDark ? 'rgba(255,255,255,0.45)' : colors.textMuted;
 
-  const pillBg = isDark ? '#0A0A0C' : '#FFFFFF';
+  // Kept translucent so list content stays visible through the pill's BlurView.
+  const pillBg = 'transparent';
   const overlayColor = isDark ? '#0A0A0C' : '#FFFFFF';
   const overlayOpacity = isDark ? 0.90 : 0.82;
-  const fallbackBg = isDark ? 'rgba(10,10,12,0.98)' : 'rgba(255,255,255,0.98)';
+  const fallbackBg = isDark ? 'rgba(10,10,12,0.35)' : 'rgba(255,255,255,0.35)';
   const gradientColors: [string, string] = isDark
     ? ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']
     : ['rgba(255,255,255,0.1)', 'rgba(248,248,252,0.5)'];

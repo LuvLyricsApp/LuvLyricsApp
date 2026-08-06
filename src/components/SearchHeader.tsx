@@ -19,7 +19,7 @@ interface SearchHeaderProps {
 
 const SearchHeader: React.FC<SearchHeaderProps> = ({ query, onQueryChange, onSubmit, onGoBack, isDark, colors }) => {
   return (
-    <View style={[styles.header, { backgroundColor: isDark ? '#020A16' : colors.background }]}>
+    <View style={[styles.header, { backgroundColor: isDark ? '#000000' : colors.background }]}>
       <Pressable style={styles.backButton} onPress={onGoBack}>
         <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
       </Pressable>

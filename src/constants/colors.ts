@@ -1,13 +1,15 @@
 export const DarkColors = {
-  background: '#020A16',
+  background: '#000000',
   card: '#06152B',
   cardHover: '#0B1F3A',
   textPrimary: '#F7F4EC',
   textSecondary: '#AAB4C0',
   textMuted: '#6F7A86',
-  primary: '#2F8CFF',
-  accent: '#2F8CFF',
-  accentSoft: '#63B7FF',
+  // Monochrome accent (Vercel-style). On the dark palette the accent has to be
+  // white — literal black would vanish against the black surfaces.
+  primary: '#FFFFFF',
+  accent: '#FFFFFF',
+  accentSoft: '#A1A1A1',
   lyricHighlight: '#7ED957',
   lyricHighlightSoft: '#A7E86F',
   divider: '#112A4A',
@@ -29,9 +31,10 @@ export const LightColors = {
   textPrimary: '#1A1A1A',
   textSecondary: '#6B6B6B',
   textMuted: '#9B9B9B',
-  primary: '#2F8CFF',
-  accent: '#2F8CFF',
-  accentSoft: '#63B7FF',
+  // Light palette gets the true black accent.
+  primary: '#000000',
+  accent: '#000000',
+  accentSoft: '#666666',
   lyricHighlight: '#1DB954',
   lyricHighlightSoft: '#1ED760',
   divider: '#E5E5EA',      // iOS separator color

@@ -102,7 +102,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       icon: 'create-outline',
       onPress: () => {
         setMenuVisible(false);
-        navigation.navigate('AddEditLyrics', { songId: currentSong?.id });
+        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
       }
     },
     {
@@ -110,7 +110,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       icon: 'timer-outline',
       onPress: () => {
         setMenuVisible(false);
-        navigation.navigate('AddEditLyrics', { songId: currentSong?.id });
+        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
       }
     },
     {

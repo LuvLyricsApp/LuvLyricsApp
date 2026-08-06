@@ -765,7 +765,7 @@ const floatingStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020A16',
+    backgroundColor: '#000000',
   },
   safeArea: {
     flex: 1,
