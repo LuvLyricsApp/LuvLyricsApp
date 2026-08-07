@@ -89,7 +89,7 @@ export const PlaylistsScreen: React.FC = () => {
         themeColors = ['#121212', '#212121', '#121212'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0E1722', '#1E2A3A', '#0E1722'];
+        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-blue') {
         themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];

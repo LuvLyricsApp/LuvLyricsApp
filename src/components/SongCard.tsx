@@ -107,7 +107,7 @@ export const SongCard: React.FC<SongCardProps> = memo(({
     onLikePress?.();
   };
 
-  const thumbnailBg = isDark ? '#0B1F3A' : colors.cardHover;
+  const thumbnailBg = isDark ? '#1A1A1A' : colors.cardHover;
 
   return (
     <Pressable

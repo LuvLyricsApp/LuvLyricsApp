@@ -310,7 +310,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       case 'purest-black': return ['#000000', '#000000', '#000000'];
       case 'grey':         return ['#121212', '#212121', '#121212'];
       case 'theme-blue':   return ['#0A1628', '#1A3A6B', '#2F8CFF'];
-      case 'theme-subtle': return ['#0E1722', '#1E2A3A', '#0E1722'];
+      case 'theme-subtle': return ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
       case 'aurora':       return ['#000000', '#EA7980', '#1D728F'];
       default:             return ['#080808', '#0A0A0A', '#080808'];
     }
@@ -464,6 +464,16 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
   
+  // Classic artwork scrim ΓÇö collapsed the bar is near-solid black with only a
+  // glimpse of the cover art; expanding it to half, then full, dissolves the
+  // scrim so the blurred artwork reads properly at those sizes.
+  const animatedClassicScrimStyle = useAnimatedStyle(() => {
+    const stage = Math.max(expansionProgress.value, classicFullProgress.value);
+    return {
+      opacity: interpolate(stage, [0, 1], [1, 0.32], Extrapolation.CLAMP),
+    };
+  });
+
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -815,18 +825,23 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 resizeMode="cover"
                 blurRadius={30}
               />
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
+              <Animated.View style={[StyleSheet.absoluteFill, animatedClassicScrimStyle]}>
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.90)', 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0.90)']}
+                  locations={[0, 0.5, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
             </>
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
-          {/* Short, light fade that lands on the same alpha the tab bar's
-              gradient starts at (0.10), so the pill and the bar meet at matching
-              values instead of a dark band butting against a lighter one.
-              The nav icons get their legibility from the tab bar's own gradient. */}
+          {/* The tab bar below is solid black, so the pill's bottom edge is
+              carried the rest of the way down to black — the two surfaces then
+              meet at the same value and the join disappears. */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.10)']}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 24 }}
+            colors={['transparent', 'rgba(0,0,0,0.7)']}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 }}
           />
         </View>
       )}
@@ -979,7 +994,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                                     textStyle={styles.expandedLyricText}
                                     activeLinePosition={0.3} 
                                     songTitle={currentSong?.title}
-                                    highlightColor={mainColor}
                                     topSpacerHeight={fullLyricExpanded ? 300 : 150} 
                                     bottomSpacerHeight={fullLyricExpanded ? 300 : 150}
                                 />
@@ -1095,7 +1109,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             textStyle={styles.expandedLyricText}
                             activeLinePosition={0.4}
                             songTitle={currentSong?.title}
-                            highlightColor={gradientColors[0]}
                             topSpacerHeight={50}
                             bottomSpacerHeight={50}
                             expandedAt={lyricExpandedAt}

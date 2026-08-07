@@ -190,7 +190,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             currentTime={positionSV}
             onLyricPress={handleLyricTap}
             songTitle={currentSong?.title}
-            highlightColor={gradientColors[0] !== '#000' ? gradientColors[0] : 'rgba(255,255,255,0.2)'}
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}

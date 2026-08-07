@@ -14,7 +14,6 @@ interface NowPlayingLyricsAreaProps {
   currentTime: any;
   onLyricPress: (timestamp: number) => void;
   songTitle?: string;
-  highlightColor: string;
   isUserScrollingRef: React.MutableRefObject<boolean>;
   scrollTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
@@ -34,7 +33,6 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   currentTime,
   onLyricPress,
   songTitle,
-  highlightColor,
   isUserScrollingRef,
   scrollTimeoutRef,
   flatListRef,
@@ -59,7 +57,6 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
       currentTime={currentTime}
       onLyricPress={onLyricPress}
       songTitle={songTitle}
-      highlightColor={highlightColor}
       isUserScrolling={isUserScrollingRef.current}
       onScrollStateChange={(isScrolling) => {
         isUserScrollingRef.current = isScrolling;

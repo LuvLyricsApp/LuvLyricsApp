@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonCancel: {
-    backgroundColor: '#0B1F3A',
+    backgroundColor: '#1A1A1A',
   },
   buttonDestructive: {
     backgroundColor: '#FF453A',

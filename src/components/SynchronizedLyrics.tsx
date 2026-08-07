@@ -33,7 +33,6 @@ interface LyricLineProps {
   onMeasured: (index: number, height: number) => void;
   textStyle?: any;
   songTitle?: string;
-  highlightColor?: string;
 }
 
 const LyricLine = React.memo(({
@@ -45,7 +44,6 @@ const LyricLine = React.memo(({
   onMeasured,
   textStyle,
   songTitle,
-  highlightColor = '#FFD700',
 }: LyricLineProps) => {
   const handlePress = useCallback(() => onLyricPress(timestamp), [onLyricPress, timestamp]);
 
@@ -122,7 +120,6 @@ interface SynchronizedLyricsProps {
   scrollEnabled?: boolean;
   activeLinePosition?: number;
   songTitle?: string;
-  highlightColor?: string;
   topSpacerHeight?: number;
   bottomSpacerHeight?: number;
   expandedAt?: number;
@@ -144,7 +141,6 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   scrollEnabled = true,
   activeLinePosition = 0.5,
   songTitle,
-  highlightColor,
   topSpacerHeight = SCREEN_HEIGHT * 0.4,
   bottomSpacerHeight = SCREEN_HEIGHT * 0.4,
 }, ref) => {
@@ -286,9 +282,8 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
       onMeasured={handleItemMeasured}
       textStyle={textStyle}
       songTitle={songTitle}
-      highlightColor={highlightColor}
     />
-  ), [activeIndexSV, onLyricPress, handleItemMeasured, textStyle, songTitle, highlightColor]);
+  ), [activeIndexSV, onLyricPress, handleItemMeasured, textStyle, songTitle]);
 
   return (
     <View style={styles.container}>

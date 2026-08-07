@@ -1,10 +1,12 @@
 export const DarkColors = {
   background: '#000000',
-  card: '#06152B',
-  cardHover: '#0B1F3A',
-  textPrimary: '#F7F4EC',
-  textSecondary: '#AAB4C0',
-  textMuted: '#6F7A86',
+  // Neutral greys only — the old navy surfaces were the source of the blue cast
+  // that leaked into every screen through useThemeColors().
+  card: '#0A0A0A',
+  cardHover: '#1A1A1A',
+  textPrimary: '#EDEDED',
+  textSecondary: '#A1A1A1',
+  textMuted: '#6E6E6E',
   // Monochrome accent (Vercel-style). On the dark palette the accent has to be
   // white — literal black would vanish against the black surfaces.
   primary: '#FFFFFF',
@@ -12,8 +14,8 @@ export const DarkColors = {
   accentSoft: '#A1A1A1',
   lyricHighlight: '#7ED957',
   lyricHighlightSoft: '#A7E86F',
-  divider: '#112A4A',
-  border: '#112A4A',
+  divider: '#1F1F1F',
+  border: '#262626',
   lyricCurrent: '#7ED957',
   lyricPrevious: 'rgba(255, 255, 255, 0.45)',
   lyricUpcoming: 'rgba(255, 255, 255, 0.60)',
@@ -51,6 +53,37 @@ export const LightColors = {
 
 // Static alias kept for any file that hasn't migrated yet — points to dark
 export const Colors = DarkColors;
+
+// Shared surface tokens. Screens hardcoded these greys inline; import them
+// instead so a single edit restyles every panel, button and chip.
+export const Surface = {
+  base: '#000000',
+  raised: '#0A0A0A',
+  overlay: '#141414',
+  pressed: '#1A1A1A',
+  hairline: 'rgba(255,255,255,0.14)',
+  hairlineSoft: 'rgba(255,255,255,0.08)',
+  fill: 'rgba(255,255,255,0.06)',
+  fillStrong: 'rgba(255,255,255,0.11)',
+} as const;
+
+// Vercel-style lift: a soft dark shadow, never a coloured glow.
+export const Elevation = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.55,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+} as const;
 
 export type ColorKey = keyof typeof DarkColors;
 export type AppColors = { [K in ColorKey]: string };
