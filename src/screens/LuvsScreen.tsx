@@ -64,16 +64,16 @@ const LuvsScreen: React.FC = () => {
   const colors = useThemeColors();
   const isDark = useIsDark();
 
-  const {
-    feedSongs,
-    currentIndex,
-    vault,
-    isLoading,
-    setCurrentIndex,
-    addToVault,
-    removeFromVault,
-    isInVault,
-  } = useLuvsFeedStore();
+  // Field selectors, not the whole store. Destructuring the store re-rendered this
+  // screen — and with it every mounted card — whenever any unrelated field moved.
+  const feedSongs = useLuvsFeedStore(s => s.feedSongs);
+  const currentIndex = useLuvsFeedStore(s => s.currentIndex);
+  const vault = useLuvsFeedStore(s => s.vault);
+  const isLoading = useLuvsFeedStore(s => s.isLoading);
+  const setCurrentIndex = useLuvsFeedStore(s => s.setCurrentIndex);
+  const addToVault = useLuvsFeedStore(s => s.addToVault);
+  const removeFromVault = useLuvsFeedStore(s => s.removeFromVault);
+  const isInVault = useLuvsFeedStore(s => s.isInVault);
 
   const insets = useSafeAreaInsets();
 
@@ -357,9 +357,9 @@ const LuvsScreen: React.FC = () => {
           isMounted={Math.abs(index - currentIndex) <= 2}
           isLiked={isInVault(item.id)}
           isPlaying={isActive && isPlaying}
-          onLike={() => handleLikePress(item)}
-          onShare={() => handleSharePress(item)}
-          onDownload={() => handleDownloadPress(item)}
+          onLike={handleLikePress}
+          onShare={handleSharePress}
+          onDownload={handleDownloadPress}
           onPlayPause={handlePlayPause}
           onScrubStateChange={setIsScrubbing}
           luvHeight={LUV_HEIGHT}

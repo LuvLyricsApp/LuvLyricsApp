@@ -227,9 +227,11 @@ interface LuvCardProps {
   isActive: boolean;
   isLiked: boolean;
   isPlaying: boolean;
-  onLike: () => void;
-  onShare: () => void;
-  onDownload: () => void;
+  // Take the song so LuvsScreen can pass stable handlers — inline arrows here
+  // defeated React.memo and re-rendered every mounted card on every swipe.
+  onLike: (song: UnifiedSong) => void;
+  onShare: (song: UnifiedSong) => void;
+  onDownload: (song: UnifiedSong) => void;
   onPlayPause: () => void;
   /** Lets the feed suspend ViewPager2 paging while the timeline is being dragged. */
   onScrubStateChange?: (scrubbing: boolean) => void;
@@ -322,9 +324,12 @@ export const LuvCard = React.memo<LuvCardProps>(
   }, [onPlayPause]);
 
     const handleLike = useCallback(() => {
-      onLike();
+      onLike(song);
       if (!isLiked) setBurstTrigger((n) => n + 1);
-    }, [onLike, isLiked]);
+    }, [onLike, isLiked, song]);
+
+    const handleShare = useCallback(() => onShare(song), [onShare, song]);
+    const handleDownload = useCallback(() => onDownload(song), [onDownload, song]);
 
     const handleMagic = useCallback(() => {
       setIsMagicActive(true);
@@ -445,8 +450,8 @@ export const LuvCard = React.memo<LuvCardProps>(
                 disabled={isMagicActive}
               />
 
-              <ActionBtn icon="share-outline" label="Share" onPress={onShare} />
-              <ActionBtn icon="bookmark-outline" label="Save" onPress={onDownload} />
+              <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
+              <ActionBtn icon="bookmark-outline" label="Save" onPress={handleDownload} />
             </View>
 
             {/* Bottom song info */}
