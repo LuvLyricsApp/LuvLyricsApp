@@ -22,6 +22,9 @@ class LuvsPrefs(context: Context) {
 
     private var languages: MutableList<LanguagePreference> = DEFAULT_LANGUAGES.toMutableList()
 
+    /** Set by swipes, cleared by flush(). Avoids re-ranking on every card. */
+    private var dirty = false
+
     init {
         load()
     }
@@ -59,22 +62,36 @@ class LuvsPrefs(context: Context) {
         save()
     }
 
+    /**
+     * Scores are only read when a feed is built, so re-ranking and re-serialising
+     * the whole history on every swipe is wasted work. Both are deferred and
+     * collapsed by flush(), which the engine calls before it generates queries.
+     */
     @Synchronized
     fun recordInteraction(interaction: LuvInteraction) {
         interactions.add(interaction)
         // Same bound as the JS store: keep the window recent so scores stay responsive.
         while (interactions.size > MAX_INTERACTIONS) interactions.removeAt(0)
-        analyze()
-        save()
+        dirty = true
     }
 
     @Synchronized
     fun markSeen(songId: String) {
         if (songId.isEmpty()) return
-        seenSongIds.add(songId)
+        if (!seenSongIds.add(songId)) return
         while (seenSongIds.size > MAX_SEEN) {
             seenSongIds.remove(seenSongIds.first())
         }
+        dirty = true
+    }
+
+    /** Re-ranks and persists if anything changed since the last flush. */
+    @Synchronized
+    fun flush() {
+        if (!dirty) return
+        analyze()
+        save()
+        dirty = false
     }
 
     /**

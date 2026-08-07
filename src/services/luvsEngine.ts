@@ -48,6 +48,7 @@ interface LuvsEngineNativeModule {
   setLanguages(languages: string[]): void;
   recordInteraction(interaction: LuvInteractionPayload): void;
   markSeen(songId: string): void;
+  flush(): void;
 }
 
 // Null on iOS and on any Android build predating the module, so a stale binary
@@ -57,7 +58,10 @@ const native: LuvsEngineNativeModule | null =
     ? (requireOptionalNativeModule('LuvsEngine') as LuvsEngineNativeModule | null)
     : null;
 
-let librarySynced = false;
+// Cheap change-detector for the library snapshot. Serialising a few hundred songs
+// across the bridge on every feed call is the single most expensive thing this
+// module can do, so it only happens when the catalogue actually changed.
+let lastLibrarySignature = '';
 
 /**
  * Kotlin needs the library for local-file swapping and for seeding artist
@@ -66,7 +70,9 @@ let librarySynced = false;
  */
 function syncLibrary(module: LuvsEngineNativeModule): void {
   const songs: Song[] = useSongsStore.getState().songs;
-  if (librarySynced && songs.length === 0) return;
+  const signature = `${songs.length}:${songs[songs.length - 1]?.id ?? ''}`;
+  if (signature === lastLibrarySignature) return;
+
   module.setLibrary(
     songs.map(s => ({
       id: s.id,
@@ -78,7 +84,7 @@ function syncLibrary(module: LuvsEngineNativeModule): void {
       hasLyrics: (s.lyrics?.length ?? 0) > 0,
     })),
   );
-  librarySynced = true;
+  lastLibrarySignature = signature;
 }
 
 function commitFeed(songs: UnifiedSong[]): UnifiedSong[] {
@@ -89,6 +95,9 @@ function commitFeed(songs: UnifiedSong[]): UnifiedSong[] {
 }
 
 export const luvsEngine = {
+  /** True when Kotlin owns ranking — lets callers skip the JS store's duplicate work. */
+  isNative: native !== null,
+
   async refresh(): Promise<UnifiedSong[]> {
     if (!native) return luvsRecommendationEngine.refreshRecommendation();
     syncLibrary(native);
@@ -99,8 +108,13 @@ export const luvsEngine = {
   async loadMore(): Promise<UnifiedSong[]> {
     if (!native) return luvsRecommendationEngine.loadMoreSongs();
     syncLibrary(native);
-    // Kotlin returns the whole feed with the new page already appended and deduped.
-    return commitFeed(await native.loadMore());
+    // Kotlin sends only the new page; appending here keeps bridge traffic flat
+    // instead of growing with every page.
+    const page = await native.loadMore();
+    if (page.length === 0) return useLuvsFeedStore.getState().feedSongs;
+    const merged = [...useLuvsFeedStore.getState().feedSongs, ...page];
+    useLuvsFeedStore.getState().setFeedSongs(merged);
+    return merged;
   },
 
   async prefetch(): Promise<void> {
@@ -127,6 +141,11 @@ export const luvsEngine = {
 
   recordInteraction(interaction: LuvInteractionPayload): void {
     native?.recordInteraction(interaction);
+  },
+
+  /** Forces deferred ranking + persistence out. Call when leaving the feed. */
+  flush(): void {
+    native?.flush();
   },
 
   /** Language selection is the one preference the Settings UI writes. */

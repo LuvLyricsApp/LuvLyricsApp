@@ -126,6 +126,8 @@ const LuvsScreen: React.FC = () => {
         StatusBar.setHidden(false);
         setIsPlaying(false);
         luvsBufferManager.stopAll();
+        // Swipes defer ranking/persistence in Kotlin — push them out on the way out.
+        luvsEngine.flush();
       };
     }, [])
   );
@@ -232,10 +234,14 @@ const LuvsScreen: React.FC = () => {
           liked: isInVault(prevSong.id),
           skipped,
         };
-        recordInteraction(interaction);
-        // Kotlin owns ranking on Android, so it needs the same signal. Scoring runs
-        // off the JS thread there — a swipe never waits on it.
-        luvsEngine.recordInteraction(interaction);
+        // Exactly one store scores this. When Kotlin owns ranking, running the JS
+        // analyser too would re-score up to 500 interactions and hit AsyncStorage
+        // on every swipe for a result nothing reads.
+        if (luvsEngine.isNative) {
+          luvsEngine.recordInteraction(interaction);
+        } else {
+          recordInteraction(interaction);
+        }
 
         if (__DEV__) {
           const verb = skipped ? '⏭️ Skipped' : '👀 Watched';

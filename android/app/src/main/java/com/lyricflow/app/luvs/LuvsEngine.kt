@@ -94,6 +94,9 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
      * so the same artist never appears twice in a row.
      */
     suspend fun fetchPersonalizedFeed(): List<LuvSong> = withContext(Dispatchers.IO) {
+        // Collapse everything the swipes deferred: this is the one moment the
+        // freshly-ranked artists are actually read.
+        prefs.flush()
         val queries = generateQueries(6)
 
         val perQuery = coroutineScope {
@@ -118,13 +121,18 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
         return songs
     }
 
+    /**
+     * Returns only the newly appended page. Returning the whole feed made bridge
+     * traffic quadratic — page N crossed N*pageSize songs.
+     */
     suspend fun loadMore(): List<LuvSong> {
         val songs = fetchPersonalizedFeed()
-        synchronized(this) {
+        return synchronized(this) {
             val existing = feed.map { it.matchKey }.toHashSet()
-            feed.addAll(songs.filter { existing.add(it.matchKey) })
+            val fresh = songs.filter { existing.add(it.matchKey) }
+            feed.addAll(fresh)
+            fresh
         }
-        return feedSnapshot()
     }
 
     /** Prefetch used on app start so the first swipe is instant. */

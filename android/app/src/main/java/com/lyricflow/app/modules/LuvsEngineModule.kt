@@ -74,6 +74,14 @@ class LuvsEngineModule : Module() {
             prefs.markSeen(songId)
         }
 
+        // Swipes defer ranking and persistence; this forces them out so nothing is
+        // lost when the user leaves Luvs or the process is killed.
+        Function("flush") {
+            prefs.flush()
+        }
+
+        // Backgrounding is the last reliable moment before the process can be killed.
+        OnActivityEntersBackground { prefs.flush() }
     }
 }
 
