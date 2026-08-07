@@ -32,9 +32,6 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
     fun feedSnapshot(): List<LuvSong> = feed.toList()
 
     @Synchronized
-    fun currentIndexValue(): Int = currentIndex
-
-    @Synchronized
     fun setCurrentIndex(index: Int) {
         currentIndex = index.coerceIn(0, maxOf(0, feed.size - 1))
     }
@@ -141,8 +138,6 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
      * after the current card.
      */
     suspend fun discoverSimilar(songId: String): List<LuvSong> = withContext(Dispatchers.IO) {
-        prefs.addMagicLike(songId)
-
         var recs = SaavnClient.suggestions(songId)
         val current = synchronized(this@LuvsEngine) { feed.getOrNull(currentIndex) }
         if (recs.size < 5 && current != null) {

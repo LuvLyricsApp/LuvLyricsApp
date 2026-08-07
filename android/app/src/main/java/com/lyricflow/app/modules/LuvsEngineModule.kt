@@ -30,8 +30,6 @@ class LuvsEngineModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("LuvsEngine")
 
-        Events("onFeedUpdated")
-
         OnDestroy { scope.cancel() }
 
         // ── Library handoff ──────────────────────────────────────────────────
@@ -58,29 +56,13 @@ class LuvsEngineModule : Module() {
             engine.discoverSimilar(songId).map { it.toMap() }
         }
 
-        Function("getFeed") {
-            engine.feedSnapshot().map { it.toMap() }
-        }
-
         Function("setCurrentIndex") { index: Int ->
             engine.setCurrentIndex(index)
         }
 
-        Function("getCurrentIndex") {
-            engine.currentIndexValue()
-        }
-
         // ── Preferences ──────────────────────────────────────────────────────
-        Function("getLanguages") {
-            prefs.languageWeights().map { mapOf("language" to it.language, "weight" to it.weight) }
-        }
-
         Function("setLanguages") { languages: List<String> ->
             prefs.setLanguages(languages)
-        }
-
-        Function("setLanguageWeight") { language: String, weight: Int ->
-            prefs.setLanguageWeight(language, weight)
         }
 
         Function("recordInteraction") { payload: Map<String, Any?> ->
@@ -92,17 +74,6 @@ class LuvsEngineModule : Module() {
             prefs.markSeen(songId)
         }
 
-        Function("addMagicLike") { songId: String ->
-            prefs.addMagicLike(songId)
-        }
-
-        Function("getTopArtists") { limit: Int ->
-            prefs.topArtistNames(limit)
-        }
-
-        Function("clearPreferences") {
-            prefs.clear()
-        }
     }
 }
 

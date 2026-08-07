@@ -40,37 +40,6 @@ data class LuvSong(
         "isAuthentic" to isAuthentic,
     )
 
-    fun toJson(): JSONObject = JSONObject().apply {
-        put("id", id)
-        put("title", title)
-        put("artist", artist)
-        put("highResArt", highResArt)
-        put("downloadUrl", downloadUrl)
-        put("hasLyrics", hasLyrics)
-        put("source", source)
-        put("duration", duration ?: JSONObject.NULL)
-        put("playCount", playCount)
-        put("language", language ?: JSONObject.NULL)
-        put("isLocal", isLocal)
-        put("isAuthentic", isAuthentic)
-    }
-
-    companion object {
-        fun fromJson(o: JSONObject): LuvSong = LuvSong(
-            id = o.optString("id"),
-            title = o.optString("title"),
-            artist = o.optString("artist"),
-            highResArt = o.optString("highResArt"),
-            downloadUrl = o.optString("downloadUrl"),
-            hasLyrics = o.optBoolean("hasLyrics", false),
-            source = o.optString("source", "Saavn"),
-            duration = if (o.isNull("duration")) null else o.optInt("duration"),
-            playCount = o.optLong("playCount", 0),
-            language = if (o.isNull("language")) null else o.optString("language"),
-            isLocal = o.optBoolean("isLocal", false),
-            isAuthentic = o.optBoolean("isAuthentic", false),
-        )
-    }
 }
 
 /**

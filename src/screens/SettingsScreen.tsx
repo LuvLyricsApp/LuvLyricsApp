@@ -193,52 +193,6 @@ const bs = StyleSheet.create({
   },
 });
 
-// ─── Luv Languages Modal ──────────────────────────────────────────────────────
-
-const LuvsLanguagesModal = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
-  const { preferredLanguages, updateLanguageWeight } = useLuvsPreferencesStore();
-  return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{
-          width: '90%', maxHeight: '80%', backgroundColor: Colors.card,
-          borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.textPrimary }}>{SettingsStrings.musicLanguages}</Text>
-            <Pressable onPress={onClose}>
-              <Ionicons name="close-circle" size={28} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ width: '100%' }}>
-            <Text style={{ color: Colors.textSecondary, marginBottom: 16, fontSize: 13 }}>
-              Adjust preferences to curate your Luvs feed. Set weight to 0% to disable a language.
-            </Text>
-            {preferredLanguages.map((item) => (
-              <View key={item.language} style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: Colors.textPrimary, fontWeight: '600' }}>{item.language}</Text>
-                  <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '700' }}>
-                    {item.weight === 0 ? 'DISABLED' : `${item.weight}%`}
-                  </Text>
-                </View>
-                <Slider
-                  style={{ width: '100%', height: 40 }}
-                  minimumValue={0} maximumValue={100} step={10}
-                  value={item.weight}
-                  onSlidingComplete={(v) => updateLanguageWeight(item.language, v)}
-                  minimumTrackTintColor={Colors.primary}
-                  maximumTrackTintColor={Colors.cardHover}
-                  thumbTintColor={Colors.primary}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // ─── Reusable rows ───────────────────────────────────────────────────────────
 
@@ -471,7 +425,6 @@ const SettingsScreen: React.FC<Props> = () => {
       ? activeLanguages.join(', ')
       : `${activeLanguages.length} selected`;
   const { hiddenSongs, fetchHiddenSongs, hideSong: unhideSong } = useSongsStore();
-  const [luvsLangModalVisible, setLuvsLangModalVisible] = React.useState(false);
   const { desktopConnectEnabled, allowDesktopDownloads, setDesktopConnectEnabled, setAllowDesktopDownloads } = useDesktopBridgeSettingsStore();
   const [pairingModalVisible, setPairingModalVisible] = React.useState(false);
   const [pairingPayloadText, setPairingPayloadText] = React.useState('');
@@ -1136,7 +1089,6 @@ const SettingsScreen: React.FC<Props> = () => {
         </Pressable>
       </Modal>
 
-      <LuvsLanguagesModal visible={luvsLangModalVisible} onClose={() => setLuvsLangModalVisible(false)} />
     </View>
   );
 };

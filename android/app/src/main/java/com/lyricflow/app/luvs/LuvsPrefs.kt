@@ -17,7 +17,6 @@ class LuvsPrefs(context: Context) {
 
     private val interactions = mutableListOf<LuvInteraction>()
     private val seenSongIds = LinkedHashSet<String>()
-    private val explicitLikes = LinkedHashSet<String>()
     private var skippedArtists = listOf<String>()
     private var topArtists = listOf<ArtistScore>()
 
@@ -61,14 +60,6 @@ class LuvsPrefs(context: Context) {
     }
 
     @Synchronized
-    fun setLanguageWeight(language: String, weight: Int) {
-        languages = languages
-            .map { if (it.language.equals(language, true)) LanguagePreference(it.language, weight) else it }
-            .toMutableList()
-        save()
-    }
-
-    @Synchronized
     fun recordInteraction(interaction: LuvInteraction) {
         interactions.add(interaction)
         // Same bound as the JS store: keep the window recent so scores stay responsive.
@@ -84,23 +75,6 @@ class LuvsPrefs(context: Context) {
         while (seenSongIds.size > MAX_SEEN) {
             seenSongIds.remove(seenSongIds.first())
         }
-    }
-
-    @Synchronized
-    fun addMagicLike(songId: String) {
-        explicitLikes.add(songId)
-        save()
-    }
-
-    @Synchronized
-    fun clear() {
-        interactions.clear()
-        seenSongIds.clear()
-        explicitLikes.clear()
-        skippedArtists = emptyList()
-        topArtists = emptyList()
-        languages = DEFAULT_LANGUAGES.toMutableList()
-        store.edit().clear().apply()
     }
 
     /**
@@ -182,7 +156,6 @@ class LuvsPrefs(context: Context) {
         val payload = JSONObject().apply {
             put("interactions", JSONArray().also { arr -> interactions.forEach { arr.put(it.toJson()) } })
             put("seenSongIds", JSONArray().also { arr -> seenSongIds.forEach { arr.put(it) } })
-            put("explicitLikes", JSONArray().also { arr -> explicitLikes.forEach { arr.put(it) } })
             put("languages", JSONArray().also { arr ->
                 languages.forEach { arr.put(JSONObject().put("language", it.language).put("weight", it.weight)) }
             })
@@ -197,7 +170,6 @@ class LuvsPrefs(context: Context) {
         json.optJSONArray("interactions")?.objects()
             ?.forEach { interactions.add(LuvInteraction.fromJson(it)) }
         json.optJSONArray("seenSongIds")?.strings()?.let { seenSongIds.addAll(it) }
-        json.optJSONArray("explicitLikes")?.strings()?.let { explicitLikes.addAll(it) }
 
         json.optJSONArray("languages")?.objects()?.takeIf { it.isNotEmpty() }?.let { saved ->
             val restored = saved.map { LanguagePreference(it.optString("language"), it.optInt("weight")) }
