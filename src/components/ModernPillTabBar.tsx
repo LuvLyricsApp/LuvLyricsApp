@@ -68,14 +68,14 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
         if (route.name === 'Luvs') {
           const { feedSongs } = (await import('../store/luvsFeedStore')).useLuvsFeedStore.getState();
           if (feedSongs.length === 0) {
-            import('../services/LuvsRecommendationEngine')
-              .then(m => m.luvsRecommendationEngine.refreshRecommendation())
+            import('../services/luvsEngine')
+              .then(m => m.luvsEngine.refresh())
               .catch(console.error);
           }
         }
       } else if (isFocused && route.name === 'Luvs') {
-        import('../services/LuvsRecommendationEngine')
-          .then(m => m.luvsRecommendationEngine.refreshRecommendation())
+        import('../services/luvsEngine')
+          .then(m => m.luvsEngine.refresh())
           .catch(console.error);
       }
     };

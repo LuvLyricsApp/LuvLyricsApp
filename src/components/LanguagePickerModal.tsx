@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLuvsPreferencesStore, LuvLanguage } from '../store/luvsPreferencesStore';
+import { luvsEngine } from '../services/luvsEngine';
 import { useThemeColors } from '../contexts/ThemeContext';
 
 const AVAILABLE_LANGUAGES: LuvLanguage[] = [
@@ -36,6 +37,9 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visibl
 
   const handleSave = () => {
     setPreferredLanguages(selectedLanguages);
+    // The native engine keeps its own persisted copy, so it has to be told too —
+    // the next feed it builds is filtered against this list.
+    luvsEngine.setLanguages(selectedLanguages);
     onClose();
   };
 

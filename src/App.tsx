@@ -147,7 +147,7 @@ const App: React.FC = () => {
           import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()).catch(console.error);
 
           // Pre-fetch Luvs for instant playback
-          import('./services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.prefetch()).catch(console.error);
+          import('./services/luvsEngine').then(m => m.luvsEngine.prefetch()).catch(console.error);
 
           // Build/verify FTS5 search index in background (Android only; no-op on iOS)
           ensureSearchIndex().catch(() => {});

@@ -29,7 +29,7 @@ import { UnifiedSong } from '../types/song';
 import { analyzeImageBrightness } from '../utils/imageAnalyzer';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
 import TimelineScrubber from './TimelineScrubber';
-import { luvsRecommendationEngine } from '../services/LuvsRecommendationEngine';
+import { luvsEngine } from '../services/luvsEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ART_SIZE = SCREEN_WIDTH * 0.72;
@@ -328,7 +328,7 @@ export const LuvCard = React.memo<LuvCardProps>(
 
     const handleMagic = useCallback(() => {
       setIsMagicActive(true);
-      luvsRecommendationEngine.discoverSimilar(song.id);
+      luvsEngine.discoverSimilar(song.id);
       magicRef.current = setTimeout(() => setIsMagicActive(false), 3000);
     }, [song.id]);
 

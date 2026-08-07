@@ -42,7 +42,7 @@ import {
   isNativePagerAvailable,
   luvsPageStyle,
 } from '../components/LuvsPager';
-import { luvsRecommendationEngine } from '../services/LuvsRecommendationEngine';
+import { luvsEngine } from '../services/luvsEngine';
 import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
 import { usePlayerStore } from '../store/playerStore';
 import { UnifiedSong } from '../types/song';
@@ -133,7 +133,7 @@ const LuvsScreen: React.FC = () => {
   // Load initial feed using recommendation engine
   const loadInitialFeed = useCallback(async () => {
     if (feedSongs.length > 0) return; // Already loaded via prefetch
-    await luvsRecommendationEngine.refreshRecommendation();
+    await luvsEngine.refresh();
   }, [feedSongs.length]);
 
   // Reload Feed Button Logic
@@ -141,7 +141,7 @@ const LuvsScreen: React.FC = () => {
     if (__DEV__) console.log('[Luvs] 🔄 Reloading feed...');
     setIsPlaying(false);
     await luvsBufferManager.stopAll(); // Stop audio first
-    await luvsRecommendationEngine.refreshRecommendation();
+    await luvsEngine.refresh();
     setIsPlaying(true); // Auto-play after reload
   };
 
@@ -203,7 +203,7 @@ const LuvsScreen: React.FC = () => {
   // Load more songs using recommendation engine
   const loadMoreSongs = useCallback(async () => {
     if (isLoading) return;
-    await luvsRecommendationEngine.loadMoreSongs();
+    await luvsEngine.loadMore();
   }, [isLoading]);
 
   /**
@@ -222,7 +222,7 @@ const LuvsScreen: React.FC = () => {
         const watchDuration = (Date.now() - viewStartTimeRef.current) / 1000;
         const skipped = watchDuration < SKIP_THRESHOLD_SECONDS;
 
-        recordInteraction({
+        const interaction = {
           songId: prevSong.id,
           title: prevSong.title,
           artist: prevSong.artist || 'Unknown',
@@ -231,7 +231,11 @@ const LuvsScreen: React.FC = () => {
           totalDuration: prevSong.duration || 180,
           liked: isInVault(prevSong.id),
           skipped,
-        });
+        };
+        recordInteraction(interaction);
+        // Kotlin owns ranking on Android, so it needs the same signal. Scoring runs
+        // off the JS thread there — a swipe never waits on it.
+        luvsEngine.recordInteraction(interaction);
 
         if (__DEV__) {
           const verb = skipped ? '⏭️ Skipped' : '👀 Watched';
@@ -243,6 +247,7 @@ const LuvsScreen: React.FC = () => {
       viewStartTimeRef.current = Date.now();
       viewTrackingRef.current = newIndex;
       setCurrentIndex(newIndex);
+      luvsEngine.setCurrentIndex(newIndex);
       // ALWAYS FORCE PLAY ON SWIPE
       setIsPlaying(true);
       luvsBufferManager.updateActiveIndex(newIndex, feedSongs, true);

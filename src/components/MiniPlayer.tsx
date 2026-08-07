@@ -309,9 +309,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, expanded, isIsland]);
     
-  // Create a "vignette" theme for island: Black -> Color -> Black
-  const mainColor = gradientColors[1] || gradientColors[0];
-
   // Per-style background mode (island vs classic bar each have their own setting)
   const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
   const useThemeBg = activeBgMode !== 'album-art';
