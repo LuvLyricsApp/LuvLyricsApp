@@ -230,11 +230,24 @@ interface LuvCardProps {
   index: number;
   currentIndex: SharedValue<number>;
   isNearActive: boolean;
+  /**
+   * False for cards far from the viewport. The native pager keeps every card in the
+   * feed mounted as a page, so distant ones collapse to a bare black view rather
+   * than holding a full-screen bitmap each. Defaults to true for the iOS FlatList,
+   * which already virtualises.
+   */
+  isMounted?: boolean;
+  /**
+   * True when LuvsPagerView's PageTransformer is doing the scale/fade. The JS
+   * interpolation is skipped so the two don't compound into a double transform.
+   */
+  nativeDepth?: boolean;
 }
 
 export const LuvCard = React.memo<LuvCardProps>(
   ({ song, isActive, isLiked, isPlaying, onLike, onShare, onDownload,
-     onPlayPause, luvHeight, index, currentIndex, isNearActive }) => {
+     onPlayPause, luvHeight, index, currentIndex, isNearActive,
+     isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
     const [burstTrigger, setBurstTrigger] = useState(0);
     const [isMagicActive, setIsMagicActive] = useState(false);
@@ -314,6 +327,8 @@ export const LuvCard = React.memo<LuvCardProps>(
 
     const cardAnimStyle = useAnimatedStyle(() => {
       'worklet';
+      // LuvsPagerView already applies scale/alpha/translate per page.
+      if (nativeDepth) return {} as ViewStyle;
       const dist = Math.abs(currentIndex.value - index);
       if (dist > 1.1) {
         return { opacity: 0, transform: [{ scale: 0.93 }, { translateY: 0 }] } as ViewStyle;
@@ -337,6 +352,12 @@ export const LuvCard = React.memo<LuvCardProps>(
       opacity: ppOp.value,
       transform: [{ scale: ppSc.value }],
     }));
+
+    // Placed after every hook so the hook order never changes as cards scroll in
+    // and out of range.
+    if (!isMounted) {
+      return <View style={[styles.card, { height: luvHeight }]} />;
+    }
 
     return (
       <Animated.View
@@ -453,6 +474,9 @@ export const LuvCard = React.memo<LuvCardProps>(
   (prev, next) =>
     prev.isActive === next.isActive &&
     prev.isNearActive === next.isNearActive &&
+    // Without this the card would stay a black placeholder after scrolling back
+    // into range — the other flags can all be unchanged across that transition.
+    prev.isMounted === next.isMounted &&
     prev.isLiked === next.isLiked &&
     prev.isPlaying === next.isPlaying &&
     prev.song.id === next.song.id

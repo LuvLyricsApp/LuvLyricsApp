@@ -31,10 +31,14 @@ export const RootNavigator: React.FC = () => {
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
 
   // Island mode: only render MiniPlayer on the Home tab.
-  // Classic bar mode: render MiniPlayer on every tab/screen.
-  const showMiniPlayer = miniPlayerStyle === 'island'
-    ? currentRoute === 'Home'
-    : true;
+  // Classic bar mode: render MiniPlayer on every tab/screen — except Luvs, which is
+  // a full-bleed reels feed running its own audio pool. The bar used to paint over
+  // it and its transport controlled a different player than the one you could hear.
+  const showMiniPlayer = currentRoute !== 'Luvs' && (
+    miniPlayerStyle === 'island'
+      ? currentRoute === 'Home'
+      : true
+  );
 
   return (
     <NavigationContainer

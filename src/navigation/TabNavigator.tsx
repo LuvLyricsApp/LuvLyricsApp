@@ -34,8 +34,18 @@ const SearchIcon = ({ color, focused }: { color: string; focused: boolean }) => 
   <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />
 );
 
-const renderModernPillTabBar = (props: BottomTabBarProps) => <ModernPillTabBar {...props} />;
-const renderCustomTabBar = (props: BottomTabBarProps) => <CustomTabBar {...props} />;
+// Luvs is a full-bleed reels feed — it owns the whole screen and exits via its own
+// back button. `tabBarStyle: { display: 'none' }` has no effect here because both
+// bars are custom components that never read it, so the gate lives at the renderer.
+const FULLSCREEN_ROUTES = ['Luvs'];
+
+const isFullscreenRoute = (state: BottomTabBarProps['state']) =>
+  FULLSCREEN_ROUTES.includes(state.routes[state.index]?.name);
+
+const renderModernPillTabBar = (props: BottomTabBarProps) =>
+  isFullscreenRoute(props.state) ? null : <ModernPillTabBar {...props} />;
+const renderCustomTabBar = (props: BottomTabBarProps) =>
+  isFullscreenRoute(props.state) ? null : <CustomTabBar {...props} />;
 
 export const TabNavigator: React.FC = () => {
   const colors = useThemeColors();
