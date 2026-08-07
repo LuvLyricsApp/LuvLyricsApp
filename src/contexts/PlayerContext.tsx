@@ -48,6 +48,7 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         artist: current?.artist || 'Unknown Artist',
         album: current?.album || '',
         artworkUri: current?.coverImageUri || '',
+        mediaId: current?.id || '',
       });
     },
     setActiveForLockScreen: (active: boolean, metadata?: any, _options?: any) => {
@@ -97,8 +98,9 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       durationSV.value = duration;
 
+      // Scrubber/lyrics read positionSV. Zustand only needs ~1 Hz for modals / bridge.
       const now = Date.now();
-      if (now - lastZustandUpdateRef.current >= 500) {
+      if (now - lastZustandUpdateRef.current >= 1000) {
         lastZustandUpdateRef.current = now;
         const posStore = usePositionStore.getState();
         if (posStore.position !== position || posStore.duration !== duration) {
@@ -123,6 +125,13 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
+    // Media3 auto-advanced into a prepared next item — sync the store without re-load.
+    const advancedSub = NativeAudioPlayer.addListener('onTrackAdvanced', (event: { mediaId?: string }) => {
+      const mediaId = event?.mediaId;
+      if (!mediaId) return;
+      usePlayerStore.getState().adoptPreparedTrack(mediaId);
+    });
+
     const commandSub = NativeAudioPlayer.addListener('onRemoteCommand', (event: any) => {
       if (__DEV__) console.log('[PlayerContext] Android native remote command:', event.command);
       const store = usePlayerStore.getState();
@@ -135,6 +144,7 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return () => {
       statusSub.remove();
+      advancedSub.remove();
       commandSub.remove();
     };
   }, [endHandledForSongIdRef]);
@@ -209,7 +219,7 @@ const IosPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     durationSV.value = duration;
 
     const now = Date.now();
-    if (now - lastZustandUpdateRef.current >= 500) {
+    if (now - lastZustandUpdateRef.current >= 1000) {
       lastZustandUpdateRef.current = now;
       const posStore = usePositionStore.getState();
       if (posStore.position !== currentTime || posStore.duration !== duration) {

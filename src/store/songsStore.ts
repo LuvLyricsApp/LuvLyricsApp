@@ -86,19 +86,22 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
         }
       },
       
-      // Add new song
+      // Add new song — patch the list in place (same pattern as updateSong).
+      // Full fetchSongs() after every download was a multi-hundred-row SQLite round-trip.
       addSong: async (song: Song) => {
-        set({ isLoading: true, error: null });
         try {
           if (__DEV__) console.log('[STORE] Adding song:', song.title);
           await queries.insertSong(song);
-          await get().fetchSongs();
-          set({ isLoading: false });
+          set(state => {
+            if (state.songs.some(s => s.id === song.id)) {
+              return { songs: state.songs.map(s => (s.id === song.id ? song : s)), error: null };
+            }
+            return { songs: [song, ...state.songs], error: null };
+          });
         } catch (error) {
           console.error('[STORE] Add error:', error);
-          set({ 
-            error: error instanceof Error ? error.message : 'Failed to add song', 
-            isLoading: false 
+          set({
+            error: error instanceof Error ? error.message : 'Failed to add song',
           });
         }
       },
@@ -145,8 +148,6 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
           if (playerState.currentSong?.id === id) {
               playerState.reset();
           }
-
-          await get().fetchSongs();
         } catch (error) {
           set({ 
             error: error instanceof Error ? error.message : 'Failed to delete song', 
