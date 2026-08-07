@@ -96,7 +96,7 @@ export const parseTimestampedLyrics = (rawText: string): LyricLine[] => {
       // Clean the line text by removing ALL timestamps and common separators
       let cleanedText = line.replace(TIMESTAMP_REGEX, '').trim();
       // Remove leading/trailing symbols commonly used as separators (-, :, |, .)
-      cleanedText = cleanedText.replace(/^[ -:.|]+|[ -:.|]+$/g, '').trim();
+      cleanedText = cleanedText.replace(/(^[ -:.|]+)|([ -:.|]+$)/g, '').trim();
 
       if (cleanedText.length > 0) {
         // Inline timestamp with text

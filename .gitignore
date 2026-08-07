@@ -67,3 +67,7 @@ GoogleService-Info.plist
 # Keep sensitive/generated android files out even after un-ignoring parents
 android/app/debug.keystore
 android/app/release.keystore
+
+# Built release artifacts — too large for git, rebuild with gradle instead
+*.apk
+*.aab

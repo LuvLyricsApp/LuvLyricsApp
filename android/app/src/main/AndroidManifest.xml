@@ -41,9 +41,15 @@
       </intent-filter>
     </activity>
 
-    <!-- Foreground service for ExoPlayer audio playback with MediaStyle notification -->
+    <!-- Media3 session service — supplies the system media notification, lock
+         screen controls, Bluetooth/Android Auto. The intent-filter is required
+         for Media3 to discover the session. -->
     <service android:name=".services.PlaybackService"
         android:foregroundServiceType="mediaPlayback"
-        android:exported="false"/>
+        android:exported="true">
+      <intent-filter>
+        <action android:name="androidx.media3.session.MediaSessionService"/>
+      </intent-filter>
+    </service>
   </application>
 </manifest>

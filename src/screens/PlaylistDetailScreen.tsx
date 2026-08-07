@@ -153,7 +153,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         themeColors = ['#0D0D0D', '#181818', '#0D0D0D'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0E1722', '#1E2A3A', '#0E1722'];
+        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-blue') {
         themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];
@@ -493,16 +493,16 @@ export const PlaylistDetailScreen: React.FC = () => {
   }
 
   const menuOptions: MenuOption[] = [
-    { 
-        label: 'Choose from Library', 
-        icon: 'images', 
-        onPress: handlePickLibrary 
+    {
+        label: 'Choose from Library',
+        icon: 'images',
+        onPress: () => { handlePickLibrary(); }
     },
-    { 
-        label: 'Reset to Default', 
-        icon: 'refresh', 
+    {
+        label: 'Reset to Default',
+        icon: 'refresh',
         isDestructive: true,
-        onPress: handleResetCover 
+        onPress: () => { handleResetCover(); }
     }
   ];
 
@@ -683,12 +683,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                             style={styles.playButtonLarge} 
                             onPress={() => {
                                 if (activeIsPlaying) {
-                                    // Optimistic Update
-                                    const nextState = !isPlaying;
-                                    usePlayerStore.getState().setIsPlaying(nextState);
-
-                                    if (isPlaying) player?.pause();
-                                    else player?.play();
+                                    usePlayerStore.getState().requestPlayback(!isPlaying);
                                 } else {
                                     // Start from first song
                                     if (songs.length > 0) {

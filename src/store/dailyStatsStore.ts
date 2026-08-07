@@ -6,7 +6,19 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startOfDay, subDays, format } from 'date-fns';
+
+// Local-time YYYY-MM-DD key. Must stay local rather than toISOString() (UTC), so
+// day boundaries follow the user's clock and match already-persisted keys.
+const dayKey = (d: Date = new Date()): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// setDate() rolls over month/year boundaries and is DST-safe, unlike subtracting
+// a fixed 86400000ms.
+const yesterdayKey = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return dayKey(d);
+};
 
 interface DailyStatsState {
   // Map of date (YYYY-MM-DD) -> { songId: playCount }
@@ -24,7 +36,7 @@ export const useDailyStatsStore = create<DailyStatsState>()(
       dailyPlays: {},
 
       incrementDailyPlay: (songId: string) => {
-        const today = format(startOfDay(new Date()), 'yyyy-MM-dd');
+        const today = dayKey();
         
         set((state) => {
           const currentDayStats = state.dailyPlays[today] || {};
@@ -46,13 +58,11 @@ export const useDailyStatsStore = create<DailyStatsState>()(
       },
 
       getTopSongOfYesterday: () => {
-        const yesterday = format(subDays(startOfDay(new Date()), 1), 'yyyy-MM-dd');
-        return getTopSongForDate(get().dailyPlays, yesterday);
+        return getTopSongForDate(get().dailyPlays, yesterdayKey());
       },
 
       getTopSongOfToday: () => {
-        const today = format(startOfDay(new Date()), 'yyyy-MM-dd');
-        return getTopSongForDate(get().dailyPlays, today);
+        return getTopSongForDate(get().dailyPlays, dayKey());
       },
 
       resetStats: () => set({ dailyPlays: {} }),

@@ -22,7 +22,6 @@
         ],
         "NSLocalNetworkUsageDescription": "LuvLyrics uses your local network to connect to the desktop app.",
         "UIBackgroundModes": [
-          "audio",
           "audio"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -58,12 +57,6 @@
       "@sentry/react-native/expo",
       "expo-sqlite",
       "expo-audio",
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow LuvLyrics to access your microphone for audio recording."
-        }
-      ],
       [
         "expo-image-picker",
         {

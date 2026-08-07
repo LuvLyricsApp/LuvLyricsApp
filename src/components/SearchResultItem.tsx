@@ -37,11 +37,11 @@ const SearchResultItem: React.FC<SearchResultItemProps> = React.memo(({ item, on
       style={[styles.resultItem, { backgroundColor: isDark ? 'transparent' : colors.card }]}
       onPress={handlePress}
     >
-      <View style={[styles.resultThumbnail, { backgroundColor: isDark ? '#0B1F3A' : colors.cardHover }]}>
+      <View style={[styles.resultThumbnail, { backgroundColor: isDark ? '#1A1A1A' : colors.cardHover }]}>
         {item.coverImageUri ? (
           <Image source={{ uri: item.coverImageUri }} style={StyleSheet.absoluteFill} />
         ) : (
-          <View style={[styles.defaultResultThumbnail, { backgroundColor: isDark ? '#0B1F3A' : colors.cardHover }]}>
+          <View style={[styles.defaultResultThumbnail, { backgroundColor: isDark ? '#1A1A1A' : colors.cardHover }]}>
             <Ionicons name="disc" size={24} color={isDark ? 'rgba(255,255,255,0.3)' : colors.textMuted} />
           </View>
         )}

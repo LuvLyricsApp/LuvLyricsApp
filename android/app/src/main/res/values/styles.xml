@@ -1,6 +1,12 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
   <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-    <item name="android:enforceNavigationBarContrast" tools:targetApi="29">true</item>
+    <!-- The app draws its own blurred tab bar behind the system navigation, so
+         Android must not paint its contrast scrim on top of it. Without this the
+         OS overlays a grey band over the gesture pill / 3-button strip. -->
+    <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <!-- Dark UI behind the bar, so the system icons must stay light. -->
+    <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#000000</item>

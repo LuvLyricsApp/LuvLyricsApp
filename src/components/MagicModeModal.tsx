@@ -37,7 +37,7 @@ export const MagicModeModal: React.FC<MagicModeModalProps> = ({
             onPress={onMagicMode}
           >
             <View style={styles.modeIconContainer}>
-              <Ionicons name="create-outline" size={32} color="#2F8CFF" />
+              <Ionicons name="create-outline" size={32} color="#EDEDED" />
             </View>
             <View style={styles.modeTextContainer}>
               <Text style={styles.modeTitle}>🪄 Magic</Text>
@@ -55,7 +55,7 @@ export const MagicModeModal: React.FC<MagicModeModalProps> = ({
             onPress={onPureMagicMode}
           >
             <View style={styles.modeIconContainer}>
-              <Ionicons name="sparkles" size={32} color="#2F8CFF" />
+              <Ionicons name="sparkles" size={32} color="#EDEDED" />
             </View>
             <View style={styles.modeTextContainer}>
               <Text style={styles.modeTitle}>✨ Pure Magic</Text>

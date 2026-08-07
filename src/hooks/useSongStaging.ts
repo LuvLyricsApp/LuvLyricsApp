@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { Audio } from 'expo-av';
+﻿import { useState, useCallback, useEffect, useRef } from 'react';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { downloadManager } from '../services/DownloadManager';
 import { useSongsStore } from '../store/songsStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -38,7 +38,7 @@ export interface StagingSong {
 export const useSongStaging = () => {
     const [lyricFetchError, setLyricFetchError] = useState<string | null>(null);
     const [staging, setStaging] = useState<StagingSong | null>(null);
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [sound, setSound] = useState<AudioPlayer | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const addSong = useSongsStore(state => state.addSong);
     const fetchSongs = useSongsStore(state => state.fetchSongs);
@@ -48,7 +48,7 @@ export const useSongStaging = () => {
   useEffect(() => {
     return () => {
       if (sound) {
-        sound.unloadAsync();
+        sound.remove();
       }
     };
   }, [sound]);
@@ -63,25 +63,23 @@ export const useSongStaging = () => {
       try {
           if (sound) {
               if (isPlaying) {
-                  await sound.pauseAsync();
+                  sound.pause();
                   setIsPlaying(false);
               } else {
-                  await sound.playAsync();
+                  sound.play();
                   setIsPlaying(true);
               }
           } else {
               // For Cobalt, the URL is direct and ready
-              const { sound: newSound } = await Audio.Sound.createAsync(
-                  { uri: staging.selectedQuality.url },
-                  { shouldPlay: true }
-              );
+              const newSound = createAudioPlayer({ uri: staging.selectedQuality.url });
               setSound(newSound);
+              newSound.play();
               setIsPlaying(true);
-              
-              newSound.setOnPlaybackStatusUpdate((status) => {
+
+              newSound.addListener('playbackStatusUpdate', (status) => {
                   if (status.isLoaded && status.didJustFinish) {
                       setIsPlaying(false);
-                      newSound.setPositionAsync(0);
+                      newSound.seekTo(0);
                   }
               });
           }
@@ -97,7 +95,7 @@ export const useSongStaging = () => {
     abortRef.current = abort;
 
     if (sound) {
-        await sound.unloadAsync();
+        sound.remove();
         setSound(null);
         setIsPlaying(false);
     }
@@ -135,7 +133,7 @@ export const useSongStaging = () => {
         progress: 0,
     });
 
-    // Fetch lyrics in background — cancelled if user stages a different song
+    // Fetch lyrics in background â€” cancelled if user stages a different song
     const { results, error } = await fetchStagingLyrics(
         song.title,
         song.artist,
@@ -174,7 +172,7 @@ export const useSongStaging = () => {
 
       if (updates.selectedQuality) {
            if (sound) {
-              await sound.unloadAsync();
+              sound.remove();
               setSound(null);
               setIsPlaying(false);
           }

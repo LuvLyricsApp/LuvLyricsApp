@@ -11,18 +11,20 @@ import React, { useRef } from 'react';
 import { View, StyleSheet, Dimensions, Image as RNImage, Animated } from 'react-native';
 import { Canvas, Rect, Oval, BlurMask, vec, Group } from '@shopify/react-native-skia';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSharedValue, withRepeat, withTiming, useDerivedValue, Easing } from 'react-native-reanimated';
+import ReAnimated, { useSharedValue, withRepeat, withTiming, useDerivedValue, useAnimatedStyle, Easing, type SharedValue } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Extended height for smooth fade
-const AURORA_HEIGHT = SCREEN_HEIGHT * 1.0; // Increased to full height per user request
+// Colour occupies the top half only; the rest of the screen is the base colour
+// (black in cover-art mode). The fadeToBlack gradient below spans this height,
+// so the artwork has fully dissolved by the midpoint rather than at the bottom.
+const AURORA_HEIGHT = SCREEN_HEIGHT * 0.5;
 
 // REFINED COLORS: Brighter & Saturated
 const COLOR_1 = '#EA7980'; // Saturated but slightly softer Peach/Rose
 const COLOR_2 = '#1D728F'; // Saturated Deep Teal Blue
 const COLOR_3 = '#155252'; // Richer Dark Evergreen
-const BASE_DARK = '#020A16';
+const BASE_DARK = '#000000';
 
 export type AuroraPalette = 'library' | 'search' | 'settings' | 'nowPlaying';
 
@@ -32,6 +34,13 @@ interface AuroraBackgroundProps {
   imageUri?: string | null; // Optional blurred image background
   animated?: boolean; // Toggle animation
   isSolid?: boolean; // Toggle solid rendering with no gradients/blobs
+  /**
+   * 1 = artwork fully visible, 0 = fully dissolved to the base colour.
+   * Only the artwork/blob layer is faded — the base colour and the fade-to-black
+   * gradient stay opaque, so the blend looks identical at every value instead of
+   * dissolving along with the thing it is supposed to be blending.
+   */
+  artworkOpacity?: SharedValue<number>;
 }
 
 const AuroraCanvas: React.FC<{
@@ -88,6 +97,7 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   imageUri,
   animated = false,
   isSolid = false,
+  artworkOpacity,
 }) => {
   const rotation = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -111,10 +121,19 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
     ? [colors[0], colors[1], colors[2] || colors[0]]
     : [COLOR_1, COLOR_2, COLOR_3];
 
+  // Cover-art mode: an artwork image with no explicit palette. Callers leave
+  // `colors` undefined here, which would otherwise fall back to the default
+  // aurora blobs (teal COLOR_2) over BASE_DARK (navy) — showing as a blue band
+  // between the artwork and the black list background while scrolling.
+  // In this mode the artwork blends straight into black instead.
+  const isCoverArtMode = !!imageUri && !(colors && colors.length >= 1);
+
   // Base color: use the first custom color as backing when colors are provided,
   // so solid modes (Spotify Grey, purest black, dark navy, etc.) don't bleed BASE_DARK's blue tint.
-  // Falls back to BASE_DARK only for the default aurora palette.
-  const baseColor = (colors && colors.length >= 1) ? colors[0] : BASE_DARK;
+  // Falls back to BASE_DARK only for the default aurora palette with no artwork.
+  const baseColor = isCoverArtMode
+    ? '#000000'
+    : (colors && colors.length >= 1) ? colors[0] : BASE_DARK;
 
   // Cross-fade between previous and new colors
   const prevColorsRef = useRef<string[]>(activeColors);
@@ -143,6 +162,10 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   const [pc1, pc2, pc3] = prevColorsRef.current;
   const [c1, c2, c3] = activeColors;
 
+  const artworkStyle = useAnimatedStyle(() => ({
+    opacity: artworkOpacity ? artworkOpacity.value : 1,
+  }));
+
   if (isSolid) {
     return (
       <View style={[styles.container, { backgroundColor: baseColor }]} pointerEvents="none" />
@@ -152,26 +175,39 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: baseColor }]} pointerEvents="none">
       <View style={[styles.auroraArea, { backgroundColor: baseColor }]}>
-        {/* Previous colors layer — always underneath */}
-        <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+        {/* Aurora blobs are skipped in cover-art mode — their colours are what
+            produced the blue band under the artwork. */}
+        {/* Everything inside this wrapper is the colour itself, and only it is
+            faded on scroll. The gradient and base colour below stay opaque. */}
+        <ReAnimated.View style={[StyleSheet.absoluteFill, artworkStyle]}>
+          {!isCoverArtMode && (
+            <>
+              {/* Previous colors layer — always underneath */}
+              <AuroraCanvas c1={pc1} c2={pc2} c3={pc3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
 
-        {/* New colors layer — fades in on top */}
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
-          <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
-        </Animated.View>
+              {/* New colors layer — fades in on top */}
+              <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
+                <AuroraCanvas c1={c1} c2={c2} c3={c3} t1={t1} t2={t2} t3={t3} baseColor={baseColor} />
+              </Animated.View>
+            </>
+          )}
 
-        {imageUri && (
-          <RNImage
-            source={{ uri: imageUri }}
-            style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT, opacity: 0.6, transform: [{ scale: 1.2 }] }]}
-            blurRadius={90}
-            resizeMode="cover"
-          />
-        )}
+          {imageUri && (
+            <RNImage
+              source={{ uri: imageUri }}
+              style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT, opacity: 0.6, transform: [{ scale: 1.2 }] }]}
+              blurRadius={90}
+              resizeMode="cover"
+            />
+          )}
+        </ReAnimated.View>
 
+        {/* Fully black by 0.8 — that lands just above the first song row, so the
+            list itself never sits on top of the colour blend. The last stop
+            holds solid black through to the bottom. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.05)', 'rgba(0,0,0,0.6)', baseColor]}
-          locations={[0.1, 0.45, 0.8, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.75)', baseColor, baseColor]}
+          locations={[0.05, 0.4, 0.65, 0.8, 1]}
           style={styles.fadeToBlack}
         />
       </View>

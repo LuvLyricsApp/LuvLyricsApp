@@ -21,7 +21,7 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { TabScreenProps } from '../types/navigation';
+import { RootStackScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
@@ -254,7 +254,7 @@ const useSettingsDividerColor = () => {
     case 'grey':
       return '#282828';
     case 'theme-subtle':
-      return '#1E2A3A';
+      return '#1F1F1F';
     case 'theme-blue':
       return '#1C3E6B';
     default:
@@ -375,7 +375,7 @@ const PINNABLE_ITEMS: Record<PinId, {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-type Props = TabScreenProps<'Settings'>;
+type Props = RootStackScreenProps<'Settings'>;
 
 const SettingsScreen: React.FC<Props> = () => {
   const insets = useSafeAreaInsets();
@@ -434,7 +434,7 @@ const SettingsScreen: React.FC<Props> = () => {
         themeColors = ['#121212', '#212121', '#121212'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0E1722', '#1E2A3A', '#0E1722'];
+        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-blue') {
         themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];
@@ -738,6 +738,34 @@ const SettingsScreen: React.FC<Props> = () => {
           onPress={() => {}}
         />
         <SettingsRowSwitch icon="speedometer-outline" label="Show FPS Counter" value={settings.showPerformanceHUD} onToggle={settings.setShowPerformanceHUD} />
+        <SettingsRowSwitch icon="flask-outline" label="Beta: YouTube Video Preview" value={settings.ytVideoPreview} onToggle={settings.setYtVideoPreview} />
+        {settings.ytVideoPreview && (
+          <View style={styles.apiKeyContainer}>
+            <View style={styles.apiKeyHeader}>
+              <Ionicons name="key-outline" size={16} color="#A78BFA" />
+              <Text style={styles.apiKeyLabel}>YouTube API Key</Text>
+              {settings.youtubeApiKey ? (
+                <View style={styles.apiKeySaved}>
+                  <Ionicons name="checkmark-circle" size={14} color="#30D158" />
+                  <Text style={styles.apiKeySavedText}>Saved</Text>
+                </View>
+              ) : null}
+            </View>
+            <TextInput
+              style={styles.apiKeyInput}
+              value={settings.youtubeApiKey}
+              onChangeText={settings.setYoutubeApiKey}
+              placeholder="AIzaSy..."
+              placeholderTextColor="#555"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={false}
+            />
+            <Text style={styles.apiKeyHint}>
+              Get a free key at console.cloud.google.com → Enable YouTube Data API v3 → Credentials → Create API Key
+            </Text>
+          </View>
+        )}
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
@@ -980,7 +1008,7 @@ const SettingsScreen: React.FC<Props> = () => {
               )}
             </View>
             <Pressable style={styles.selectAllButton} onPress={toggleSelectAll}>
-              <Ionicons name={selectedFiles.size === availableAudioFiles.length ? 'checkbox' : 'square-outline'} size={24} color="#007AFF" />
+              <Ionicons name={selectedFiles.size === availableAudioFiles.length ? 'checkbox' : 'square-outline'} size={24} color="#EDEDED" />
               <Text style={styles.selectAllText}>Select All</Text>
             </Pressable>
             <ScrollView style={styles.selectionList} keyboardShouldPersistTaps="handled">
@@ -992,7 +1020,7 @@ const SettingsScreen: React.FC<Props> = () => {
               ) : (
                 filteredAudioFiles.map(file => (
                   <Pressable key={file.uri} style={styles.selectionItem} onPress={() => toggleFileSelection(file.uri)}>
-                    <Ionicons name={selectedFiles.has(file.uri) ? 'checkbox' : 'square-outline'} size={24} color={selectedFiles.has(file.uri) ? '#007AFF' : Colors.textSecondary} />
+                    <Ionicons name={selectedFiles.has(file.uri) ? 'checkbox' : 'square-outline'} size={24} color={selectedFiles.has(file.uri) ? '#EDEDED' : Colors.textSecondary} />
                     <View style={styles.selectionItemInfo}>
                       <Text style={styles.selectionItemTitle} numberOfLines={1}>{file.filename.replace(/\.[^/.]+$/, '')}</Text>
                       <Text style={styles.selectionItemArtist} numberOfLines={1}>{file.artist || file.album || 'Unknown'}</Text>
@@ -1070,7 +1098,7 @@ const SettingsScreen: React.FC<Props> = () => {
                       style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: 'rgba(0,122,255,0.1)' }}
                       onPress={() => unhideSong(song.id, false)}
                     >
-                      <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>{SettingsStrings.unhide}</Text>
+                      <Text style={{ color: '#EDEDED', fontWeight: 'bold' }}>{SettingsStrings.unhide}</Text>
                     </Pressable>
                   </View>
                 ))
@@ -1191,7 +1219,7 @@ const styles = StyleSheet.create({
   nameInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, fontSize: 15, color: Colors.textPrimary, marginBottom: 18 },
   nameModalButtons: { flexDirection: 'row', gap: 10 },
   nameModalButton: { flex: 1, padding: 13, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
-  nameModalButtonPrimary: { backgroundColor: '#007AFF' },
+  nameModalButtonPrimary: { backgroundColor: '#2E2E2E' },
   nameModalButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   nameModalButtonTextPrimary: { color: '#fff' },
   pairingHint: { color: Colors.textSecondary, fontSize: 13, marginBottom: 10 },
@@ -1212,7 +1240,7 @@ const styles = StyleSheet.create({
   emptySearchContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
   emptySearchText: { fontSize: 14, color: Colors.textMuted, textAlign: 'center' },
   selectAllButton: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  selectAllText: { fontSize: 15, fontWeight: '600', color: '#007AFF' },
+  selectAllText: { fontSize: 15, fontWeight: '600', color: '#EDEDED' },
   selectionList: { maxHeight: 400 },
   selectionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 12 },
   selectionItemInfo: { flex: 1 },
@@ -1221,10 +1249,39 @@ const styles = StyleSheet.create({
   selectionActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 18 },
   selectionButton: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
   selectionButtonCancel: { backgroundColor: 'rgba(255,255,255,0.1)' },
-  selectionButtonImport: { backgroundColor: '#007AFF' },
+  selectionButtonImport: { backgroundColor: '#2E2E2E' },
   selectionButtonDisabled: { backgroundColor: 'rgba(0,122,255,0.3)' },
   selectionButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   selectionButtonTextImport: { color: '#fff' },
+
+  // Beta: YouTube API key
+  apiKeyContainer: {
+    marginTop: 4, marginBottom: 4,
+    paddingHorizontal: 4, paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  apiKeyHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10,
+  },
+  apiKeyLabel: {
+    flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textPrimary,
+  },
+  apiKeySaved: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  apiKeySavedText: {
+    fontSize: 12, color: '#30D158', fontWeight: '600',
+  },
+  apiKeyInput: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 13, color: Colors.textPrimary, fontFamily: 'monospace',
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
+    marginBottom: 8,
+  },
+  apiKeyHint: {
+    fontSize: 11, color: Colors.textSecondary, lineHeight: 16,
+  },
 });
 
 export default SettingsScreen;

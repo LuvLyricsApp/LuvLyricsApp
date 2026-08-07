@@ -1,61 +1,92 @@
 package com.lyricflow.app.services
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
-import android.os.Build
-import android.os.IBinder
 import android.util.Log
-import androidx.core.app.NotificationCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import com.lyricflow.app.modules.PlayerBridge
 
 private const val TAG = "LyrFlow"
-private const val CHANNEL_ID = "lyricflow_playback"
-private const val NOTIFICATION_ID = 1
 
-class PlaybackService : android.app.Service() {
+/**
+ * Media3 session-backed playback service.
+ *
+ * Extending MediaSessionService (rather than a bare Service with a hand-rolled
+ * notification) is what gives the app the real system media experience: artwork
+ * and transport controls on the lock screen and in the shade, Bluetooth headset
+ * buttons, Android Auto, and Wear — all driven by the session rather than by us.
+ * Media3 owns the notification and the foreground promotion; we must not call
+ * startForeground() ourselves or the two will fight.
+ */
+class PlaybackService : MediaSessionService() {
+
+    private var mediaSession: MediaSession? = null
     private lateinit var exoPlayer: ExoPlayer
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "PlaybackService.onCreate() start")
 
-        // Create notification channel (required Android 8+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Music Playback",
-                NotificationManager.IMPORTANCE_LOW
+        exoPlayer = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                /* handleAudioFocus = */ true
             )
-            getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(channel)
-        }
-
-        // Call startForeground() immediately so Android doesn't kill us
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("LuvLyrics")
-            .setContentText("Playing music")
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setSilent(true)
+            // Pause when headphones are unplugged, as every native player does.
+            .setHandleAudioBecomingNoisy(true)
             .build()
-        startForeground(NOTIFICATION_ID, notification)
-
-        exoPlayer = ExoPlayer.Builder(this).build()
         exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
+
+        val sessionActivity = packageManager
+            .getLaunchIntentForPackage(packageName)
+            ?.let { launchIntent ->
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    launchIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            }
+
+        // The session drives the notification, so it gets the queue-aware wrapper.
+        // PlayerBridge keeps the raw ExoPlayer for status polling and seeks.
+        val sessionPlayer = QueueForwardingPlayer(exoPlayer)
+        mediaSession = MediaSession.Builder(this, sessionPlayer)
+            .apply { sessionActivity?.let { setSessionActivity(it) } }
+            .build()
+
         PlayerBridge.setPlayer(exoPlayer, this)
-        Log.d(TAG, "PlaybackService.onCreate() done — player registered")
+        Log.d(TAG, "PlaybackService.onCreate() done — media session ready")
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the app away while paused should tear the service down rather
+        // than leave a dead notification pinned.
+        val player = mediaSession?.player
+        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+            stopSelf()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         Log.d(TAG, "PlaybackService.onDestroy()")
         PlayerBridge.clearPlayer()
-        exoPlayer.release()
+        mediaSession?.run {
+            player.release()
+            release()
+        }
+        mediaSession = null
         super.onDestroy()
     }
 }

@@ -6,7 +6,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RootStackScreenProps } from '../types/navigation';
+import { TabScreenProps } from '../types/navigation';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -17,7 +17,7 @@ import SearchFilterChips from '../components/SearchFilterChips';
 import SearchRecentSearches from '../components/SearchRecentSearches';
 import SearchResultsList from '../components/SearchResultsList';
 
-type Props = RootStackScreenProps<'Search'>;
+type Props = TabScreenProps<'Search'>;
 
 const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const colors = useThemeColors();
@@ -107,7 +107,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   }, [navigation, setCurrentSong, setMiniPlayerHidden, playInMiniPlayerOnly, playerCurrentSong?.id]);
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#020A16' : colors.background }]}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#000000' : colors.background }]}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <SearchHeader
           query={query}

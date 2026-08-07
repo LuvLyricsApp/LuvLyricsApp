@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center' },
   badgeLrc: { backgroundColor: '#0A84FF' },
   badgeSaavn: { backgroundColor: '#24D366' },
-  badgeLyrica: { backgroundColor: '#2F8CFF' },
+  badgeLyrica: { backgroundColor: '#1A1A1A' },
   badgeGenius: { backgroundColor: '#FFD60A' },
   badgeSynced: { backgroundColor: '#30D158' },
   badgeHigh: { backgroundColor: 'rgba(48,209,88,0.2)', borderWidth: 1, borderColor: '#30D158' },

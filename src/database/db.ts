@@ -36,7 +36,7 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   }
 
   // Wait for in-progress initialization
-  if (initPromise) {
+  if (initPromise !== null) {
     log('Waiting for in-progress initialization...');
     return initPromise;
   }
@@ -172,6 +172,18 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS lyrics_scan_jobs (
+      song_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      duration INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      is_forced_synced INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title);
     CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist);
     CREATE INDEX IF NOT EXISTS idx_lyrics_song_id ON lyrics(song_id);
@@ -244,6 +256,11 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
         }
       }
     }
+    if (!columns.some(c => c.name === 'youtube_video_id')) {
+      log('Adding youtube_video_id column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN youtube_video_id TEXT');
+      log('Migration complete');
+    }
   } catch (e) {
     log('Migration check failed', e);
     throw e; // RETHROW to ensure init fails if schema is broken
@@ -256,7 +273,7 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
 export const closeDatabase = async (): Promise<void> => {
   log('closeDatabase() called');
   
-  if (initPromise) {
+  if (initPromise !== null) {
     log('Waiting for init to complete before closing...');
     await initPromise.catch(() => undefined);
   }

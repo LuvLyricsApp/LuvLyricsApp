@@ -17,7 +17,6 @@ class ExpoModulesPackageList : ModulesProvider {
         @JvmStatic
         fun getPackageList(): List<Package> = listOf(
             expo.modules.adapters.react.ReactAdapterPackage(),
-            expo.modules.av.AVPackage(),
             expo.modules.constants.ConstantsPackage(),
             expo.modules.core.BasePackage(),
             expo.modules.devlauncher.DevLauncherPackage(),
@@ -36,8 +35,6 @@ class ExpoModulesPackageList : ModulesProvider {
         expo.modules.fetch.ExpoFetchModule::class.java,
         expo.modules.asset.AssetModule::class.java,
         expo.modules.audio.AudioModule::class.java,
-        expo.modules.av.video.VideoViewModule::class.java,
-        expo.modules.av.AVModule::class.java,
         expo.modules.blur.BlurModule::class.java,
         expo.modules.clipboard.ClipboardModule::class.java,
         expo.modules.constants.ConstantsModule::class.java,
@@ -62,6 +59,7 @@ class ExpoModulesPackageList : ModulesProvider {
         com.lyricflow.app.modules.StartupModule::class.java,
         com.lyricflow.app.modules.MainPlayerModule::class.java,
         com.lyricflow.app.modules.LuvsPlayerModule::class.java,
+        com.lyricflow.app.modules.LuvsPagerModule::class.java,
         com.lyricflow.app.modules.DownloaderModule::class.java,
         com.lyricflow.app.modules.SearchModule::class.java,
         com.lyricflow.app.modules.PaletteModule::class.java,

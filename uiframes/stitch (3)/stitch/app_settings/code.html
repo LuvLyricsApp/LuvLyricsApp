@@ -153,7 +153,7 @@
 <div class="settings-row border-b border-divider/50 cursor-pointer -mx-4 px-4">
 <span class="material-symbols-outlined text-gray-400 text-2xl mr-4">lyrics</span>
 <span class="text-base font-medium flex-1">Auto-Scroll Lyrics</span>
-<div class="ios-switch active" onclick="this.classList.toggle('active')">
+<div class="ios-switch active" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('active')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.classList.toggle('active')}">
 <div class="ios-switch-bg"></div>
 <div class="ios-switch-knob"></div>
 </div>
@@ -161,7 +161,7 @@
 <div class="settings-row border-b border-divider/50 cursor-pointer -mx-4 px-4">
 <span class="material-symbols-outlined text-gray-400 text-2xl mr-4">smart_display</span>
 <span class="text-base font-medium flex-1">Show Music Videos</span>
-<div class="ios-switch" onclick="this.classList.toggle('active')">
+<div class="ios-switch" role="switch" aria-checked="false" tabindex="0" onclick="this.classList.toggle('active')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.classList.toggle('active')}">
 <div class="ios-switch-bg"></div>
 <div class="ios-switch-knob"></div>
 </div>
@@ -182,7 +182,7 @@
 <div class="settings-row border-b border-divider/50 cursor-pointer -mx-4 px-4">
 <span class="material-symbols-outlined text-gray-400 text-2xl mr-4">download</span>
 <span class="text-base font-medium flex-1">Smart Downloads</span>
-<div class="ios-switch active" onclick="this.classList.toggle('active')">
+<div class="ios-switch active" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('active')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.classList.toggle('active')}">
 <div class="ios-switch-bg"></div>
 <div class="ios-switch-knob"></div>
 </div>

@@ -26,11 +26,12 @@ class MainPlayerModule : Module() {
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
-            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, isBuffering, didJustFinish ->
+            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, playWhenReady, isBuffering, didJustFinish ->
                 sendEvent("onPlaybackStatus", mapOf(
                     "position" to position,
                     "duration" to duration,
                     "isPlaying" to isPlaying,
+                    "playWhenReady" to playWhenReady,
                     "isBuffering" to isBuffering,
                     "didJustFinish" to didJustFinish
                 ))
@@ -49,9 +50,16 @@ class MainPlayerModule : Module() {
             Log.d(TAG, "load() called uri=$uri")
             val context = appContext.reactContext ?: throw Exception("React context not available")
 
+            // startService, not startForegroundService: MediaSessionService posts
+            // the media notification and promotes itself to foreground when playback
+            // begins. Starting it as a foreground service here would demand a
+            // startForeground() call within ~5s that never comes while the user is
+            // merely loading a track, which Android kills the process for.
+            // load() is always driven by a user action, so the app is in the
+            // foreground and a plain startService is permitted.
             val intent = Intent(context, PlaybackService::class.java)
-            context.startForegroundService(intent)
-            Log.d(TAG, "load() startForegroundService sent")
+            context.startService(intent)
+            Log.d(TAG, "load() startService sent")
 
             var retries = 0
             while (PlayerBridge.getPlayer() == null && retries < 100) {

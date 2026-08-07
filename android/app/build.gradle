@@ -168,6 +168,9 @@ dependencies {
     // Palette API for Module F (album art color extraction)
     implementation "androidx.palette:palette-ktx:1.0.0"
 
+    // ViewPager2 backs the native Luvs reels pager (LuvsPagerView)
+    implementation "androidx.viewpager2:viewpager2:1.1.0"
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

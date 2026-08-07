@@ -130,6 +130,7 @@ export const getSongById = async (id: string): Promise<Song | null> => {
     audio_uri: string | null;
     is_liked: number | null;
     is_hidden: number | null;
+    youtube_video_id: string | null;
   }>('SELECT * FROM songs WHERE id = ?', [id]);
   
   if (!songRow) return null;
@@ -159,6 +160,7 @@ export const getSongById = async (id: string): Promise<Song | null> => {
     audioUri: songRow.audio_uri ?? undefined,
     isLiked: songRow.is_liked === 1,
     isHidden: songRow.is_hidden === 1,
+    youtubeVideoId: songRow.youtube_video_id ?? undefined,
     lyrics: normalizeLyrics(lyricsRows.map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
@@ -177,8 +179,8 @@ export const insertSong = async (song: Song): Promise<void> => {
     await db.runAsync(
       `INSERT OR REPLACE INTO songs
          (id, title, artist, album, gradient_id, duration, date_created, date_modified,
-          play_count, scroll_speed, lyrics_align, text_case, audio_uri, is_liked, cover_image_uri)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          play_count, scroll_speed, lyrics_align, text_case, audio_uri, is_liked, cover_image_uri, youtube_video_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         song.id,
         song.title,
@@ -195,6 +197,7 @@ export const insertSong = async (song: Song): Promise<void> => {
         song.audioUri ?? null,
         song.isLiked ? 1 : 0,
         song.coverImageUri ?? null,
+        song.youtubeVideoId ?? null,
       ]
     );
 
@@ -222,7 +225,7 @@ export const updateSong = async (song: Song): Promise<void> => {
       `UPDATE songs SET
          title = ?, artist = ?, album = ?, gradient_id = ?, duration = ?,
          date_modified = ?, scroll_speed = ?, lyrics_align = ?, text_case = ?,
-         cover_image_uri = ?, audio_uri = ?, is_liked = ?
+         cover_image_uri = ?, audio_uri = ?, is_liked = ?, youtube_video_id = ?
        WHERE id = ?`,
       [
         song.title,
@@ -237,6 +240,7 @@ export const updateSong = async (song: Song): Promise<void> => {
         song.coverImageUri ?? null,
         song.audioUri ?? null,
         song.isLiked ? 1 : 0,
+        song.youtubeVideoId ?? null,
         song.id,
       ]
     );
@@ -259,6 +263,15 @@ export const updateSong = async (song: Song): Promise<void> => {
     }
 
     log(`updateSong() completed`);
+  });
+};
+
+export const patchYoutubeVideoId = async (songId: string, videoId: string): Promise<void> => {
+  await withDbWrite(async (db) => {
+    await db.runAsync(
+      `UPDATE songs SET youtube_video_id = ? WHERE id = ?`,
+      [videoId, songId]
+    );
   });
 };
 

@@ -16,7 +16,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { Ionicons } from '@expo/vector-icons';
 
 const BUTTON_SIZE = 56;
-const PRIMARY = '#2F8CFF';
+const PRIMARY = '#EDEDED';
 const PULSE_SIZE = BUTTON_SIZE + 28;
 
 interface Props {
@@ -161,7 +161,7 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
 
   // Error state overrides colors briefly
   const hasError = !!error && !isListening;
-  const bgColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? '#1A1A2E' : '#FFFFFF'));
+  const bgColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? '#111111' : '#FFFFFF'));
   const iconColor = isListening ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.75)' : colors.textMuted);
   const borderColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'));
 

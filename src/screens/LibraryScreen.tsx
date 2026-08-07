@@ -13,6 +13,7 @@ import {
   InteractionManager,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabScreenProps } from '../types/navigation';
 import { useSongsStore } from '../store/songsStore';
@@ -41,7 +42,7 @@ import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { usePlaybackQueue } from '../hooks/usePlaybackQueue';
 import { FlashList, FlashListRef } from '@shopify/flash-list';
-import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, useDerivedValue, interpolate, Extrapolation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import LibraryHeader from '../components/LibraryHeader';
 import LibraryEmptyState from '../components/LibraryEmptyState';
@@ -56,6 +57,11 @@ const setSongItemLayout = (layout: SongItemLayout) => {
   layout.size = 80;
   layout.span = 1;
 };
+
+// Scroll distance over which the cover-art background dissolves to black.
+// Short on purpose — a small flick should resolve it fully, and scrolling back
+// to the top brings it straight back.
+const AURORA_FADE_DISTANCE = 140;
 
 type Props = TabScreenProps<'Library'>;
 
@@ -97,15 +103,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const [showEditInfoModal, setShowEditInfoModal] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editArtist, setEditArtist] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentlyPlayedMode, setRecentlyPlayedMode] = useState<RecentlyPlayedMode>('recent');
   const [selectedSongForArt, setSelectedSongForArt] = useState<Song | null>(null);
 
   const scrollY = useSharedValue(0);
   const lastSentFocusMode = useSharedValue(false);
   const flatListRef = React.useRef<FlashListRef<Song>>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
 
   const isSolidBg = libraryBackgroundMode === 'purest-black'
     || libraryBackgroundMode === 'grey'
@@ -113,11 +116,16 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     || libraryBackgroundMode === 'black'
     || libraryBackgroundMode === 'theme-blue';
 
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    if (isSolidBg) return { transform: [{ translateY: 0 }] };
-    // Parallax — background scrolls 1:1 with list
-    return { transform: [{ translateY: -scrollY.value }] };
-  });
+  // The header itself stays put and fully opaque — only the artwork inside it
+  // fades (see AuroraHeader's artworkOpacity). Fading the whole layer dissolved
+  // the fade-to-black gradient along with the colour, which broke the blend.
+  const headerAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 0 }] }));
+
+  const auroraFade = useDerivedValue(() =>
+    isSolidBg
+      ? 1
+      : interpolate(scrollY.value, [0, AURORA_FADE_DISTANCE], [1, 0], Extrapolation.CLAMP)
+  );
 
   const updateFocusMode = useCallback((shouldFocus: boolean) => {
     // Solid static backgrounds don't use focus-mode header hiding
@@ -144,7 +152,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const activeDownloadsCount = useDownloadQueueStore(state => state.queue.filter(i => i.status === 'downloading' || i.status === 'pending' || i.status === 'staging').length);
   const addToScanQueue = useLyricsScanQueueStore(state => state.addToQueue);
 
-  const filteredSongs = useSortedSongs(songs, searchQuery, 'recent', 'desc');
+  const filteredSongs = useSortedSongs(songs, '', 'recent', 'desc');
 
   const handleAddToQueue = useCallback((song: Song) => {
     const currentQueue = useLyricsScanQueueStore.getState().queue;
@@ -177,17 +185,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     setRecentlyPlayedMode((currentMode) => currentMode === 'recent' ? 'artist' : 'recent');
   }, [playerCurrentSongId]);
 
-  const handleSearchFocus = useCallback(() => {
-    if (headerHeight > 0) {
-      flatListRef.current?.scrollToOffset({ offset: headerHeight, animated: true });
-    }
-  }, [headerHeight]);
-
-  const handleSearchCancel = useCallback(() => {
-    setIsSearchFocused(false);
-    setSearchQuery('');
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
 
   const playSong = usePlaybackQueue({
     playInMiniPlayerOnly,
@@ -402,17 +399,34 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
       <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#000' : colors.background }]} />
       {isDark && (
         <Animated.View style={[StyleSheet.absoluteFill, headerAnimatedStyle]}>
-          <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} />
+          <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} artworkOpacity={auroraFade} />
         </Animated.View>
       )}
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {!isSearchFocused && (
+        {(
           <View style={styles.brandHeader}>
             <Pressable onPress={handleBrandPress} hitSlop={12} style={styles.brandPressable}>
               <Text style={[styles.brandName, { color: isDark ? '#fff' : colors.textPrimary, textShadowColor: isDark ? 'rgba(0,0,0,0.3)' : 'transparent' }]} numberOfLines={1}>
                 LuvLyrics
               </Text>
             </Pressable>
+            {/* Moved up from the old "All Songs" row so the list starts higher. */}
+            <View style={styles.brandActions}>
+              <Pressable style={styles.brandActionButton} onPress={() => setShowQueueModal(true)}>
+                <Ionicons name="list" size={22} color={isDark ? '#fff' : colors.textSecondary} />
+                {activeDownloadsCount > 0 && (
+                  <View style={styles.brandBadge}>
+                    <Text style={styles.brandBadgeText}>{activeDownloadsCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable style={styles.brandActionButton} onPress={() => (navigation as any).navigate('AudioDownloader')}>
+                <Ionicons name="cloud-download-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.brandActionButton} onPress={() => navigation.navigate('Settings')}>
+                <Ionicons name="settings-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -426,10 +440,10 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           overrideItemLayout={(layout: any) => { setSongItemLayout(layout); }}
           getItemType={(_item: any) => 'song'}
           contentContainerStyle={{
-            paddingBottom: 150 + insets.bottom,
+            // Clears nav bar + mini player + the docked search bar.
+            paddingBottom: 208 + insets.bottom,
             paddingTop: 10,
           }}
-          extraData={[isSearchFocused]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
@@ -449,20 +463,8 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
               onSongLongPress={handleSongLongPress}
               onLikePress={toggleLike}
               onMagicPress={handleAddToQueue}
-              activeDownloadsCount={activeDownloadsCount}
-              onOpenQueueModal={() => setShowQueueModal(true)}
-              onNavigateAudioDownloader={() => (navigation as any).navigate('AudioDownloader')}
-              onAddPress={handleAddPress}
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              isSearchFocused={isSearchFocused}
-              onSearchFocus={handleSearchFocus}
-              onSearchCancel={handleSearchCancel}
               currentSong={playerCurrentSong}
               recentlyPlayedMode={recentlyPlayedMode}
-              onHeaderLayout={setHeaderHeight}
-              isDark={isDark}
-              colors={colors}
             />
           }
           keyboardShouldPersistTaps="handled"
@@ -571,10 +573,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 8 : 4, paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandPressable: { alignSelf: 'flex-start', flexShrink: 0, maxWidth: '100%' },
+  brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
+  brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
+  brandActionButton: { padding: 4, position: 'relative' },
+  brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
+  brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   brandName: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  recentArtContainer: { backgroundColor: '#06152B', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
+  recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
   recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },
   recentArtScroll: { paddingHorizontal: 20 },
   recentArtItem: { width: 120, height: 120, borderRadius: 12, overflow: 'hidden', marginRight: 12 },

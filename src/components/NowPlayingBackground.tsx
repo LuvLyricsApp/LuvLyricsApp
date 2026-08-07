@@ -59,11 +59,6 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
             blob3Style,
           ]}
         />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.5)', '#000']}
-          locations={[0.2, 0.7, 1.0]}
-          style={StyleSheet.absoluteFill}
-        />
       </View>
     );
   }

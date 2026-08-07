@@ -4,7 +4,7 @@ import { Alert, Dimensions } from 'react-native';
 import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withRepeat, Easing, withSequence } from 'react-native-reanimated';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore } from '../store/playerStore';
+import { usePlayerStore, beginAudioLoad, endAudioLoad } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { useSongsStore } from '../store/songsStore';
 import { useArtHistoryStore } from '../store/artHistoryStore';
@@ -30,7 +30,7 @@ export function useNowPlayingLogic(songId: string) {
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
   const storePlaying = usePlayerStore(state => state.isPlaying);
-  const setStorePlaying = usePlayerStore(state => state.setIsPlaying);
+  const requestPlayback = usePlayerStore(state => state.requestPlayback);
 
   const toggleLike = useSongsStore(state => state.toggleLike);
   const addRecentArt = useArtHistoryStore(state => state.addRecentArt);
@@ -40,7 +40,7 @@ export function useNowPlayingLogic(songId: string) {
   const setAnimateBackground = useSettingsStore(state => state.setAnimateBackground);
 
   const flatListRef = useRef<SynchronizedLyricsRef>(null);
-  const activeLoadSongIdRef = useRef<string | null>(null);
+  const didAutoPlayRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
@@ -173,16 +173,22 @@ export function useNowPlayingLogic(songId: string) {
 
         if (loadedAudioId === targetSongId) {
           if (__DEV__) console.log('[NowPlaying] Audio already loaded');
-          if (!storePlaying) player?.play();
+          // Resume only the first time the screen opens on an already-loaded
+          // track. This effect re-runs on every store change, so resuming
+          // unconditionally here fought the user's own pause.
+          if (!didAutoPlayRef.current) {
+            didAutoPlayRef.current = true;
+            if (!usePlayerStore.getState().isPlaying) requestPlayback(true);
+          }
         } else {
-          if (activeLoadSongIdRef.current === targetSongId) return;
-          activeLoadSongIdRef.current = targetSongId;
+          if (!beginAudioLoad(targetSongId)) return;
           if (__DEV__) console.log('[NowPlaying] Loading audio:', songToPlay.title);
           await player?.replace(songToPlay.audioUri);
-          if (cancelled) { activeLoadSongIdRef.current = null; return; }
+          if (cancelled) { endAudioLoad(targetSongId); return; }
           setLoadedAudioId(targetSongId);
-          player?.play();
-          activeLoadSongIdRef.current = null;
+          didAutoPlayRef.current = true;
+          requestPlayback(true);
+          endAudioLoad(targetSongId);
         }
 
         if (!songToPlay.lyrics || songToPlay.lyrics.length === 0) {
@@ -193,15 +199,17 @@ export function useNowPlayingLogic(songId: string) {
           }
         }
       } catch (error) {
-        activeLoadSongIdRef.current = null;
+        endAudioLoad(songId);
         if (__DEV__) console.error('Failed to load song:', error);
         Alert.alert('Error', 'Could not load audio file.');
       }
     };
     load();
     return () => { cancelled = true; };
+    // storePlaying is deliberately not a dep — this effect loads audio, it must
+    // never react to play/pause state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songId, currentSong?.id, currentSong?.audioUri, currentSong?.lyrics?.length, loadedAudioId, player, setLoadedAudioId, storePlaying, updateCurrentSong]);
+  }, [songId, currentSong?.id, currentSong?.audioUri, currentSong?.lyrics?.length, loadedAudioId, player, setLoadedAudioId, updateCurrentSong]);
 
   // Lyrics processing
   const processedLyrics = React.useMemo(() => {
@@ -293,13 +301,7 @@ export function useNowPlayingLogic(songId: string) {
       withTiming(0.8, { duration: 100 }),
       withTiming(1, { duration: 100 })
     );
-    if (storePlaying) {
-      setStorePlaying(false);
-      player?.pause();
-    } else {
-      setStorePlaying(true);
-      player?.play();
-    }
+    requestPlayback(!usePlayerStore.getState().isPlaying);
   };
 
   const playButtonStyle = useAnimatedStyle(() => ({
@@ -317,7 +319,10 @@ export function useNowPlayingLogic(songId: string) {
     if (positionSV.value > 3) {
       isSeeking.value = true;
       positionSV.value = 0;
+      // seekTo pauses on iOS — restart-track must not silently stop playback.
+      const wasPlaying = usePlayerStore.getState().isPlaying;
       await player.seekTo(0);
+      if (wasPlaying) requestPlayback(true);
       isSeeking.value = false;
     } else {
       usePlayerStore.getState().previousInPlaylist();
@@ -328,9 +333,11 @@ export function useNowPlayingLogic(songId: string) {
     if (player) {
       const wasPlaying = usePlayerStore.getState().isPlaying;
       await player.seekTo(seconds);
-      if (wasPlaying) player.play();
+      // requestPlayback (not player.play) so the store stays in sync and the
+      // post-seek status blip is recognised as stale.
+      if (wasPlaying) requestPlayback(true);
     }
-  }, [player]);
+  }, [player, requestPlayback]);
 
   const handleLyricTap = async (timestamp: number) => {
     resetHideTimer();
@@ -338,7 +345,9 @@ export function useNowPlayingLogic(songId: string) {
     isSeeking.value = true;
     positionSV.value = timestamp;
     await player.seekTo(timestamp);
-    player.play();
+    // Tapping a lyric always starts playback (existing behaviour), but it must go
+    // through the store or the button shows "play" while audio is running.
+    requestPlayback(true);
     isSeeking.value = false;
   };
 

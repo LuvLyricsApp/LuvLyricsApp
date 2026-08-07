@@ -10,6 +10,8 @@ import { usePlaylistStore } from '../store/playlistStore';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as playlistQueries from '../database/playlistQueries';
 import { downloadManager } from '../services/DownloadManager';
+import { findYouTubeVideoId } from '../services/YouTubeSearchService';
+import { patchYoutubeVideoId } from '../database/queries';
 
 // Wrapper component to conditionally use the hook
 const KeepAwakeController = () => {
@@ -168,7 +170,6 @@ export const BackgroundDownloader = () => {
                         }
                 } catch {
                      if (__DEV__) console.warn(`[BackgroundDownloader] Lyrics processing failed`);
-                     // Continue saving song even if lyrics fail
                     }
                 }
 
@@ -192,6 +193,18 @@ export const BackgroundDownloader = () => {
                 
                 if (__DEV__) console.log(`[BackgroundDownloader] Calling addSong...`);
                 await addSong(newSong);
+
+                // Beta: silently fetch YouTube videoId after song saved
+                const apiKey = useSettingsStore.getState().youtubeApiKey;
+                if (apiKey) {
+                  findYouTubeVideoId(newSong.title, newSong.artist ?? '', apiKey)
+                    .then(videoId => {
+                      if (videoId) {
+                        patchYoutubeVideoId(newSong.id, videoId).catch(() => {});
+                      }
+                    })
+                    .catch(() => {});
+                }
 
                 // 🎵 Enqueue lyrics scan BEFORE fetchSongs to avoid race condition
                 // (fetchSongs triggers re-render cascade; scan must be queued first)

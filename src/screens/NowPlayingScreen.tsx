@@ -102,7 +102,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       icon: 'create-outline',
       onPress: () => {
         setMenuVisible(false);
-        navigation.navigate('AddEditLyrics', { songId: currentSong?.id });
+        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
       }
     },
     {
@@ -110,7 +110,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       icon: 'timer-outline',
       onPress: () => {
         setMenuVisible(false);
-        navigation.navigate('AddEditLyrics', { songId: currentSong?.id });
+        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
       }
     },
     {
@@ -190,7 +190,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             currentTime={positionSV}
             onLyricPress={handleLyricTap}
             songTitle={currentSong?.title}
-            highlightColor={gradientColors[0] !== '#000' ? gradientColors[0] : 'rgba(255,255,255,0.2)'}
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}

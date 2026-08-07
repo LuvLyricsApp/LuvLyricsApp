@@ -36,7 +36,7 @@ const LOADER_BARS = [
 const BAR_COLORS = [
   'rgba(255,255,255,0.35)',
   'rgba(255,255,255,0.6)',
-  '#2F8CFF',
+  '#EDEDED',
   'rgba(255,255,255,0.6)',
   'rgba(255,255,255,0.35)',
 ];
@@ -109,6 +109,11 @@ const App: React.FC = () => {
           // Restore any downloads that were in-flight when the app was last killed
           import('./store/downloadQueueStore')
             .then(m => m.useDownloadQueueStore.getState().hydrateFromDb())
+            .catch(() => {});
+
+          // Restore any lyrics scan jobs that were pending when the app was last killed
+          import('./store/lyricsScanQueueStore')
+            .then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb())
             .catch(() => {});
 
           const { usePlaylistStore } = await import('./store/playlistStore');
@@ -184,7 +189,7 @@ const App: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" backgroundColor="#000" />
-        <Ionicons name="musical-notes" size={48} color="#2F8CFF" style={{ marginBottom: 20 }} />
+        <Ionicons name="musical-notes" size={48} color="#EDEDED" style={{ marginBottom: 20 }} />
         <Text style={styles.loadingTitle}>{AppStrings.appTitle}</Text>
         <Text style={styles.loadingSubtitle}>{AppStrings.loadingSubtitle}</Text>
         <View style={{ height: 48 }} />

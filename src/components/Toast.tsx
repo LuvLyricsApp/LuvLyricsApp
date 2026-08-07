@@ -89,7 +89,7 @@ export const Toast: React.FC<ToastProps> = ({
   const backgroundColor = 
     type === 'success' ? '#1E1E1E' : 
     type === 'error' ? '#FF3B30' : 
-    '#007AFF';
+    '#1E1E1E';
   
   const iconColor = type === 'success' ? '#4CD964' : '#FFF';
 

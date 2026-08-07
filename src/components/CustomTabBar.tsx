@@ -51,7 +51,10 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <View style={styles.outerContainer} pointerEvents="box-none">
-      <View style={[styles.container, { height: 64 + insets.bottom }]}>
+      {/* edgeToEdgeEnabled draws under the system bars, so the inset has to be
+          reserved as padding too — growing the height alone just re-centres the
+          icons into the gesture pill / 3-button strip. */}
+      <View style={[styles.container, { height: 64 + insets.bottom, paddingBottom: insets.bottom }]}>
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
@@ -87,8 +90,12 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     height: 64,
-    backgroundColor: '#0A0A0C',
+    // Solid black, not a blur — list content used to read straight through the
+    // bar and collide with the icons, and an opaque bar meets the near-black
+    // bottom of the song pill without a visible seam.
+    backgroundColor: '#000000',
     borderTopWidth: 0,
+    overflow: 'hidden',
   },
   tabBar: {
     flex: 1,
