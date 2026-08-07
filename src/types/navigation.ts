@@ -27,7 +27,6 @@ export type RootStackParamList = {
   } | undefined;
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault
-  PlaylistDetail: { playlistId: string }; // Playlist detail screen
   CreatePlaylist: { playlistId?: string, initialName?: string } | undefined; // Create or Edit playlist modal
   AddToPlaylist: { songId?: string; playlistId?: string }; // NEW: Add song to playlist modal
 };
@@ -38,6 +37,16 @@ export type TabParamList = {
   Luvs: undefined;
   Library: undefined; // Was Playlists
   Search: undefined; // replaced Settings in the tab bar
+};
+
+/**
+ * Stack nested inside the Library tab. PlaylistDetail lives here rather than on the
+ * root stack so the tab bar and mini player stay on screen while you are inside a
+ * playlist — a root-stack sibling covers the tab navigator entirely.
+ */
+export type LibraryStackParamList = {
+  PlaylistsHome: undefined;
+  PlaylistDetail: { playlistId: string };
 };
 
 // Screen Props

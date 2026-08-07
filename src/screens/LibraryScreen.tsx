@@ -449,6 +449,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           }
           onScroll={scrollHandler}
           scrollEventThrottle={16}
+          // Rows and cover squares used to be cut off dead straight at the top of
+          // the viewport. This dissolves them into whatever is behind instead —
+          // which has to be a mask rather than a gradient overlay, because the
+          // backdrop here is the aurora artwork, not a flat colour to blend into.
+          // Android-only; a no-op on iOS.
+          fadingEdgeLength={56}
           ListEmptyComponent={
             <LibraryEmptyState
               onAddPress={handleAddPress}

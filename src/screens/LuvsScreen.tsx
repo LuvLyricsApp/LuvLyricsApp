@@ -44,6 +44,7 @@ import {
 } from '../components/LuvsPager';
 import { luvsRecommendationEngine } from '../services/LuvsRecommendationEngine';
 import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
+import { usePlayerStore } from '../store/playerStore';
 import { UnifiedSong } from '../types/song';
 import { LuvsVaultModal } from '../components/LuvsVaultModal';
 import { PerformanceHUD } from '../components/PerformanceHUD';
@@ -82,6 +83,7 @@ const LuvsScreen: React.FC = () => {
   const pagerRef = useRef<LuvsPagerHandle>(null);
   const [showVault, setShowVault] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false); // Start paused by default
+  const [isScrubbing, setIsScrubbing] = useState(false);
   const viewStartTimeRef = useRef<number>(Date.now());
 
   // Keep ref in sync so useFocusEffect can read latest index without a dep on it
@@ -174,6 +176,14 @@ const LuvsScreen: React.FC = () => {
     }
   }, [isFocused]);
 
+  // Luvs owns a separate audio pool, so the library player has to yield or both
+  // play at once. Routed through requestPlayback per the store's play/pause contract.
+  const silenceMainPlayer = useCallback(() => {
+    if (usePlayerStore.getState().isPlaying) {
+      usePlayerStore.getState().requestPlayback(false);
+    }
+  }, []);
+
   const hasFeedSongs = feedSongs.length > 0;
   useEffect(() => {
     luvsBufferManager.setSuspended(!isFocused);
@@ -182,12 +192,13 @@ const LuvsScreen: React.FC = () => {
       // If we are coming BACK to the screen, we might want to respect autoPlay
       // But usually isPlaying state is what we want to maintain during a session.
       if (isPlaying) {
+        silenceMainPlayer();
         luvsBufferManager.resume();
       }
     } else if (!isFocused) {
       luvsBufferManager.pause();
     }
-  }, [isFocused, hasFeedSongs, isPlaying]);
+  }, [isFocused, hasFeedSongs, isPlaying, silenceMainPlayer]);
 
   // Load more songs using recommendation engine
   const loadMoreSongs = useCallback(async () => {
@@ -310,10 +321,11 @@ const LuvsScreen: React.FC = () => {
       await luvsBufferManager.pause();
       setIsPlaying(false);
     } else {
+      silenceMainPlayer();
       await luvsBufferManager.resume();
       setIsPlaying(true);
     }
-  }, [isPlaying]);
+  }, [isPlaying, silenceMainPlayer]);
 
   const handleGoBack = useCallback(() => {
     // The tab bar is hidden on this route, so this button is the only way out —
@@ -343,6 +355,7 @@ const LuvsScreen: React.FC = () => {
           onShare={() => handleSharePress(item)}
           onDownload={() => handleDownloadPress(item)}
           onPlayPause={handlePlayPause}
+          onScrubStateChange={setIsScrubbing}
           luvHeight={LUV_HEIGHT}
           index={index}
           currentIndex={currentIndexSV}
@@ -380,6 +393,9 @@ const LuvsScreen: React.FC = () => {
           offscreenPages={2}
           depthEffect
           hapticsOnSettle
+          // ViewPager2 intercepts drags before RNGH sees them, so a scrub on the
+          // timeline reads as a page swipe. Disable paging for the drag's duration.
+          scrollEnabled={!isScrubbing}
         >
           {feedSongs.map((song, index) => (
             <View key={song.id} style={luvsPageStyle} collapsable={false}>

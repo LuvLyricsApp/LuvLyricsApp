@@ -172,8 +172,13 @@ const ActionBtn = ({
 
 // ─── Progress controller ──────────────────────────────────────────────────────
 const LuvsProgressController = ({
-  isActive, insetTop, insetBottom,
-}: { isActive: boolean; insetTop: number; insetBottom: number }) => {
+  isActive, insetTop, insetBottom, onScrubStateChange,
+}: {
+  isActive: boolean;
+  insetTop: number;
+  insetBottom: number;
+  onScrubStateChange?: (scrubbing: boolean) => void;
+}) => {
   const position = useSharedValue(0);
   const duration = useSharedValue(0);
   const progress = useSharedValue(0);
@@ -207,8 +212,8 @@ const LuvsProgressController = ({
           currentTime={position}
           duration={duration}
           onSeek={(t) => luvsBufferManager.seekTo(t)}
-          onScrubStart={() => luvsBufferManager.pause()}
-          onScrubEnd={() => luvsBufferManager.resume()}
+          onScrubStart={() => { onScrubStateChange?.(true); luvsBufferManager.pause(); }}
+          onScrubEnd={() => { onScrubStateChange?.(false); luvsBufferManager.resume(); }}
           variant="island"
         />
       </View>
@@ -226,6 +231,8 @@ interface LuvCardProps {
   onShare: () => void;
   onDownload: () => void;
   onPlayPause: () => void;
+  /** Lets the feed suspend ViewPager2 paging while the timeline is being dragged. */
+  onScrubStateChange?: (scrubbing: boolean) => void;
   luvHeight: number;
   index: number;
   currentIndex: SharedValue<number>;
@@ -246,7 +253,7 @@ interface LuvCardProps {
 
 export const LuvCard = React.memo<LuvCardProps>(
   ({ song, isActive, isLiked, isPlaying, onLike, onShare, onDownload,
-     onPlayPause, luvHeight, index, currentIndex, isNearActive,
+     onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
      isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
     const [burstTrigger, setBurstTrigger] = useState(0);
@@ -410,6 +417,7 @@ export const LuvCard = React.memo<LuvCardProps>(
               isActive={isActive}
               insetTop={insets.top}
               insetBottom={insets.bottom}
+              onScrubStateChange={onScrubStateChange}
             />
 
             {/* Right buttons */}

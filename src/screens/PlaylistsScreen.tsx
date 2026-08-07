@@ -21,12 +21,16 @@ import { useSongsStore } from '../store/songsStore';
 import { getGradientColors } from '../constants/gradients';
 import { AuroraHeader } from '../components/AuroraHeader';
 import { DarkColors } from '../constants/colors';
-import { RootStackParamList } from '../types/navigation';
+import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
 import { Playlist, Song } from '../types/song';
 
 export const PlaylistsScreen: React.FC = () => {
   const colors = useThemeColors();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // This screen sits in the Library tab's nested stack: PlaylistDetail resolves
+  // locally, everything else bubbles up to the root stack.
+  const navigation = useNavigation<
+    NativeStackNavigationProp<LibraryStackParamList & RootStackParamList>
+  >();
   const isLoading = usePlaylistStore(state => state.isLoading);
   const deletePlaylist = usePlaylistStore(state => state.deletePlaylist);
   const playlists = usePlaylistStore(state => state.playlists);

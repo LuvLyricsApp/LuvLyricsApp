@@ -33,10 +33,22 @@ import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
+import { TAB_BAR_HEIGHT } from '../constants/layout';
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 
 const { width } = Dimensions.get('window');
+
+// Tallest the classic bar's blurred artwork ever needs to be — the full-expand
+// stage is 0.915 of the screen, with headroom so the image is never the thing
+// that runs out. Held constant so the Android blur bitmap is computed once.
+const CLASSIC_BG_HEIGHT = Dimensions.get('window').height * 0.95;
+
+// How far the classic bar drops into the tab bar's top strip. The MiniPlayer sits
+// above the tab bar in z-order, and that strip is empty (the icons are centred
+// below it), so this only eats dead space — pushing it much past ~16 starts
+// clipping the icons themselves.
+const CLASSIC_BAR_TAB_OVERLAP = 12;
 
 // Create Animated Pressable
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -474,6 +486,17 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
 
+  // The bottom fade has to grow with the bar. A fixed 28px reads as a soft
+  // landing on the 70px collapsed pill, but on the half/full panel the same
+  // 28px compresses the whole falloff into a sliver and shows as a hard line
+  // where the artwork stops.
+  const animatedClassicBottomFadeStyle = useAnimatedStyle(() => {
+    const stage = Math.max(expansionProgress.value, classicFullProgress.value);
+    return {
+      height: interpolate(stage, [0, 1], [28, 160], Extrapolation.CLAMP),
+    };
+  });
+
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -797,9 +820,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     <View style={[
       styles.container, 
       isIsland ? styles.islandContainer : styles.barContainer,
-      // The tab bar is 64 tall plus the system inset, so a hardcoded offset
-      // leaves the pill either floating away from it or colliding with it.
-      !isIsland && { marginBottom: 64 + insets.bottom },
+      // The tab bar is TAB_BAR_HEIGHT tall plus the system inset, so a hardcoded
+      // offset leaves the pill either floating away from it or colliding with it.
+      // Sitting exactly on its top edge still reads as a gap, because the icons
+      // are centred in that band and leave dead space above them — so the pill
+      // drops into that unused strip rather than resting on top of it.
+      !isIsland && { marginBottom: TAB_BAR_HEIGHT + insets.bottom - CLASSIC_BAR_TAB_OVERLAP },
       isIsland && expanded && { alignItems: 'center', marginHorizontal: 12, marginRight: 12 } // Expanded: Force Center & Symmetry. Override container margins.
     ]}>
       {/* Classic background lives OUT here, not inside styles.content — that
@@ -819,9 +845,21 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             />
           ) : currentSong.coverImageUri ? (
             <>
+              {/* Fixed to the tallest size the bar ever reaches, anchored to the
+                  bottom, rather than absoluteFill. blurRadius on Android is a CPU
+                  bitmap blur that re-runs whenever the view resizes, so an image
+                  that grows with the container shows the previous bitmap's hard
+                  edge for a frame or two mid-expand. At a constant size the
+                  bitmap is blurred once and the container just reveals more. */}
               <Image
                 source={{ uri: currentSong.coverImageUri }}
-                style={StyleSheet.absoluteFill}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: CLASSIC_BG_HEIGHT,
+                }}
                 resizeMode="cover"
                 blurRadius={30}
               />
@@ -839,10 +877,24 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           {/* The tab bar below is solid black, so the pill's bottom edge is
               carried the rest of the way down to black — the two surfaces then
               meet at the same value and the join disappears. */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)']}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 }}
-          />
+          <Animated.View
+            style={[
+              { position: 'absolute', left: 0, right: 0, bottom: 0 },
+              animatedClassicBottomFadeStyle,
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'transparent',
+                'rgba(0,0,0,0.18)',
+                'rgba(0,0,0,0.48)',
+                'rgba(0,0,0,0.78)',
+                'rgba(0,0,0,0.94)',
+              ]}
+              locations={[0, 0.3, 0.55, 0.8, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
         </View>
       )}
 

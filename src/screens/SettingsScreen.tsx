@@ -34,6 +34,7 @@ import { SettingsStrings } from '../constants/uiStrings';
 import { exportAllSongs, shareExportedFile, importSongsFromJson } from '../utils/exportImport';
 import { clearAllData } from '../database/queries';
 import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
+import { LanguagePickerModal } from '../components/LanguagePickerModal';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
 import { trustedPairingService, TrustedDesktopRecord } from '../services/TrustedPairingService';
 import { useSongsStore } from '../store/songsStore';
@@ -458,6 +459,17 @@ const SettingsScreen: React.FC<Props> = () => {
   useFocusEffect(React.useCallback(() => { setMiniPlayerHidden(false); }, [setMiniPlayerHidden]));
   const likedCount = usePlaylistStore(state => state.likedSongIds.size);
   const [hiddenSongsVisible, setHiddenSongsVisible] = React.useState(false);
+  const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
+
+  // Luvs pulls its feed from whichever languages carry weight, so the row reflects
+  // the live store — edits take effect on the next batch the engine requests.
+  const preferredLanguages = useLuvsPreferencesStore(s => s.preferredLanguages);
+  const activeLanguages = preferredLanguages.filter(l => l.weight > 0).map(l => l.language);
+  const luvsLanguageSummary = activeLanguages.length === 0
+    ? 'None'
+    : activeLanguages.length <= 2
+      ? activeLanguages.join(', ')
+      : `${activeLanguages.length} selected`;
   const { hiddenSongs, fetchHiddenSongs, hideSong: unhideSong } = useSongsStore();
   const [luvsLangModalVisible, setLuvsLangModalVisible] = React.useState(false);
   const { desktopConnectEnabled, allowDesktopDownloads, setDesktopConnectEnabled, setAllowDesktopDownloads } = useDesktopBridgeSettingsStore();
@@ -906,6 +918,12 @@ const SettingsScreen: React.FC<Props> = () => {
           onToggle={settings.setShowThumbnails}
         />
         <SettingsRow
+          icon="language-outline"
+          label="Luvs Languages"
+          value={luvsLanguageSummary}
+          onPress={() => { closeSheet(); setLanguagePickerVisible(true); }}
+        />
+        <SettingsRow
           icon="scan-outline"
           label="Scan Local Audio"
           onPress={() => { closeSheet(); handleImportLocalAudio(); }}
@@ -957,6 +975,11 @@ const SettingsScreen: React.FC<Props> = () => {
       </BottomSheet>
 
       {/* ── Alerts & Utility Modals ──────────────────────────────────────────── */}
+
+      <LanguagePickerModal
+        visible={languagePickerVisible}
+        onClose={() => setLanguagePickerVisible(false)}
+      />
 
       <CustomAlert
         visible={alertConfig.visible}

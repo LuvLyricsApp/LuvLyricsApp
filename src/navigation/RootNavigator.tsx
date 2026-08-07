@@ -15,7 +15,6 @@ import TabNavigator from './TabNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
@@ -87,10 +86,6 @@ export const RootNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
-          />
-          <Stack.Screen
-            name="PlaylistDetail"
-            component={PlaylistDetailScreen}
           />
           <Stack.Screen
             name="AudioDownloader"

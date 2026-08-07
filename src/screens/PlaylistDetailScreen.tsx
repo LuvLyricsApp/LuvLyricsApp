@@ -57,6 +57,7 @@ import { Toast } from '../components/Toast';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
+import { bottomChromeHeight } from '../constants/layout';
 
 type PlaylistDetailRouteProp = RouteProp<
   { PlaylistDetail: { playlistId: string } },
@@ -112,6 +113,14 @@ export const PlaylistDetailScreen: React.FC = () => {
   const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
   const getSong = useSongsStore(state => state.getSong);
   const allSongsStore = useSongsStore(state => state.songs);
+
+  // This screen lives in the Library tab's stack, so the tab bar is always behind
+  // it. The classic mini player only stacks on top of that when a song is loaded.
+  const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
+  const hasClassicBar = miniPlayerStyle === 'bar' && !!currentSong;
+  const bottomChrome = bottomChromeHeight(insets.bottom, true, hasClassicBar);
+  const fabBottom = bottomChrome + 16;
+  const listPaddingBottom = bottomChrome + 80;
 
   const [activeThemeColors, setActiveThemeColors] = useState<string[] | undefined>(undefined);
   const [activeImageUri, setActiveImageUri] = useState<string | null>(null);
@@ -827,7 +836,7 @@ export const PlaylistDetailScreen: React.FC = () => {
             renderItem={({ item, index }: { item: Song, index: number }) => renderItem({ item, getIndex: () => index, drag: undefined, isActive: false } as any)}
             onScroll={scrollHandler}
             scrollEventThrottle={1}
-            contentContainerStyle={{ paddingBottom: 150, paddingTop: 50 + insets.top }}
+            contentContainerStyle={{ paddingBottom: listPaddingBottom, paddingTop: 50 + insets.top }}
             ListHeaderComponent={renderHeader()}
         />
       ) : (
@@ -839,7 +848,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         renderItem={renderItem}
         onScroll={scrollHandler}
         scrollEventThrottle={1} // Use 1 for maximum update frequency
-        contentContainerStyle={{ paddingBottom: 150, paddingTop: 50 + insets.top }} 
+        contentContainerStyle={{ paddingBottom: listPaddingBottom, paddingTop: 50 + insets.top }} 
         ListHeaderComponent={renderHeader()}
       />
       )}
@@ -891,9 +900,11 @@ export const PlaylistDetailScreen: React.FC = () => {
       {/* Scroll To Top FAB */}
       <Animated.View 
         style={[
-            styles.fab, 
-            { bottom: 80 + insets.bottom }, 
-            fabStyle 
+            styles.fab,
+            // Clears the tab bar plus the classic mini player when it is showing —
+            // a flat 80 put this button entirely behind the bar.
+            { bottom: fabBottom },
+            fabStyle
         ]}
         pointerEvents="box-none" 
       >

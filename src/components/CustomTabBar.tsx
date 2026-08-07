@@ -9,6 +9,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceMicButton } from './VoiceMicButton';
 import { useSettingsStore } from '../store/settingsStore';
+import { TAB_BAR_HEIGHT } from '../constants/layout';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -54,7 +55,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
       {/* edgeToEdgeEnabled draws under the system bars, so the inset has to be
           reserved as padding too — growing the height alone just re-centres the
           icons into the gesture pill / 3-button strip. */}
-      <View style={[styles.container, { height: 64 + insets.bottom, paddingBottom: insets.bottom }]}>
+      <View style={[styles.container, { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
-    height: 64,
+    height: TAB_BAR_HEIGHT,
     // Solid black, not a blur — list content used to read straight through the
     // bar and collide with the icons, and an opaque bar meets the near-black
     // bottom of the song pill without a visible seam.
