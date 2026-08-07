@@ -4,6 +4,27 @@ import { Song } from '../types/song';
 import { useSongsStore } from './songsStore';
 import { useSettingsStore } from './settingsStore';
 import { setPlaybackIntent } from '../playback/playbackIntent';
+import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
+
+function trackMeta(song: Song) {
+  return {
+    title: song.title || 'Unknown Title',
+    artist: song.artist || 'Unknown Artist',
+    album: song.album || '',
+    artworkUri: song.coverImageUri || '',
+    mediaId: song.id,
+  };
+}
+
+/** Stage queue[index+1] in Media3 when Android can take it. No-op elsewhere. */
+export function prepareNextInQueue(): void {
+  if (!NativeAudioPlayer.isAvailable()) return;
+  const { playlistQueue, currentQueueIndex, currentSongId } = usePlayerStore.getState();
+  if (!playlistQueue || playlistQueue.length < 2) return;
+  const next = playlistQueue[(currentQueueIndex + 1) % playlistQueue.length];
+  if (!next?.audioUri || next.id === currentSongId) return;
+  NativeAudioPlayer.prepareNext(next.audioUri, trackMeta(next), next.id);
+}
 
 // Module-level controls ref — written by PlayerContext at mount, read everywhere else.
 // Keeps imperative player commands out of Zustand state so they don't trigger re-renders.
@@ -76,6 +97,8 @@ interface PlayerState {
   removeFromQueue: (songId: string) => void;
   nextInPlaylist: () => Promise<void>;
   previousInPlaylist: () => void;
+  /** Media3 already advanced — update queue cursor without reloading audio. */
+  adoptPreparedTrack: (mediaId: string) => void;
   clearPlaylistQueue: () => void;
   
   reset: () => void;
@@ -141,6 +164,35 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     } catch (err) {
       if (__DEV__) console.warn('[playerStore] getSongById failed:', err);
     }
+  },
+
+  adoptPreparedTrack: (mediaId: string) => {
+    const state = get();
+    if (state.currentSongId === mediaId) {
+      // nextInPlaylist already synced via seekToNextIfReady — still stage the one after.
+      prepareNextInQueue();
+      return;
+    }
+    const queue = state.playlistQueue;
+    if (!queue) return;
+    const idx = queue.findIndex(s => s.id === mediaId);
+    if (idx < 0) return;
+    const song = queue[idx];
+    set({
+      currentQueueIndex: idx,
+      currentSong: song,
+      currentSongId: song.id,
+      loadedAudioId: song.id,
+      isPlaying: true,
+    });
+    if (state.currentPlaylistId) {
+      useSettingsStore.getState().updatePlaylistHistory(state.currentPlaylistId, song.id);
+    }
+    useSongsStore.getState().setCurrentSong(song);
+    queries.getSongById(song.id).then(full => {
+      if (full && get().currentSongId === song.id) set({ currentSong: full });
+    }).catch(() => {});
+    prepareNextInQueue();
   },
 
   setInitialSong: (song: Song) => {
@@ -259,7 +311,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const state = get();
 
     // Safety net: queue was never set (e.g. song launched via fallback path or Recently Played)
-    // Rebuild from DB so auto-next still works — no circular dep to songsStore
+    // Rebuild from memory so auto-next still works — no circular dep to songsStore
     if (!state.playlistQueue || state.playlistQueue.length === 0) {
       if (state.currentPlaylistId === 'library' && state.currentSongId) {
         const allSongs: Song[] = _getSongs ? _getSongs() : [];
@@ -278,15 +330,37 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (!freshState.playlistQueue) return;
     const nextIndex = (freshState.currentQueueIndex + 1) % freshState.playlistQueue.length;
     const nextSong = freshState.playlistQueue[nextIndex];
-    
-    set({ 
+
+    // Prefer the staged Media3 item — avoids pause → load → prepare gap on skip.
+    const usedNative = await NativeAudioPlayer.seekToNextIfReady(nextSong.id);
+    if (usedNative) {
+      set({
+        currentQueueIndex: nextIndex,
+        currentSong: nextSong,
+        currentSongId: nextSong.id,
+        loadedAudioId: nextSong.id,
+        isPlaying: true,
+      });
+      if (freshState.currentPlaylistId) {
+        useSettingsStore.getState().updatePlaylistHistory(freshState.currentPlaylistId, nextSong.id);
+      }
+      useSongsStore.getState().setCurrentSong(nextSong);
+      queries.getSongById(nextSong.id).then(full => {
+        if (full && get().currentSongId === nextSong.id) set({ currentSong: full });
+      }).catch(() => {});
+      prepareNextInQueue();
+      setPlaybackIntent(true);
+      playerControls.play();
+      return;
+    }
+
+    set({
       currentQueueIndex: nextIndex,
       currentSong: nextSong,
       currentSongId: nextSong.id,
-      isPlaying: true // FORCE PLAY
+      isPlaying: true,
     });
-    
-    // Trigger audio load
+
     await get().loadSong(nextSong.id);
     setPlaybackIntent(true);
     playerControls.play();

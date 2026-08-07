@@ -13,26 +13,37 @@ if (Platform.OS === 'android') {
   }
 }
 
-export interface PlaybackStatus {
-  position: number;
-  duration: number;
-  isPlaying: boolean;
-  isBuffering: boolean;
-  didJustFinish: boolean;
-}
-
-export interface RemoteCommandEvent {
-  command: 'next' | 'previous' | 'play' | 'pause';
-}
+export type PlayerMetadata = {
+  title: string;
+  artist: string;
+  album: string;
+  artworkUri: string;
+  mediaId?: string;
+};
 
 export const NativeAudioPlayer = {
   isAvailable(): boolean {
     return Platform.OS === 'android' && MainPlayerModule !== null;
   },
 
-  async load(uri: string, metadata: { title: string; artist: string; album: string; artworkUri: string }) {
+  async load(uri: string, metadata: PlayerMetadata) {
     if (!this.isAvailable()) return;
     return await MainPlayerModule.load(uri, metadata);
+  },
+
+  /** Stage the following track so Media3 can auto-advance without a JS reload. */
+  prepareNext(uri: string, metadata: PlayerMetadata, mediaId: string) {
+    if (!this.isAvailable() || !mediaId) return;
+    MainPlayerModule.prepareNext(uri, metadata, mediaId);
+  },
+
+  /**
+   * Seek to the prepared next item if its mediaId matches.
+   * True → JS must not call load(); false → fall back to full load.
+   */
+  async seekToNextIfReady(mediaId: string): Promise<boolean> {
+    if (!this.isAvailable() || !mediaId) return false;
+    return !!(await MainPlayerModule.seekToNextIfReady(mediaId));
   },
 
   play() {
@@ -50,7 +61,7 @@ export const NativeAudioPlayer = {
     MainPlayerModule.seekTo(seconds);
   },
 
-  updateMetadata(metadata: { title: string; artist: string; album: string; artworkUri: string }) {
+  updateMetadata(metadata: PlayerMetadata) {
     if (!this.isAvailable()) return;
     MainPlayerModule.updateMetadata(metadata);
   },
@@ -60,10 +71,13 @@ export const NativeAudioPlayer = {
     MainPlayerModule.destroy();
   },
 
-  addListener(eventName: 'onPlaybackStatus' | 'onRemoteCommand', callback: (data: any) => void) {
+  addListener(
+    eventName: 'onPlaybackStatus' | 'onRemoteCommand' | 'onTrackAdvanced',
+    callback: (data: any) => void,
+  ) {
     if (!this.isAvailable() || !eventEmitter) {
       return { remove: () => {} };
     }
     return eventEmitter.addListener(eventName, callback);
-  }
+  },
 };

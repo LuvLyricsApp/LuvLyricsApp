@@ -1,6 +1,7 @@
 package com.lyricflow.app.modules
 
 import android.content.Context
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import java.lang.ref.WeakReference
@@ -19,6 +20,8 @@ object PlayerBridge {
         didJustFinish: Boolean
     ) -> Unit)? = null
     var onRemoteCommand: ((command: String) -> Unit)? = null
+    /** Fires when Media3 lands on a new item (auto end-of-track or seekToNext). */
+    var onTrackAdvanced: ((mediaId: String) -> Unit)? = null
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -32,6 +35,17 @@ object PlayerBridge {
         // Fires the moment play()/pause() is applied, before buffering resolves.
         // This is what lets JS render the transport state without guessing.
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            emitStatus()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (
+                reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+            ) {
+                val id = mediaItem?.mediaId
+                if (!id.isNullOrEmpty()) onTrackAdvanced?.invoke(id)
+            }
             emitStatus()
         }
     }
@@ -59,7 +73,9 @@ object PlayerBridge {
         val player = activePlayerRef.get() ?: return
         val isPlaying = player.isPlaying
         val isBuffering = player.playbackState == Player.STATE_BUFFERING
-        val finished = didJustFinish || player.playbackState == Player.STATE_ENDED
+        // Only treat ENDED as finish when there is no next item — otherwise Media3
+        // will auto-advance and JS must not also call nextInPlaylist.
+        val finished = didJustFinish && !player.hasNextMediaItem()
 
         val position = player.currentPosition.toDouble() / 1000.0
         val duration = player.duration.toDouble() / 1000.0

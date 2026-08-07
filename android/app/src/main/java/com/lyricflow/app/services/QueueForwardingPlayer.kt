@@ -5,16 +5,10 @@ import androidx.media3.common.Player
 import com.lyricflow.app.modules.PlayerBridge
 
 /**
- * The playback queue lives in JS, so ExoPlayer only ever holds a single media item.
- * Left alone, Media3 would render the notification's next/previous buttons as
- * disabled — the player genuinely has nowhere to go.
- *
- * This wrapper advertises the seek-to-next/previous commands as available and
- * redirects them to the JS queue instead of ExoPlayer's own (empty) timeline.
- * Only the session sees this wrapper; PlayerBridge keeps talking to the real
- * ExoPlayer for status polling.
+ * ExoPlayer holds current (+ optional prepared next). When a next item is present,
+ * notification skip uses native seekToNext. Otherwise it falls through to the JS queue.
  */
-class QueueForwardingPlayer(player: Player) : ForwardingPlayer(player) {
+class QueueForwardingPlayer(private val player: Player) : ForwardingPlayer(player) {
 
     override fun getAvailableCommands(): Player.Commands =
         super.getAvailableCommands()
@@ -35,17 +29,21 @@ class QueueForwardingPlayer(player: Player) : ForwardingPlayer(player) {
         else -> super.isCommandAvailable(command)
     }
 
-    // Media3 hides the buttons when these report false.
+    // Keep next/prev visible even when only JS owns the rest of the queue.
     override fun hasNextMediaItem(): Boolean = true
 
     override fun hasPreviousMediaItem(): Boolean = true
 
     override fun seekToNext() {
-        PlayerBridge.onRemoteCommand?.invoke("next")
+        if (player.hasNextMediaItem()) {
+            player.seekToNextMediaItem()
+        } else {
+            PlayerBridge.onRemoteCommand?.invoke("next")
+        }
     }
 
     override fun seekToNextMediaItem() {
-        PlayerBridge.onRemoteCommand?.invoke("next")
+        seekToNext()
     }
 
     override fun seekToPrevious() {

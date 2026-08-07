@@ -9,6 +9,13 @@ jest.mock('./songsStore', () => ({
 jest.mock('./settingsStore', () => ({
   useSettingsStore: { getState: () => ({ updatePlaylistHistory: jest.fn() }) },
 }));
+jest.mock('../services/NativeAudioPlayer', () => ({
+  NativeAudioPlayer: {
+    isAvailable: () => false,
+    prepareNext: jest.fn(),
+    seekToNextIfReady: jest.fn().mockResolvedValue(false),
+  },
+}));
 
 import {
   usePlayerStore,
@@ -18,6 +25,7 @@ import {
   setNativeOwnsPlaybackState,
 } from './playerStore';
 import { isStalePlayingEcho, clearPlaybackIntent } from '../playback/playbackIntent';
+import type { Song } from '../types/song';
 
 describe('requestPlayback', () => {
   let calls: string[];
@@ -114,5 +122,30 @@ describe('audio load ownership', () => {
     // a late release from the abandoned load must not free the new claim
     endAudioLoad('song-a');
     expect(beginAudioLoad('song-b')).toBe(false);
+  });
+});
+
+describe('adoptPreparedTrack', () => {
+  const song = (id: string): Song =>
+    ({ id, title: id, artist: 'a', audioUri: `file:///${id}.mp3` }) as Song;
+
+  it('moves the queue cursor without clearing loadedAudioId', () => {
+    const a = song('a');
+    const b = song('b');
+    usePlayerStore.setState({
+      playlistQueue: [a, b],
+      currentQueueIndex: 0,
+      currentSong: a,
+      currentSongId: 'a',
+      loadedAudioId: 'a',
+      currentPlaylistId: 'library',
+    });
+
+    usePlayerStore.getState().adoptPreparedTrack('b');
+
+    const s = usePlayerStore.getState();
+    expect(s.currentSongId).toBe('b');
+    expect(s.currentQueueIndex).toBe(1);
+    expect(s.loadedAudioId).toBe('b');
   });
 });

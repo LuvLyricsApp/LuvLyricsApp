@@ -27,7 +27,7 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad } from '../store/playerStore';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
@@ -49,6 +49,14 @@ const CLASSIC_BG_HEIGHT = Dimensions.get('window').height * 0.95;
 // below it), so this only eats dead space — pushing it much past ~16 starts
 // clipping the icons themselves.
 const CLASSIC_BAR_TAB_OVERLAP = 12;
+
+// Cover-art blur must be soft enough that a mid-screen crop (half-open lyrics)
+// doesn't read as a razor edge. NowPlaying uses ~120; the classic bar used 30
+// and the hard clip at half height was obvious. Scale past the container so
+// album-art rectangle edges stay outside the visible area.
+const CLASSIC_COVER_BLUR = Platform.OS === 'android' ? 55 : 70;
+const ISLAND_COVER_BLUR = Platform.OS === 'android' ? 40 : 55;
+const COVER_BLEED = 28; // px the blurred image overshoots the clip on each side
 
 // Create Animated Pressable
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -356,6 +364,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           if (__DEV__) console.log('[MiniPlayer] Syncing audio for:', currentSong.title);
           await player.replace(currentSong.audioUri);
           setLoadedAudioId(songId);
+          // Stage the following queue item in Media3 (Android) for gapless advance.
+          prepareNextInQueue();
 
           // On app startup (first load), don't auto-play
           // On user-initiated song change, auto-play
@@ -473,24 +483,27 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
   
-  // Classic artwork scrim ΓÇö collapsed the bar is near-solid black with only a
+  // Classic artwork scrim — collapsed the bar is near-solid black with only a
   // glimpse of the cover art; expanding it to half, then full, dissolves the
   // scrim so the blurred artwork reads properly at those sizes.
+  // Keep a bit more scrim at half-open (stage≈1 from expansion alone) so the
+  // mid-screen crop edge stays soft rather than a bright hard cut of art.
   const animatedClassicScrimStyle = useAnimatedStyle(() => {
-    const stage = Math.max(expansionProgress.value, classicFullProgress.value);
-    return {
-      opacity: interpolate(stage, [0, 1], [1, 0.32], Extrapolation.CLAMP),
-    };
+    const expand = expansionProgress.value;
+    const full = classicFullProgress.value;
+    // At half (expand=1, full=0) land around 0.45; only go to 0.28 at full screen.
+    const opacity = interpolate(expand, [0, 1], [1, 0.45], Extrapolation.CLAMP)
+      - interpolate(full, [0, 1], [0, 0.17], Extrapolation.CLAMP);
+    return { opacity };
   });
 
-  // The bottom fade has to grow with the bar. A fixed 28px reads as a soft
-  // landing on the 70px collapsed pill, but on the half/full panel the same
-  // 28px compresses the whole falloff into a sliver and shows as a hard line
-  // where the artwork stops.
+  // Bottom chrome only — soft join from artwork into the solid-black tab bar.
+  // Kept short so it never washes a black shadow over half/full lyrics; lyric
+  // edges dissolve via alpha mask on the lyrics container, not a black scrim.
   const animatedClassicBottomFadeStyle = useAnimatedStyle(() => {
     const stage = Math.max(expansionProgress.value, classicFullProgress.value);
     return {
-      height: interpolate(stage, [0, 1], [28, 160], Extrapolation.CLAMP),
+      height: interpolate(stage, [0, 1], [36, 56], Extrapolation.CLAMP),
     };
   });
 
@@ -832,7 +845,16 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       {!isIsland && (
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              overflow: 'hidden',
+              // Bleed a little into the tab-bar strip so the artwork→black
+              // falloff lands on solid black chrome, not as a hard cut on the
+              // pill's bottom edge (half-open lyrics made that line obvious).
+              bottom: -CLASSIC_BAR_TAB_OVERLAP,
+            },
+          ]}
         >
           {useThemeBg ? (
             <LinearGradient
@@ -847,22 +869,25 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                   bitmap blur that re-runs whenever the view resizes, so an image
                   that grows with the container shows the previous bitmap's hard
                   edge for a frame or two mid-expand. At a constant size the
-                  bitmap is blurred once and the container just reveals more. */}
+                  bitmap is blurred once and the container just reveals more.
+                  Oversized + scaled so album-art rectangle edges and blur
+                  kernel roll-off sit outside the visible clip. */}
               <Image
                 source={{ uri: currentSong.coverImageUri }}
                 style={{
                   position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: CLASSIC_BG_HEIGHT,
+                  left: -COVER_BLEED,
+                  right: -COVER_BLEED,
+                  bottom: -COVER_BLEED,
+                  height: CLASSIC_BG_HEIGHT + COVER_BLEED * 2,
+                  transform: [{ scale: 1.18 }],
                 }}
                 resizeMode="cover"
-                blurRadius={30}
+                blurRadius={CLASSIC_COVER_BLUR}
               />
               <Animated.View style={[StyleSheet.absoluteFill, animatedClassicScrimStyle]}>
                 <LinearGradient
-                  colors={['rgba(0,0,0,0.90)', 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0.90)']}
+                  colors={['rgba(0,0,0,0.92)', 'rgba(0,0,0,0.82)', 'rgba(0,0,0,0.92)']}
                   locations={[0, 0.5, 1]}
                   style={StyleSheet.absoluteFill}
                 />
@@ -871,9 +896,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
-          {/* The tab bar below is solid black, so the pill's bottom edge is
-              carried the rest of the way down to black — the two surfaces then
-              meet at the same value and the join disappears. */}
+          {/* Tab-bar join only (short). Lyrics dissolve with an alpha mask, not
+              a black top/bottom shadow over the text. */}
           <Animated.View
             style={[
               { position: 'absolute', left: 0, right: 0, bottom: 0 },
@@ -883,12 +907,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             <LinearGradient
               colors={[
                 'transparent',
-                'rgba(0,0,0,0.18)',
-                'rgba(0,0,0,0.48)',
-                'rgba(0,0,0,0.78)',
-                'rgba(0,0,0,0.94)',
+                'rgba(0,0,0,0.35)',
+                'rgba(0,0,0,0.75)',
+                '#000000',
               ]}
-              locations={[0, 0.3, 0.55, 0.8, 1]}
+              locations={[0, 0.4, 0.75, 1]}
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
@@ -938,20 +961,32 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                    />
                  </View>
                ) : !libraryFocusMode && currentSong.coverImageUri ? (
+                  /* Oversized + stronger blur so half-open lyric stage doesn't
+                     show a hard album-art rectangle through the glass. */
                   <Image
                     source={{ uri: currentSong.coverImageUri }}
-                    style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
+                    style={{
+                      position: 'absolute',
+                      top: -COVER_BLEED,
+                      left: -COVER_BLEED,
+                      right: -COVER_BLEED,
+                      bottom: -COVER_BLEED,
+                      opacity: 0.5,
+                      transform: [{ scale: 1.2 }],
+                    }}
                     resizeMode="cover"
-                    blurRadius={22}
+                    blurRadius={ISLAND_COVER_BLUR}
                   />
                ) : (
                   /* Solid fallback when no cover art — prevents transparent look */
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
                )}
 
-              {/* Vignette for text readability */}
+              {/* Vignette — stronger top/bottom so half & full lyric expand don't
+                  leave a sharp cover-art edge at the pill rim. */}
               <LinearGradient
-                colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.65)']}
+                colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.72)']}
+                locations={[0, 0.25, 0.65, 1]}
                 start={{x: 0, y: 0}}
                 end={{x: 0, y: 1}}
                 style={StyleSheet.absoluteFill}
@@ -1143,6 +1178,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                     </View>
 
                     <Animated.View style={[styles.classicLyricsContainer, animatedClassicLyricsStyle]}>
+                        {/* edgeFade uses native ScrollView fadingEdgeLength (no
+                            MaskedView rebuild) so lyric text soft-dissolves at
+                            the top/bottom instead of a black scrim. */}
                         <SynchronizedLyrics
                             lyrics={lyricsToUse || []}
                             currentTime={positionSV}
@@ -1161,6 +1199,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             topSpacerHeight={50}
                             bottomSpacerHeight={50}
                             expandedAt={lyricExpandedAt}
+                            edgeFade={48}
                         />
                         <View style={styles.dragHandle} />
                     </Animated.View>
