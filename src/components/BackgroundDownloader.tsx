@@ -20,7 +20,10 @@ const KeepAwakeController = () => {
 };
 
 export const BackgroundDownloader = () => {
-    const { queue, updateItem } = useDownloadQueueStore();
+    // This component is mounted for the whole app lifetime, so it must not
+    // re-render on unrelated queue-store fields.
+    const queue = useDownloadQueueStore(s => s.queue);
+    const updateItem = useDownloadQueueStore(s => s.updateItem);
     const addSong = useSongsStore(state => state.addSong);
     const fetchSongs = useSongsStore(state => state.fetchSongs);
     const activeDownloads = useRef<Set<string>>(new Set());

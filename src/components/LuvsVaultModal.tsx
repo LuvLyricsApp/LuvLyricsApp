@@ -31,7 +31,9 @@ export const LuvsVaultModal: React.FC<LuvsVaultModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { vault, removeFromVault, clearVault } = useLuvsFeedStore();
+  const vault = useLuvsFeedStore(s => s.vault);
+  const removeFromVault = useLuvsFeedStore(s => s.removeFromVault);
+  const clearVault = useLuvsFeedStore(s => s.clearVault);
   const addToQueue = useDownloadQueueStore((state) => state.addToQueue);
   
   const [downloadAlertVisible, setDownloadAlertVisible] = React.useState(false);

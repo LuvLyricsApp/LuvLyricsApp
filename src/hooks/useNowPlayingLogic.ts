@@ -260,7 +260,8 @@ export function useNowPlayingLogic(songId: string) {
   const isUserScrolling = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { lyricsDelay } = useSettingsStore();
+  // Selector only — this hook re-renders on position ticks during playback.
+  const lyricsDelay = useSettingsStore(s => s.lyricsDelay);
 
   const linearScrollDataRef = useRef({ isLinear, processedLyrics, lyricsDelay });
   linearScrollDataRef.current = { isLinear, processedLyrics, lyricsDelay };

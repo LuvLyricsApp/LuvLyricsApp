@@ -186,7 +186,8 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     }
   }, [recomputeOffsets]);
 
-  const { lyricsDelay } = useSettingsStore();
+  // Selector, not the whole store: this component re-renders while lyrics scroll.
+  const lyricsDelay = useSettingsStore(s => s.lyricsDelay);
 
   // Normalise currentTime — accept both raw number and SharedValue<number>
   const currentTimeNumberSV = useSharedValue(typeof currentTime === 'number' ? currentTime : 0);

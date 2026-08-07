@@ -21,7 +21,8 @@ interface LanguagePickerModalProps {
 
 export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visible, onClose }) => {
   const colors = useThemeColors();
-  const { preferredLanguages, setPreferredLanguages } = useLuvsPreferencesStore();
+  const preferredLanguages = useLuvsPreferencesStore(s => s.preferredLanguages);
+  const setPreferredLanguages = useLuvsPreferencesStore(s => s.setPreferredLanguages);
   const [selectedLanguages, setSelectedLanguages] = useState<LuvLanguage[]>(() =>
     preferredLanguages.filter(l => l.weight > 0).map(l => l.language)
   );

@@ -51,7 +51,8 @@ export const PlaylistsScreen: React.FC = () => {
   const currentSongId = usePlayerStore(state => state.currentSongId);
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
   const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-  const { songs: allSongsStore, getSong } = useSongsStore();
+  const allSongsStore = useSongsStore(s => s.songs);
+  const getSong = useSongsStore(s => s.getSong);
 
   const [activeThemeColors, setActiveThemeColors] = React.useState<string[] | undefined>(undefined);
   const [activeImageUri, setActiveImageUri] = React.useState<string | null>(null);

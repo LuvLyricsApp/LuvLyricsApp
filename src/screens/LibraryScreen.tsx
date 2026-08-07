@@ -81,7 +81,8 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const playerCurrentSongId = usePlayerStore(state => state.currentSong?.id);
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
   const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-  const { recentArts, addRecentArt } = useArtHistoryStore();
+  const recentArts = useArtHistoryStore(s => s.recentArts);
+  const addRecentArt = useArtHistoryStore(s => s.addRecentArt);
   const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
   const playInMiniPlayerOnly = useSettingsStore(state => state.playInMiniPlayerOnly);
   const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
