@@ -125,14 +125,19 @@ class LuvsPrefs(context: Context) {
     // ── Scoring ──────────────────────────────────────────────────────────────
 
     /**
-     * Recency-weighted artist scoring, matching the JS implementation: likes add,
-     * skips subtract, and partial plays contribute proportional engagement.
+     * Recency-weighted artist scoring: likes add, skips subtract, partial plays
+     * contribute proportional engagement.
+     *
+     * Deliberately a full pass. Incremental folding looks tempting, but the recency
+     * weight is relative to the current history length, so a partial update would
+     * freeze each entry's weight at the size it had when recorded and quietly change
+     * the ranking. This runs once per feed build (see flush()), not per swipe.
      */
     @Synchronized
     fun analyze() {
         if (interactions.isEmpty()) return
 
-        data class Acc(var totalScore: Double = 0.0, var count: Int = 0, var skips: Int = 0)
+        class Acc(var totalScore: Double = 0.0, var count: Int = 0, var skips: Int = 0)
         val byArtist = mutableMapOf<String, Acc>()
 
         interactions.forEachIndexed { index, it ->

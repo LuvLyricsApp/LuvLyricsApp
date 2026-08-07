@@ -4,6 +4,7 @@ import com.lyricflow.app.luvs.LocalSong
 import com.lyricflow.app.luvs.LuvInteraction
 import com.lyricflow.app.luvs.LuvsEngine
 import com.lyricflow.app.luvs.LuvsPrefs
+import com.lyricflow.app.luvs.SaavnClient
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CoroutineScope
@@ -23,7 +24,9 @@ class LuvsEngineModule : Module() {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val prefs: LuvsPrefs by lazy {
-        LuvsPrefs(requireNotNull(appContext.reactContext) { "No React context for LuvsPrefs" })
+        val context = requireNotNull(appContext.reactContext) { "No React context for LuvsPrefs" }
+        SaavnClient.initCache(context.cacheDir)
+        LuvsPrefs(context)
     }
     private val engine: LuvsEngine by lazy { LuvsEngine(prefs) }
 

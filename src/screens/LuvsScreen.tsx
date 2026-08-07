@@ -89,7 +89,7 @@ const LuvsScreen: React.FC = () => {
   // Keep ref in sync so useFocusEffect can read latest index without a dep on it
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
-  const { recordInteraction, loadFromStorage } = useLuvsPreferencesStore();
+  const loadFromStorage = useLuvsPreferencesStore(s => s.loadFromStorage);
 
   const scrollY = useSharedValue(0);
   const currentIndexSV = useDerivedValue(() => {
@@ -234,14 +234,9 @@ const LuvsScreen: React.FC = () => {
           liked: isInVault(prevSong.id),
           skipped,
         };
-        // Exactly one store scores this. When Kotlin owns ranking, running the JS
-        // analyser too would re-score up to 500 interactions and hit AsyncStorage
-        // on every swipe for a result nothing reads.
-        if (luvsEngine.isNative) {
-          luvsEngine.recordInteraction(interaction);
-        } else {
-          recordInteraction(interaction);
-        }
+        // Kotlin is the only thing that scores interactions now, and it defers the
+        // ranking off the JS thread — a swipe never waits on it.
+        luvsEngine.recordInteraction(interaction);
 
         if (__DEV__) {
           const verb = skipped ? '⏭️ Skipped' : '👀 Watched';
@@ -262,7 +257,7 @@ const LuvsScreen: React.FC = () => {
         loadMoreSongs();
       }
     },
-    [feedSongs, isInVault, recordInteraction, loadMoreSongs, setCurrentIndex]
+    [feedSongs, isInVault, loadMoreSongs, setCurrentIndex]
   );
 
   /**

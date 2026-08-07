@@ -1,13 +1,12 @@
 /**
  * Single entry point the Luvs UI talks to.
  *
- * Android runs the Kotlin engine (LuvsEngineModule) — Saavn search, ranking,
- * filtering, feed state and preference persistence are all native. Every other
- * platform falls back to the TypeScript engine, which stays the reference
- * implementation until the Swift port lands.
+ * The engine is Kotlin (LuvsEngineModule): Saavn search, ranking, filtering, feed
+ * state and preference persistence all run natively. Feeds are written into
+ * useLuvsFeedStore so the React components stay backend-agnostic.
  *
- * Either way the resulting feed is written into useLuvsFeedStore, so React
- * components never need to know which backend produced it.
+ * Android-only. Every call is inert elsewhere, so iOS renders the empty state
+ * rather than crashing — until a Swift port lands.
  */
 
 import { Platform } from 'react-native';
@@ -15,7 +14,6 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Song, UnifiedSong } from '../types/song';
 import { useLuvsFeedStore } from '../store/luvsFeedStore';
 import { useSongsStore } from '../store/songsStore';
-import { luvsRecommendationEngine } from './LuvsRecommendationEngine';
 
 export interface LuvInteractionPayload {
   songId: string;
@@ -52,7 +50,7 @@ interface LuvsEngineNativeModule {
 }
 
 // Null on iOS and on any Android build predating the module, so a stale binary
-// degrades to the JS engine instead of crashing.
+// shows an empty feed instead of crashing.
 const native: LuvsEngineNativeModule | null =
   Platform.OS === 'android'
     ? (requireOptionalNativeModule('LuvsEngine') as LuvsEngineNativeModule | null)
@@ -99,14 +97,14 @@ export const luvsEngine = {
   isNative: native !== null,
 
   async refresh(): Promise<UnifiedSong[]> {
-    if (!native) return luvsRecommendationEngine.refreshRecommendation();
+    if (!native) return [];
     syncLibrary(native);
     useLuvsFeedStore.getState().setCurrentIndex(0);
     return commitFeed(await native.refresh());
   },
 
   async loadMore(): Promise<UnifiedSong[]> {
-    if (!native) return luvsRecommendationEngine.loadMoreSongs();
+    if (!native) return [];
     syncLibrary(native);
     // Kotlin sends only the new page; appending here keeps bridge traffic flat
     // instead of growing with every page.
@@ -118,19 +116,13 @@ export const luvsEngine = {
   },
 
   async prefetch(): Promise<void> {
-    if (!native) {
-      await luvsRecommendationEngine.prefetch();
-      return;
-    }
+    if (!native) return;
     syncLibrary(native);
     commitFeed(await native.prefetch());
   },
 
   async discoverSimilar(songId: string): Promise<void> {
-    if (!native) {
-      await luvsRecommendationEngine.discoverSimilar(songId);
-      return;
-    }
+    if (!native) return;
     commitFeed(await native.discoverSimilar(songId));
   },
 

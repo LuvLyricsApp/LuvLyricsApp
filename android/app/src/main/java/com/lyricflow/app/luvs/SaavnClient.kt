@@ -1,22 +1,53 @@
 package com.lyricflow.app.luvs
 
+import okhttp3.Cache
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /**
- * Kotlin port of the Saavn half of MultiSourceSearchService. Same endpoints,
- * headers and field mapping — the JS implementation stays authoritative for iOS.
+ * Kotlin port of the Saavn half of MultiSourceSearchService — same endpoints,
+ * headers and field mapping.
  */
 object SaavnClient {
     private const val API = "https://jiosaavn-api-byprats.vercel.app/api"
 
-    private val client = OkHttpClient.Builder()
+    /**
+     * Search results are stable enough to reuse for a few minutes. The feed rebuilds
+     * from the same artist pool constantly, so most refreshes hit the disk cache and
+     * skip the network entirely.
+     */
+    private const val CACHE_BYTES = 12L * 1024 * 1024
+    private val MAX_STALE_SECONDS = TimeUnit.MINUTES.toSeconds(10).toInt()
+
+    @Volatile
+    private var client: OkHttpClient = buildClient(null)
+
+    /** Called once from the module; the provider sends no cache headers of its own. */
+    @Synchronized
+    fun initCache(cacheDir: File) {
+        client = buildClient(Cache(File(cacheDir, "luvs-http"), CACHE_BYTES))
+    }
+
+    private fun buildClient(cache: Cache?) = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
+        .apply { if (cache != null) cache(cache) }
+        // The API returns no-store, so responses are rewritten as cacheable on the
+        // way in. Nothing here is user-specific, so it is safe to reuse.
+        .addNetworkInterceptor { chain ->
+            chain.proceed(chain.request())
+                .newBuilder()
+                .removeHeader("Pragma")
+                .removeHeader("Cache-Control")
+                .header("Cache-Control", "public, max-age=$MAX_STALE_SECONDS")
+                .build()
+        }
         .build()
 
     private val browserHeaders = mapOf(
@@ -43,7 +74,10 @@ object SaavnClient {
     }
 
     private fun get(url: String): JSONObject? {
-        val builder = Request.Builder().url(url)
+        val builder = Request.Builder()
+            .url(url)
+            // Serve from disk when the entry is still fresh; fall through otherwise.
+            .cacheControl(CacheControl.Builder().maxStale(MAX_STALE_SECONDS, TimeUnit.SECONDS).build())
         browserHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
         client.newCall(builder.build()).execute().use { response ->
             if (!response.isSuccessful) return null
