@@ -257,7 +257,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
 
     if (__DEV__) console.log(`[YTBrowser] Handing off: ${videoInfo.title}`);
 
-    navigation.replace('AudioDownloader', {
+    navigation.navigate('Main', { screen: 'AudioDownloader', params: {
       fromBrowser: true,
       videoTitle: videoInfo.title,
       videoAuthor: videoInfo.author,
@@ -267,7 +267,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
       audioFormat: videoInfo.audioFormat,
       thumbnail: videoInfo.thumbnail,
       lengthSeconds: videoInfo.lengthSeconds,
-    });
+    }});
   }, [videoInfo, navigation]);
 
   return (

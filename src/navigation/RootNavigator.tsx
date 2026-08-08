@@ -13,7 +13,6 @@ import { navigationRef } from '../utils/navigationService';
 // Import navigators and screens
 import TabNavigator from './TabNavigator';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
-import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
@@ -65,10 +64,6 @@ export const RootNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
-          />
-          <Stack.Screen
-            name="AudioDownloader"
-            component={AudioDownloaderScreen}
           />
           <Stack.Screen
             name="YoutubeBrowser"

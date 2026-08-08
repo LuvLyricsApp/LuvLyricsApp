@@ -8,7 +8,7 @@ This document is the source of truth for the in-app player and lyrics reader. Th
 - Lyrics expand upward from the docked player. Playback, seeking, and action controls stay available at the bottom; opening lyrics must not navigate to a new player screen.
 - The Dynamic Island uses one open/close transition rather than separate tray and full-screen stages. It is opaque and has the same animated artwork treatment as the Classic Bar.
 - Show the player on the normal app routes, including Settings. Luvs is the intentional exception.
-- Settings is a hidden route within the tab navigator. The normal navigation bar remains visible while Settings is open.
+- Settings and Audio Downloader are hidden routes within the tab navigator. The normal navigation bar remains visible while either screen is open.
 
 ## Artwork colour flow
 

@@ -37,7 +37,7 @@ if (wasPlaying) player.play();
 `PlayerContext` uses `didJustFinish` (cross-platform signal) as primary, plus a `isNearEndFallback` (within 0.35s of end) as secondary. The fallback only triggers when `store.isPlaying` is true — prevents auto-advancing when user manually pauses near end.
 
 ### Player presentation
-There is no standalone Now Playing screen. Keep lyrics in `MiniPlayer` so controls stay docked when the reader opens. The Dynamic Island and Classic Bar must use the same opaque artwork-flow background. Settings is a hidden tab route, so the normal tab bar remains visible there.
+There is no standalone Now Playing screen. Keep lyrics in `MiniPlayer` so controls stay docked when the reader opens. The Dynamic Island and Classic Bar must use the same opaque artwork-flow background. Settings and Audio Downloader are hidden tab routes, so the normal tab bar remains visible there.
 
 ### Library auto-next
 `nextInPlaylist()` in `playerStore.ts` dynamically `require`s `songsStore` (circular dep workaround) to rebuild queue when `currentPlaylistId === 'library'` and queue is null.

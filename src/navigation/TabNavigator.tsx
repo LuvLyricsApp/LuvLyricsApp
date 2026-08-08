@@ -16,6 +16,7 @@ import PlaylistsScreen from '../screens/PlaylistsScreen';
 import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
@@ -92,6 +93,7 @@ export const TabNavigator: React.FC = () => {
       {/* Settings is reached from the Home header, but lives in the tab navigator
           so the existing bottom navigation remains available while editing it. */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 };

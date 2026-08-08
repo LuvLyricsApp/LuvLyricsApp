@@ -1,28 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DarkColors } from '../constants/colors';
 import { usePlayerStore } from '../store/playerStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { AudioDownloaderSearchTab } from './AudioDownloaderSearchTab';
 import { AudioDownloaderQueueTab } from './AudioDownloaderQueueTab';
-import { safeGoBack } from '../utils/navigationService';
-
-interface AudioDownloaderProps {
-    navigation: {
-        goBack: () => void;
-        canGoBack?: () => boolean;
-        navigate: (screen: string, params?: Record<string, unknown>) => void;
-    };
-    route: {
-        params?: {
-            voiceQuery?: string;
-            autoDownload?: boolean;
-        };
-    };
-}
+import { TabScreenProps } from '../types/navigation';
+import { TAB_BAR_HEIGHT } from '../constants/layout';
 
 type ShellTab = 'search' | 'queue';
 
@@ -39,9 +26,10 @@ const QueueBadge = () => {
     );
 };
 
-export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigation, route }) => {
+export const AudioDownloaderScreen: React.FC<TabScreenProps<'AudioDownloader'>> = ({ navigation, route }) => {
     const [activeShellTab, setActiveShellTab] = useState<ShellTab>('search');
     const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
+    const insets = useSafeAreaInsets();
     const voiceQuery = route.params?.voiceQuery;
     const autoDownload = route.params?.autoDownload;
 
@@ -62,10 +50,10 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
                 start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.45 }}
             />
 
-            <SafeAreaView style={styles.safeArea}>
+            <SafeAreaView style={[styles.safeArea, { paddingBottom: TAB_BAR_HEIGHT + insets.bottom }]}>
                 {/* Shell header: back + tab switcher */}
                 <View style={styles.header}>
-                    <Pressable onPress={() => safeGoBack(navigation)} style={styles.backBtn}>
+                    <Pressable onPress={() => navigation.navigate('Home')} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={22} color="#fff" />
                     </Pressable>
 

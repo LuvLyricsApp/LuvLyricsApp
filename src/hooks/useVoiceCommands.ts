@@ -129,10 +129,10 @@ export function useVoiceCommands() {
         break;
 
       case 'SEARCH_DOWNLOAD':
-        navigationRef.current?.navigate('AudioDownloader', {
+        navigationRef.current?.navigate('Main', { screen: 'AudioDownloader', params: {
           voiceQuery: intent.query,
           autoDownload: true,
-        });
+        }});
         setState(s => ({ ...s, lastCommand: `Finding ${intent.query}` }));
         break;
 

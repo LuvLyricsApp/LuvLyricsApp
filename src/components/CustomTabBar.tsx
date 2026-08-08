@@ -22,7 +22,9 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
   const micEnabled = useSettingsStore(s => s.micEnabled);
   // Settings is a hidden tab route so its screen can retain this navigator. It
   // must not reserve an empty icon slot in the visible four-tab layout.
-  const visibleRoutes = state.routes.filter(route => route.name !== 'Settings');
+  const visibleRoutes = state.routes.filter(
+    route => route.name !== 'Settings' && route.name !== 'AudioDownloader',
+  );
   const midpoint = Math.ceil(visibleRoutes.length / 2);
   const leftRoutes = visibleRoutes.slice(0, midpoint);
   const rightRoutes = visibleRoutes.slice(midpoint);

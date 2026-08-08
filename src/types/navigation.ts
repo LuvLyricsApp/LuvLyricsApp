@@ -4,25 +4,26 @@
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { CompositeScreenProps } from '@react-navigation/native';
+import { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
+
+export type AudioDownloaderParams = {
+  fromBrowser?: boolean;
+  videoTitle?: string;
+  videoAuthor?: string;
+  videoId?: string;
+  audioUrl?: string;
+  audioBitrate?: number;
+  audioFormat?: string;
+  thumbnail?: string;
+  lengthSeconds?: number;
+  voiceQuery?: string;
+  autoDownload?: boolean;
+};
 
 // Root Stack Navigator
 export type RootStackParamList = {
-  Main: undefined;
+  Main: NavigatorScreenParams<TabParamList> | undefined;
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
-  AudioDownloader: {
-    fromBrowser?: boolean;
-    videoTitle?: string;
-    videoAuthor?: string;
-    videoId?: string;
-    audioUrl?: string;
-    audioBitrate?: number;
-    audioFormat?: string;
-    thumbnail?: string;
-    lengthSeconds?: number;
-    voiceQuery?: string;
-    autoDownload?: boolean;
-  } | undefined;
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault
   CreatePlaylist: { playlistId?: string, initialName?: string } | undefined; // Create or Edit playlist modal
@@ -36,6 +37,7 @@ export type TabParamList = {
   Library: undefined; // Was Playlists
   Search: undefined; // replaced Settings in the tab bar
   Settings: undefined; // hidden route so Settings retains the bottom navigation
+  AudioDownloader: AudioDownloaderParams | undefined; // hidden route; retains bottom navigation
 };
 
 /**

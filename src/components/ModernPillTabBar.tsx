@@ -48,7 +48,9 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
   // Settings stays inside the tab navigator to keep this bar visible, but it
   // remains a header-only destination rather than a fifth tab icon.
-  const visibleRoutes = state.routes.filter(route => route.name !== 'Settings');
+  const visibleRoutes = state.routes.filter(
+    route => route.name !== 'Settings' && route.name !== 'AudioDownloader',
+  );
   const midpoint = Math.ceil(visibleRoutes.length / 2);
   const leftRoutes = visibleRoutes.slice(0, midpoint);
   const rightRoutes = visibleRoutes.slice(midpoint);
