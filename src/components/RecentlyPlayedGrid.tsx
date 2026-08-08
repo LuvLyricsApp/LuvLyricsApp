@@ -102,6 +102,7 @@ export const RecentlyPlayedGrid: React.FC<RecentlyPlayedGridProps> = React.memo(
             gradientId={song.gradientId}
             coverImageUri={song.coverImageUri} 
             duration={song.duration} 
+            showDuration={false}
             isLiked={song.isLiked}
             onPress={() => onSongPress(song, visibleSongs)}
             onLongPress={() => onSongLongPress(song)}
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     paddingLeft: 26,
     paddingRight: 16,
     gap: 12,
-    marginBottom: 20
+    marginBottom: 10
   },
   horizontalCard: {
     width: 160,

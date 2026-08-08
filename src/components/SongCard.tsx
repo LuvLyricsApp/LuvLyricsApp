@@ -22,6 +22,8 @@ interface SongCardProps {
   gradientId: string;
   coverImageUri?: string;
   duration?: number;
+  /** Recent-play cards are intentionally compact; list and search cards keep time. */
+  showDuration?: boolean;
   isLiked?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
@@ -30,7 +32,7 @@ interface SongCardProps {
 }
 
 export const SongCard: React.FC<SongCardProps> = memo(({
-  id, title, artist, album, gradientId, coverImageUri, duration, isLiked: isLikedProp,
+  id, title, artist, album, gradientId, coverImageUri, duration, showDuration = true, isLiked: isLikedProp,
   onPress, onLongPress, onLikePress, onMagicPress,
 }) => {
   const colors = useThemeColors();
@@ -161,7 +163,7 @@ export const SongCard: React.FC<SongCardProps> = memo(({
       <View style={styles.info}>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
-        {durationText.length > 0 && <Text style={[styles.duration, { color: colors.textMuted }]}>{durationText}</Text>}
+        {showDuration && durationText.length > 0 && <Text style={[styles.duration, { color: colors.textMuted }]}>{durationText}</Text>}
       </View>
     </Pressable>
   );
