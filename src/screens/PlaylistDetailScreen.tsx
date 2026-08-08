@@ -7,7 +7,7 @@
  * - Dynamic Header (Syncs with playing song)
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
 import {
   StyleSheet,
   View,
@@ -33,6 +33,11 @@ import Animated, {
   interpolate,
   Extrapolation,
   withTiming,
+  withRepeat,
+  withSequence,
+  withDelay,
+  Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
@@ -67,9 +72,73 @@ type PlaylistDetailRouteProp = RouteProp<
 >;
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const PLAYLIST_TITLE_PAUSE_MS = 6500;
+const PLAYLIST_TITLE_PIXELS_PER_SECOND = 26;
 
 const AnimatedDraggableFlatList = Animated.createAnimatedComponent(DraggableFlatList) as unknown as typeof DraggableFlatList;
 const AnimatedFlashList = Animated.createAnimatedComponent(FlashList) as unknown as React.FC<any>;
+
+/**
+ * Keeps a long playlist name readable without making the header jump or
+ * continuously move. Measurement happens on the JS side; the repeating
+ * translation stays on the UI thread.
+ */
+const PlaylistHeaderTitle = memo(({ title }: { title: string }) => {
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const progress = useSharedValue(0);
+  const isOverflowing = textWidth > viewportWidth + 1;
+
+  useEffect(() => {
+    const overflow = Math.max(0, textWidth - viewportWidth);
+    cancelAnimation(progress);
+    progress.value = 0;
+    if (overflow <= 1) return;
+
+    const travelMs = Math.max(2400, (overflow / PLAYLIST_TITLE_PIXELS_PER_SECOND) * 1000);
+    progress.value = withRepeat(
+      withSequence(
+        withDelay(PLAYLIST_TITLE_PAUSE_MS, withTiming(1, { duration: travelMs, easing: Easing.linear })),
+        withTiming(0, { duration: 1 }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => cancelAnimation(progress);
+  }, [progress, textWidth, title, viewportWidth]);
+
+  const animatedTextStyle = useAnimatedStyle(() => {
+    const overflow = Math.max(0, textWidth - viewportWidth);
+    return { transform: [{ translateX: -overflow * progress.value }] };
+  });
+
+  return (
+    <View
+      style={styles.stickyHeaderTitleViewport}
+      onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+    >
+      <Text
+        accessible={false}
+        style={[styles.stickyHeaderTitle, styles.stickyHeaderTitleMeasure]}
+        onLayout={(event) => setTextWidth(event.nativeEvent.layout.width)}
+      >
+        {title}
+      </Text>
+      <Animated.Text
+        numberOfLines={1}
+        style={[
+          styles.stickyHeaderTitle,
+          isOverflowing ? styles.stickyHeaderTitleAnimated : styles.stickyHeaderTitleCentered,
+          animatedTextStyle,
+        ]}
+      >
+        {title}
+      </Animated.Text>
+    </View>
+  );
+});
+PlaylistHeaderTitle.displayName = 'PlaylistHeaderTitle';
 
 export const PlaylistDetailScreen: React.FC = () => {
   const colors = useThemeColors();
@@ -781,9 +850,7 @@ export const PlaylistDetailScreen: React.FC = () => {
           
           {/* Title always visible over artwork (like home brand name). */}
           {!isSearchActive && (
-              <Animated.Text style={styles.stickyHeaderTitle} numberOfLines={2}>
-                  {playlistName}
-              </Animated.Text>
+              <PlaylistHeaderTitle title={playlistName} />
           )}
           
           <View style={{flex: 1}} />
@@ -971,13 +1038,31 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   stickyHeaderTitle: {
-      flex: 1,
       fontSize: 18,
       fontWeight: 'bold',
       color: '#fff',
-      marginLeft: 16,
       textAlign: 'center',
-      marginRight: 16,
+  },
+  stickyHeaderTitleViewport: {
+      position: 'absolute',
+      left: 64,
+      right: 64,
+      overflow: 'hidden',
+      justifyContent: 'center',
+  },
+  stickyHeaderTitleAnimated: {
+      alignSelf: 'flex-start',
+      flexShrink: 0,
+  },
+  stickyHeaderTitleCentered: {
+      width: '100%',
+  },
+  stickyHeaderTitleMeasure: {
+      position: 'absolute',
+      left: 0,
+      opacity: 0,
+      alignSelf: 'flex-start',
+      flexShrink: 0,
   },
   iconButton: {
     width: 40,
