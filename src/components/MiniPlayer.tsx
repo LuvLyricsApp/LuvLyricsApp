@@ -662,6 +662,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const classicFullExpandedSV = useSharedValue(false);
   const isIslandSV = useSharedValue(isIsland);
   const hasLyricsSV = useSharedValue(false);
+  const classicTrackSwipeX = useSharedValue(0);
 
   // Keep shared flags in sync with React state (cheap writes, no re-render).
   useEffect(() => { expandedSV.value = expanded; }, [expanded, expandedSV]);
@@ -762,10 +763,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
       // Collapsed (both styles) ΓÇö swipe left/right to skip
       if (!expandedSV.value && isHoriz) {
-        if (event.translationX < -60 || event.velocityX < -600) {
-          runOnJS(skipForward)();
-        } else if (event.translationX > 60 || event.velocityX > 600) {
-          runOnJS(skipBackward)();
+        if (isIslandSV.value) {
+          if (event.translationX < -60 || event.velocityX < -600) {
+            runOnJS(skipForward)();
+          } else if (event.translationX > 60 || event.velocityX > 600) {
+            runOnJS(skipBackward)();
+          }
         }
         return;
       }
@@ -877,6 +880,42 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // so the middle of the bar belongs to the lyric ScrollView and can scroll.
   const stageRailLeftGesture = buildStageGesture();
   const stageRailRightGesture = buildStageGesture();
+
+  // Dedicated song-info swipe: it has a decisive threshold so a normal tap or
+  // vertical stage gesture cannot accidentally change tracks.
+  const classicTrackInfoGesture = Gesture.Pan()
+    .enabled(!isIsland)
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-14, 14])
+    .onUpdate((event) => {
+      'worklet';
+      classicTrackSwipeX.value = Math.max(-34, Math.min(34, event.translationX));
+    })
+    .onEnd((event) => {
+      'worklet';
+      const isNext = event.translationX < -44 || event.velocityX < -520;
+      const isPrevious = event.translationX > 44 || event.velocityX > 520;
+      const direction = isNext ? -1 : isPrevious ? 1 : 0;
+
+      if (direction !== 0) {
+        classicTrackSwipeX.value = withSequence(
+          withTiming(direction * 24, { duration: 70, easing: Easing.out(Easing.quad) }),
+          withSpring(0, { damping: 18, stiffness: 240, mass: 0.55 }),
+        );
+        if (isNext) runOnJS(skipForward)();
+        else runOnJS(skipBackward)();
+      } else {
+        classicTrackSwipeX.value = withSpring(0, { damping: 18, stiffness: 240, mass: 0.55 });
+      }
+    });
+
+  const animatedClassicTrackInfoStyle = useAnimatedStyle(() => {
+    const distance = Math.abs(classicTrackSwipeX.value);
+    return {
+      transform: [{ translateX: classicTrackSwipeX.value * 0.18 }],
+      opacity: 1 - Math.min(distance / 360, 0.09),
+    };
+  });
 
   const toggleExpand = useCallback(() => {
     if (expanded) {
@@ -1244,14 +1283,18 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 <View style={{ width: '100%', height: '100%', flexDirection: 'column-reverse' }}>
                   <GestureDetector gesture={panGesture}>
                     <View style={styles.classicTransportRow}>
-                        <TrackInfo
-                            title={currentSong.title}
-                            artist={currentSong.artist || ''}
-                            coverImageUri={currentSong.coverImageUri}
-                            isIsland={isIsland}
-                            onPress={toggleExpand}
-                            onBodyPress={toggleExpand}
-                        />
+                        <GestureDetector gesture={classicTrackInfoGesture}>
+                            <Animated.View style={[styles.classicTrackInfoSwipeTarget, animatedClassicTrackInfoStyle]}>
+                                <TrackInfo
+                                    title={currentSong.title}
+                                    artist={currentSong.artist || ''}
+                                    coverImageUri={currentSong.coverImageUri}
+                                    isIsland={isIsland}
+                                    onPress={toggleExpand}
+                                    onBodyPress={toggleExpand}
+                                />
+                            </Animated.View>
+                        </GestureDetector>
                         {/* Like the currently playing song without leaving the bar. */}
                         <Pressable
                             onPress={(e) => {
@@ -1391,6 +1434,12 @@ const styles = StyleSheet.create({
     // Room for the top-edge scrubber track
     paddingTop: 12,
     width: '100%',
+  },
+  classicTrackInfoSwipeTarget: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
   },
   islandContainer: {
     alignItems: 'center',
