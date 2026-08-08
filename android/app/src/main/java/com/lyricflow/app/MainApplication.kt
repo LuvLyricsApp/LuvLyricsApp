@@ -46,7 +46,13 @@ class MainApplication : Application(), ReactApplication {
     } catch (e: IllegalArgumentException) {
       ReleaseLevel.STABLE
     }
-    loadReactNative(this)
+    // Expo Dev Launcher must install its React delegate before a debug React
+    // context exists. Eager startup here races that delegate and leaves Expo's
+    // JS EventEmitter global unavailable. Release keeps the standard eager
+    // path; debug lets ReactActivityDelegate create the context after launch.
+    if (!BuildConfig.DEBUG) {
+      loadReactNative(this)
+    }
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
 
