@@ -266,14 +266,16 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
 
     extractAlbumColors(coverImageUri).then((albumPalette) => {
       if (cancelled || !albumPalette) return;
-      const extracted = [
-        albumPalette.dominant && { ...albumPalette.dominant, role: 'dominant' },
-        albumPalette.vibrant && { ...albumPalette.vibrant, role: 'vibrant' },
-        albumPalette.darkVibrant && { ...albumPalette.darkVibrant, role: 'darkVibrant' },
-        albumPalette.muted && { ...albumPalette.muted, role: 'muted' },
-        albumPalette.lightVibrant && { ...albumPalette.lightVibrant, role: 'lightVibrant' },
-        albumPalette.darkMuted && { ...albumPalette.darkMuted, role: 'darkMuted' },
-      ].filter(Boolean) as PaletteCandidate[];
+      const extracted = albumPalette.swatches?.length
+        ? albumPalette.swatches
+        : [
+          albumPalette.dominant && { ...albumPalette.dominant, role: 'dominant' },
+          albumPalette.vibrant && { ...albumPalette.vibrant, role: 'vibrant' },
+          albumPalette.darkVibrant && { ...albumPalette.darkVibrant, role: 'darkVibrant' },
+          albumPalette.muted && { ...albumPalette.muted, role: 'muted' },
+          albumPalette.lightVibrant && { ...albumPalette.lightVibrant, role: 'lightVibrant' },
+          albumPalette.darkMuted && { ...albumPalette.darkMuted, role: 'darkMuted' },
+        ].filter(Boolean) as PaletteCandidate[];
       // Keep the outgoing artwork palette alive while this new cover is being
       // read. Clearing it first briefly fell back to the song's generic (often
       // blue) gradient, creating a visible flash between two real palettes.

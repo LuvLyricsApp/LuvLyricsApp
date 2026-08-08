@@ -9,6 +9,8 @@ export interface AlbumSwatch {
 }
 
 export interface AlbumPalette {
+  /** Raw quantized artwork swatches, ordered by the native Palette engine. */
+  swatches?: AlbumSwatch[];
   dominant?: AlbumSwatch;
   vibrant?: AlbumSwatch;
   darkVibrant?: AlbumSwatch;

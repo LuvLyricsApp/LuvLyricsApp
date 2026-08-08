@@ -7,7 +7,10 @@ import android.util.LruCache
 import androidx.palette.graphics.Palette
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 class PaletteModule : Module() {
 
@@ -17,7 +20,7 @@ class PaletteModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("Palette")
 
-        // Returns JSON: { dominant, vibrant, darkVibrant, muted, darkMuted, lightVibrant }
+        // Returns JSON: { swatches, dominant, vibrant, darkVibrant, muted, darkMuted, lightVibrant }
         // Each present swatch: { color: "#RRGGBB", titleTextColor: "#RRGGBB", bodyTextColor: "#RRGGBB" }
         // Absent swatches are omitted. Returns null string on any failure.
         AsyncFunction("extractColors") { imageUri: String ->
@@ -43,10 +46,27 @@ class PaletteModule : Module() {
         return try {
             val uri = Uri.parse(uriStr)
             val scheme = uri.scheme
-            if (scheme == "file" || scheme == null) {
-                BitmapFactory.decodeFile(uri.path, opts)
-            } else {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
+            when (scheme) {
+                "file", null -> BitmapFactory.decodeFile(uri.path, opts)
+                "http", "https" -> {
+                    // Some legacy downloads retain the remote artwork URL when
+                    // their cover file was unavailable. ContentResolver cannot
+                    // open those URLs, which previously made them fall back to
+                    // the generic blue song gradient.
+                    val connection = (URL(uriStr).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 4_000
+                        readTimeout = 6_000
+                        instanceFollowRedirects = true
+                    }
+                    try {
+                        connection.inputStream.use { stream ->
+                            BitmapFactory.decodeStream(stream, null, opts)
+                        }
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+                else -> context.contentResolver.openInputStream(uri)?.use { stream ->
                     BitmapFactory.decodeStream(stream, null, opts)
                 }
             }
@@ -55,6 +75,9 @@ class PaletteModule : Module() {
 
     private fun buildJson(palette: Palette): String {
         val root = JSONObject()
+        val swatches = JSONArray()
+        palette.swatches.forEach { swatches.put(swatchJson(it)) }
+        root.put("swatches", swatches)
         palette.dominantSwatch?.let      { root.put("dominant",     swatchJson(it)) }
         palette.vibrantSwatch?.let       { root.put("vibrant",      swatchJson(it)) }
         palette.darkVibrantSwatch?.let   { root.put("darkVibrant",  swatchJson(it)) }
