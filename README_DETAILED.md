@@ -33,7 +33,7 @@ The standalone Now Playing screen was removed. `MiniPlayer.tsx` is the only play
 - **Artwork flow**: `ArtworkFlowBackground.tsx` extracts a local cover-art palette and cross-fades directly from the outgoing track to the incoming track on a Skia canvas.
 - **Tracking**: `SynchronizedLyrics.tsx` reads shared playback values and finds the active timestamp with binary search on the UI thread.
 - **Glide**: Measured lyric-row midpoints are centred at 50% of the reader viewport. Destination changes use a 460 ms UI-thread glide; large seeks jump immediately.
-- **Typography**: The active line changes colour, opacity, and font treatment without scaling, so the lyric layout remains stable.
+- **Typography**: The active line changes colour, opacity, and vertical settle only; font family, weight, and size stay fixed.
 
 See [Player & Lyrics Experience](./docs/player-lyrics-experience.md) for the maintained interaction contract.
 
@@ -83,7 +83,7 @@ The download manager handles audio, cover art, and lyrics downloads while keepin
 - **Async Overhead Removal**: Progress updates no longer use `await` + `setTimeout` delays, keeping the download I/O thread unblocked.
 
 ### Lyric Reader Motion
-`SynchronizedLyrics.tsx` measures row heights and uses their midpoints to centre the active line precisely. Normal active-line changes glide with a 460 ms cubic-bezier animation driven on the UI thread. An initial position or a seek that spans more than three lines snaps directly to its destination. The active line deliberately has no scale animation; only colour, opacity, vertical lift, and font treatment change.
+`SynchronizedLyrics.tsx` measures row heights and uses their midpoints to centre the active line precisely. Normal active-line changes glide with a 460 ms cubic-bezier animation driven on the UI thread. An initial position or a seek that spans more than three lines snaps directly to its destination. The active line deliberately has no scale or font-weight animation; only colour, opacity, and vertical lift change.
 
 ### State Isolation Architecture
 We implemented strict **Zustand Slicing** to prevent "render cascades".

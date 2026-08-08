@@ -99,8 +99,8 @@ const LyricLine = React.memo(({
       transform: [{ translateY }] as any,
       opacity,
       color,
-      fontFamily: activeValue.value > 0.5 ? Fonts.lyricsActive : Fonts.lyrics,
-      fontWeight: activeValue.value > 0.5 ? Fonts.lyricsActiveWeight : Fonts.lyricsWeight,
+      fontFamily: Fonts.lyrics,
+      fontWeight: Fonts.lyricsWeight,
     };
   });
 
@@ -108,8 +108,7 @@ const LyricLine = React.memo(({
     const basOpacity = activeIndexSV.value > index ? 0.4 : 0.25;
     const opacity = interpolate(activeValue.value, [0, 1], [basOpacity, 1.0], Extrapolation.CLAMP);
     const translateY = interpolate(activeValue.value, [0, 1], [5, 0], Extrapolation.CLAMP);
-    const scale = interpolate(activeValue.value, [0, 1], [0.92, 1], Extrapolation.CLAMP);
-    return { transform: [{ translateY }, { scale }], opacity } as ViewStyle;
+    return { transform: [{ translateY }], opacity } as ViewStyle;
   });
 
   const renderedText = useMemo(() => {

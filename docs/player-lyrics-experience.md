@@ -17,7 +17,7 @@ This document is the source of truth for the in-app player and lyrics reader. Th
 1. A native palette is extracted locally from the current cover art.
 2. The outgoing palette remains visible while the next cover is being analysed; do not clear it or show a generic fallback colour.
 3. Once the next palette is ready, the renderer cross-fades straight from the outgoing palette to the incoming palette.
-4. Large blurred colour blobs drift slowly on a measured canvas. Blur is derived from the actual layout size so it does not look like a static, full-screen cover blur.
+4. Large blurred colour blobs drift at a calm but visible pace on a measured canvas. Blur is derived from the actual layout size so it does not look like a static, full-screen cover blur.
 5. Reduced-motion mode keeps the palette stable while preserving its track-specific colours.
 
 ## Timed lyric reader
@@ -28,7 +28,7 @@ This document is the source of truth for the in-app player and lyrics reader. Th
 - Each lyric row reports its measured height. Its midpoint, not its top edge, is used to calculate the reader target.
 - The active line is centred at 50% of the lyric viewport. A large initial jump or seek is immediate; ordinary active-line changes glide with a 460 ms cubic-bezier animation on the UI thread.
 - The scroll command only runs when the active-line destination changes, avoiding repeated native scroll work for every position tick.
-- The focused lyric changes colour, opacity, and font treatment but deliberately does **not** scale up. Past and upcoming lines are dimmed without changing layout geometry.
+- The focused lyric changes colour, opacity, and a small vertical settle only. Font family, weight, and size stay fixed so the highlighted line never looks larger. Past and upcoming lines are dimmed without changing layout geometry.
 
 ## Scrubber and titles
 

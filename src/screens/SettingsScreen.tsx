@@ -20,6 +20,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
@@ -567,11 +568,21 @@ const SettingsScreen: React.FC<Props> = () => {
     }
   }, [pairingPayloadText]);
 
-  const cardBg = isDark ? 'rgba(255,255,255,0.06)' : colors.card;
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : colors.border;
+  const cardBg = isDark ? 'rgba(255,255,255,0.075)' : colors.card;
+  const cardBorder = isDark ? 'rgba(255,255,255,0.11)' : colors.border;
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000' : colors.background }]}>
+      {isDark && (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.065)', 'rgba(255,255,255,0.018)', 'transparent']}
+          locations={[0, 0.38, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 0.48 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       {isDark && applyThemeToOtherPages && (
         <View style={StyleSheet.absoluteFill}>
           <AuroraHeader palette="settings" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} />
@@ -581,7 +592,10 @@ const SettingsScreen: React.FC<Props> = () => {
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 150 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
           {/* ── Screen title ── */}
-          <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>{SettingsStrings.screenTitle}</Text>
+          <View style={styles.titleBlock}>
+            <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>{SettingsStrings.screenTitle}</Text>
+            <Text style={[styles.screenSubtitle, { color: colors.textMuted }]}>Your listening space, tuned your way</Text>
+          </View>
 
           {/* ── Profile card ── */}
           <View style={[styles.profileCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -1099,12 +1113,14 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16 },
 
   // Screen title
-  screenTitle: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: 12, marginBottom: 20 },
+  titleBlock: { marginTop: 12, marginBottom: 20 },
+  screenTitle: { fontSize: 34, fontWeight: '700', letterSpacing: -0.7 },
+  screenSubtitle: { fontSize: 13, marginTop: 3, letterSpacing: -0.1 },
 
   // Profile card
   profileCard: {
     flexDirection: 'row', alignItems: 'center', gap: 16,
-    borderRadius: 20, padding: 16, marginBottom: 14,
+    borderRadius: 22, padding: 17, marginBottom: 16,
     borderWidth: 1,
   },
   avatar: {
@@ -1129,9 +1145,9 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 28, opacity: 0.5 },
 
   // Quick Actions
-  quickActions: { flexDirection: 'row', gap: 10, marginBottom: 6 },
+  quickActions: { flexDirection: 'row', gap: 10, marginBottom: 7 },
   quickAction: {
-    flex: 1, borderRadius: 16,
+    flex: 1, borderRadius: 18,
     paddingVertical: 14, paddingHorizontal: 12,
     alignItems: 'center', gap: 8,
     borderWidth: 1,
@@ -1156,10 +1172,10 @@ const styles = StyleSheet.create({
 
   // Menu groups
   menuGroup: {
-    borderRadius: 16, overflow: 'hidden', borderWidth: 1, marginBottom: 20,
+    borderRadius: 18, overflow: 'hidden', borderWidth: 1, marginBottom: 22,
   },
   menuRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 16,
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth, gap: 14,
   },
   menuRowLast: { borderBottomWidth: 0 },

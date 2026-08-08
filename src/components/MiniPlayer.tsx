@@ -119,10 +119,16 @@ const MarqueeTitle = memo(({ title, textStyle }: { title: string; textStyle?: an
       style={styles.marqueeViewport}
       onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
     >
+      <Text
+        accessible={false}
+        style={[styles.title, textStyle, styles.marqueeMeasure]}
+        onLayout={(event) => setTextWidth(event.nativeEvent.layout.width)}
+      >
+        {title}
+      </Text>
       <Animated.Text
         numberOfLines={1}
         style={[styles.title, textStyle, styles.marqueeText, marqueeStyle]}
-        onLayout={(event) => setTextWidth(event.nativeEvent.layout.width)}
       >
         {title}
       </Animated.Text>
@@ -369,11 +375,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, expanded, isIsland]);
     
-  // Per-style background mode (island vs classic bar each have their own setting)
   const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
-  // The docked Island always follows its current artwork; choosing an old static
-  // theme must not quietly disable the Apple-Music-style colour motion there.
-  const useThemeBg = !isIsland && activeBgMode !== 'album-art';
+  // Both docked styles always follow their current artwork. Static Classic Bar
+  // themes made the palette flow silently disappear for many users.
+  const useThemeBg = false;
 
   const themePlayerColors: [string, string, string] = (() => {
     switch (activeBgMode) {
@@ -1017,7 +1022,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             <ArtworkFlowBackground
               coverImageUri={currentSong.coverImageUri}
               fallbackColors={gradientColors}
-              animated={expanded}
+              animated
             />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
@@ -1305,7 +1310,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             <View style={[styles.classicStageRail, styles.classicStageRailRight]} />
                         </GestureDetector>
 
-                        <View style={styles.dragHandle} />
                     </Animated.View>
 
                         {/* Beta: YouTube video preview button — floats above play/pause row */}
@@ -1382,8 +1386,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: CLASSIC_TRANSPORT_H,
-    paddingLeft: 16,
-    paddingRight: 8,
+    paddingLeft: 12,
+    paddingRight: 2,
     // Room for the top-edge scrubber track
     paddingTop: 12,
     width: '100%',
@@ -1632,6 +1636,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   marqueeText: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+  },
+  marqueeMeasure: {
+    position: 'absolute',
+    left: 0,
+    opacity: 0,
     alignSelf: 'flex-start',
     flexShrink: 0,
   },

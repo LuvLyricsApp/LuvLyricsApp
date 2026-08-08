@@ -55,20 +55,33 @@ const darken = ([red, green, blue]: ColorVector, amount: number): ColorVector =>
   1,
 ];
 
+const colourInterest = (color: string): number => {
+  const [red, green, blue] = hexToVector(color, [0, 0, 0, 1]);
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const saturation = maximum === 0 ? 0 : (maximum - minimum) / maximum;
+  const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+  const usableLightness = luminance >= 0.10 && luminance <= 0.86 ? 0.32 : 0;
+  return saturation * 1.45 + usableLightness + luminance * 0.08;
+};
+
 const createFlowPalette = (colors: string[]): FlowPalette => {
-  const fallbackBase = hexToVector(colors[0], [0.06, 0.07, 0.11, 1]);
-  const fallbackAccent = hexToVector(colors[1], [0.18, 0.22, 0.36, 1]);
-  const fallbackLight = hexToVector(colors[2], fallbackAccent);
-  const fallbackMuted = hexToVector(colors[3], fallbackBase);
+  const ranked = [...new Set(colors.filter((color) => /^#?[0-9a-fA-F]{6}$/.test(color.trim())))]
+    .sort((left, right) => colourInterest(right) - colourInterest(left));
+  const selected = ranked.length ? ranked : colors;
+  const fallbackBase = hexToVector(selected[0], [0.06, 0.07, 0.11, 1]);
+  const fallbackAccent = hexToVector(selected[1] ?? selected[0], [0.18, 0.22, 0.36, 1]);
+  const fallbackLight = hexToVector(selected[2] ?? selected[0], fallbackAccent);
+  const fallbackMuted = hexToVector(selected[3] ?? selected[1] ?? selected[0], fallbackBase);
 
   // The first swatch becomes an intentional, stable base. The remaining three
   // colours become moving fields, so the surface has a clear dominant colour
   // instead of a washed-out blend of the whole cover image.
   return [
-    darken(fallbackBase, 0.62),
-    darken(fallbackAccent, 0.88),
-    darken(fallbackLight, 0.78),
-    darken(fallbackMuted, 0.82),
+    darken(fallbackBase, 0.46),
+    darken(fallbackAccent, 0.96),
+    darken(fallbackLight, 0.86),
+    darken(fallbackMuted, 0.90),
   ];
 };
 
@@ -232,7 +245,7 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
   const backOpacity = useDerivedValue(() => 1 - transition.value);
   // Slightly quicker than a screen-sized lyric backdrop. In a compact Island
   // this keeps the colour drift perceptible while remaining calm.
-  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 520 : 0));
+  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 285 : 0));
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
