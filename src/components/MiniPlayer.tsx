@@ -530,18 +530,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
   
-  // Classic artwork scrim — collapsed is near-solid black (readable mini bar).
-  // Half/full open dissolve almost all of it so cover colour stays vivid;
-  // a thin residual keeps white lyric text readable.
-  const animatedClassicScrimStyle = useAnimatedStyle(() => {
-    const expand = expansionProgress.value;
-    const full = classicFullProgress.value;
-    // half: ~0.07 · full: ~0.04
-    const opacity = interpolate(expand, [0, 1], [1, 0.07], Extrapolation.CLAMP)
-      - interpolate(full, [0, 1], [0, 0.03], Extrapolation.CLAMP);
-    return { opacity };
-  });
-
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -935,23 +923,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
               style={StyleSheet.absoluteFill}
             />
           ) : currentSong.coverImageUri ? (
-            <>
-              {/* The moving artwork field is visible behind lyrics in the
-                  half- and full-expanded Classic Bar. */}
-              <ArtworkFlowBackground
-                coverImageUri={currentSong.coverImageUri}
-                fallbackColors={gradientColors}
-                animated={animateBackground}
-              />
-              <Animated.View style={[StyleSheet.absoluteFill, animatedClassicScrimStyle]}>
-                {/* Soft tint only — expanded opacity is tiny so colour stays vivid. */}
-                <LinearGradient
-                  colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.4)']}
-                  locations={[0, 0.5, 1]}
-                  style={StyleSheet.absoluteFill}
-                />
-              </Animated.View>
-            </>
+            <ArtworkFlowBackground
+              coverImageUri={currentSong.coverImageUri}
+              fallbackColors={gradientColors}
+              animated={animateBackground && expanded}
+            />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
