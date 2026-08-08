@@ -47,8 +47,8 @@ export function isNativeOwningPlaybackState(): boolean {
   return nativeOwnsPlaybackState;
 }
 
-// Single owner for replace() calls. MiniPlayer and NowPlayingScreen both watch
-// loadedAudioId and would otherwise both load the same track at once.
+// Single owner for replace() calls. The mini player checks this before loading
+// a track, which prevents duplicate native replace() calls.
 let audioLoadInFlight: string | null = null;
 export function beginAudioLoad(songId: string): boolean {
   if (audioLoadInFlight === songId) return false;

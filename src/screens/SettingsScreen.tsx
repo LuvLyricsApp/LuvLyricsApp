@@ -735,7 +735,6 @@ const SettingsScreen: React.FC<Props> = () => {
 
       <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
         <SettingsRowSwitch icon="play-outline" label="Auto-Scroll Lyrics" value={true} onToggle={() => {}} />
-        <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
         {settings.navBarStyle === 'classic' && (
           <SettingsRow
             icon="layers-outline" label="Mini Player Style"
@@ -812,7 +811,6 @@ const SettingsScreen: React.FC<Props> = () => {
             onPress={() => settings.setMiniPlayerStyle(settings.miniPlayerStyle === 'island' ? 'bar' : 'island')}
           />
         )}
-        <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'library'} title="Library" onClose={closeSheet}>

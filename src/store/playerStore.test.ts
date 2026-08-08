@@ -102,8 +102,7 @@ describe('audio load ownership', () => {
     endAudioLoad('song-b');
   });
 
-  // MiniPlayer and NowPlayingScreen both watch loadedAudioId; without this claim
-  // they both call player.replace() for the same track.
+  // The mini player checks this claim before it calls player.replace().
   it('grants the claim once and refuses a concurrent claim for the same track', () => {
     expect(beginAudioLoad('song-a')).toBe(true);
     expect(beginAudioLoad('song-a')).toBe(false);

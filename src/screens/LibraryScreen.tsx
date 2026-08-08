@@ -1,5 +1,4 @@
 import React, { useEffect, useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
 import {
   StyleSheet,
   View,
@@ -91,10 +90,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const recentArts = useArtHistoryStore(s => s.recentArts);
   const addRecentArt = useArtHistoryStore(s => s.addRecentArt);
   const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
-  const playInMiniPlayerOnly = useSettingsStore(state => state.playInMiniPlayerOnly);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
-
-  useFocusEffect(useCallback(() => { setMiniPlayerHidden(false); }, [setMiniPlayerHidden]));
 
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -205,11 +200,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   }, [playerCurrentSongId]);
 
 
-  const playSong = usePlaybackQueue({
-    playInMiniPlayerOnly,
-    setMiniPlayerHidden,
-    navigation,
-  });
+  const playSong = usePlaybackQueue({});
 
   // `queue` is whatever list the tap came from — the Recently Played / artist
   // row passes its own. Only the main list omits it and falls back to itself.
@@ -223,6 +214,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     setSelectedSongForArt(song);
     setShowBottomSheet(true);
   }, []);
+
+  const handleEditLyrics = useCallback(() => {
+    if (!selectedSongForArt) return;
+    setShowBottomSheet(false);
+    navigation.navigate('AddEditLyrics', { songId: selectedSongForArt.id });
+  }, [navigation, selectedSongForArt]);
 
   const handleAddPress = useCallback(() => navigation.navigate('AddEditLyrics', {}), [navigation]);
 
@@ -410,6 +407,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
         song={item}
         onPress={handleSongPress}
         onLongPress={handleSongLongPress}
+        onMore={handleSongLongPress}
         addToScanQueue={handleAddToQueue}
       />
     );
@@ -510,6 +508,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
         onRemoveCover={handleRemoveCover}
         onHideSong={handleHideSong}
         onEditInfo={handleEditInfo}
+        onEditLyrics={handleEditLyrics}
         onDelete={() => { setShowBottomSheet(false); setTimeout(() => setShowDeleteConfirm(true), 300); }}
         colors={colors}
       />

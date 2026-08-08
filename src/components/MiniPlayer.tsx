@@ -5,9 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
 import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
 import InstrumentalWaveform, { isInstrumentalLyric } from './InstrumentalWaveform';
@@ -222,8 +219,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const showTransliteration = usePlayerStore(state => state.showTransliteration);
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
-  const hideMiniPlayer = usePlayerStore(state => state.hideMiniPlayer);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
   const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
@@ -231,14 +226,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const animateBackground = useSettingsStore(state => state.animateBackground);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
   const isLiked = useIsSongLiked(currentSong?.id);
-
-  // Use store instead of navigation state to avoid root-level crashes
-  const isNowPlaying = hideMiniPlayer;
 
   // Animation for Play/Pause Button
   const playButtonScale = useSharedValue(1);
@@ -360,8 +351,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       if (!currentSong || !player) return;
       
       // If the player doesn't have this audio loaded, load it.
-      // beginAudioLoad claims ownership so NowPlayingScreen — which watches the
-      // same loadedAudioId — doesn't replace() the same track in parallel.
+      // beginAudioLoad keeps this single player surface as the only owner of
+      // replace() calls for a track.
       if (loadedAudioId !== currentSong.id && currentSong.audioUri) {
         const songId = currentSong.id;
         if (!beginAudioLoad(songId)) return;
@@ -391,7 +382,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
     syncAudio();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, setMiniPlayerHidden, requestPlayback]);
+  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, requestPlayback]);
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
@@ -842,22 +833,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
-  const openNowPlaying = useCallback(() => {
-    if (currentSong) {
-      setMiniPlayerHidden(true);
-      navigation.navigate('NowPlaying', { songId: currentSong.id });
-      expansionProgress.value = withSpring(0);
-      lyricExpansionProgress.value = withSpring(0);
-      fullExpansionProgress.value = withSpring(0);
-      classicFullProgress.value = withSpring(0);
-      setExpanded(false);
-      setLyricExpanded(false);
-      setFullLyricExpanded(false);
-      setClassicFullExpanded(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong, setMiniPlayerHidden, navigation]);
-
   const handleLyricPress = useCallback((timestamp: number) => {
       if (!fullLyricExpanded) {
           // In Half-Screen mode, tapping lyrics expands to Full Screen
@@ -921,7 +896,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
   
   // Placeholder check to avoid early null return (safer for Reanimated hooks)
-  const isActuallyVisible = currentSong && !isNowPlaying;
+  const isActuallyVisible = currentSong;
   
   if (!isActuallyVisible) return <View style={{ height: 0, opacity: 0 }} />;
   
@@ -1064,7 +1039,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 <GestureDetector gesture={panGesture}>
                     <View style={styles.expandedTopRow}>
                         {/* Rotating Vinyl */}
-                        <Pressable onPress={openNowPlaying} style={styles.vinylMargin}>
+                        <Pressable onPress={toggleExpand} style={styles.vinylMargin}>
                              <RotatingVinyl 
                                 imageUri={currentSong.coverImageUri} 
                                 size={64} 
@@ -1181,7 +1156,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         artist={currentSong.artist || ''}
                         coverImageUri={currentSong.coverImageUri}
                         isIsland={isIsland}
-                        onPress={openNowPlaying}
+                        onPress={toggleExpand}
                         onBodyPress={toggleExpand}
                     />
                     <PlaybackControls
@@ -1214,7 +1189,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             artist={currentSong.artist || ''}
                             coverImageUri={currentSong.coverImageUri}
                             isIsland={isIsland}
-                            onPress={openNowPlaying}
+                            onPress={toggleExpand}
                             onBodyPress={toggleExpand}
                         />
                         {/* Like the currently playing song without leaving the bar. */}

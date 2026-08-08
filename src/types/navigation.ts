@@ -9,7 +9,6 @@ import { CompositeScreenProps } from '@react-navigation/native';
 // Root Stack Navigator
 export type RootStackParamList = {
   Main: undefined;
-  NowPlaying: { songId: string };
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
   Settings: undefined; // moved off the tab bar; reached from the Home header
   AudioDownloader: {

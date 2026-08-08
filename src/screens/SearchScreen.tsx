@@ -9,7 +9,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabScreenProps } from '../types/navigation';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
-import { useSettingsStore } from '../store/settingsStore';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { Song } from '../types/song';
 import SearchHeader from '../components/SearchHeader';
@@ -31,9 +30,6 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const searchSongs = useSongsStore(state => state.searchSongs);
   const setCurrentSong = useSongsStore(state => state.setCurrentSong);
   const toggleLike = useSongsStore(state => state.toggleLike);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
-  const playerCurrentSong = usePlayerStore(state => state.currentSong);
-  const playInMiniPlayerOnly = useSettingsStore(state => state.playInMiniPlayerOnly);
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -59,11 +55,6 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   }, [searchSongs, filterAudio, filterTimestamp]);
 
   React.useEffect(() => {
-    setMiniPlayerHidden(true);
-    return () => setMiniPlayerHidden(false);
-  }, [setMiniPlayerHidden]);
-
-  React.useEffect(() => {
     if (query.trim().length > 0) {
       handleSearch(query);
     }
@@ -87,8 +78,6 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
       return newHistory.slice(0, 8);
     });
 
-    const isCurrentlyPlaying = playerCurrentSong?.id === song.id;
-
     // The results you are looking at are the queue. This used to call
     // setInitialSong + loadSong with no queue at all, so next/previous were
     // silent no-ops for anything started from search.
@@ -103,19 +92,8 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
       }
     };
 
-    if (playInMiniPlayerOnly) {
-      if (isCurrentlyPlaying) {
-        setMiniPlayerHidden(true);
-        navigation.navigate('NowPlaying', { songId: song.id });
-      } else {
-        startFromResults();
-      }
-    } else {
-      setMiniPlayerHidden(true);
-      startFromResults();
-      navigation.navigate('NowPlaying', { songId: song.id });
-    }
-  }, [navigation, setCurrentSong, setMiniPlayerHidden, playInMiniPlayerOnly, playerCurrentSong?.id, results]);
+    startFromResults();
+  }, [setCurrentSong, results]);
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000000' : colors.background }]}>

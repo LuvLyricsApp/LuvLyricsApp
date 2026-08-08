@@ -12,7 +12,6 @@ import { navigationRef } from '../utils/navigationService';
 
 // Import navigators and screens
 import TabNavigator from './TabNavigator';
-import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
@@ -56,13 +55,6 @@ export const RootNavigator: React.FC = () => {
           }}
         >
           <Stack.Screen name="Main" component={TabNavigator} />
-          <Stack.Screen
-            name="NowPlaying"
-            component={NowPlayingScreen}
-            options={{
-              presentation: 'fullScreenModal',
-            }}
-          />
           <Stack.Screen
             name="AddEditLyrics"
             component={AddEditLyricsScreen}

@@ -13,10 +13,11 @@ interface SongListItemProps {
   song: Song;
   onPress: (song: Song) => void;
   onLongPress: (song: Song) => void;
+  onMore: (song: Song) => void;
   addToScanQueue: (song: Song) => void;
 }
 
-export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQueue }: SongListItemProps) => {
+export const SongListItem = React.memo(({ song, onPress, onLongPress, onMore, addToScanQueue }: SongListItemProps) => {
   const colors = useThemeColors();
   const isDark = useIsDark();
   const isLiked = useIsSongLiked(song.id);
@@ -39,6 +40,11 @@ export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQ
   const handleLongPress = useCallback(() => {
     onLongPress(song);
   }, [onLongPress, song]);
+
+  const handleMorePress = useCallback((event: any) => {
+    event.stopPropagation();
+    onMore(song);
+  }, [onMore, song]);
 
   const renderRightActions = useCallback((_progress: RNAnimated.AnimatedInterpolation<number>, dragX: RNAnimated.AnimatedInterpolation<number>) => {
     const opacity = dragX.interpolate({ inputRange: [-60, 0], outputRange: [1, 0], extrapolate: 'clamp' });
@@ -101,6 +107,9 @@ export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQ
           </Text>
           {isLiked && <Ionicons name="heart" size={14} color={colors.primary} style={{ marginTop: 2 }} />}
         </View>
+        <Pressable onPress={handleMorePress} hitSlop={10} style={styles.moreButton}>
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.textMuted} />
+        </Pressable>
       </Pressable>
     </Swipeable>
   );
@@ -114,7 +123,7 @@ export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQ
 
 const styles = StyleSheet.create({
   swipeContainer: { marginBottom: 8, overflow: 'hidden', borderRadius: 12 },
-  listItem: { flexDirection: 'row', alignItems: 'center', height: 72, paddingHorizontal: 12, borderRadius: 12, gap: 12 },
+  listItem: { flexDirection: 'row', alignItems: 'center', height: 72, paddingHorizontal: 12, borderRadius: 12, gap: 10 },
   pressedScale: { transform: [{ scale: 0.98 }] },
   swipeAction: { marginBottom: 8, width: 70, height: 72, marginLeft: 8, borderRadius: 12, overflow: 'hidden' },
   swipeInnerContainer: { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,100,100,0.1)' },
@@ -129,5 +138,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   artist: { fontSize: 13 },
   metaContainer: { alignItems: 'flex-end', justifyContent: 'center', gap: 4 },
+  moreButton: { padding: 4, marginLeft: 2 },
   duration: { fontSize: 12, fontVariant: ['tabular-nums'] },
 });
