@@ -286,8 +286,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
-  const islandBgMode = useSettingsStore(state => state.islandBgMode);
-  const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const insets = useSafeAreaInsets();
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
@@ -375,23 +373,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, expanded, isIsland]);
     
-  const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
-  // Both docked styles always follow their current artwork. Static Classic Bar
-  // themes made the palette flow silently disappear for many users.
-  const useThemeBg = false;
-
-  const themePlayerColors: [string, string, string] = (() => {
-    switch (activeBgMode) {
-      case 'song-gradient': return [gradientColors[0] || '#111', gradientColors[1] || '#333', gradientColors[2] || gradientColors[0] || '#111'] as [string, string, string];
-      case 'purest-black': return ['#000000', '#000000', '#000000'];
-      case 'grey':         return ['#121212', '#212121', '#121212'];
-      case 'theme-blue':   return ['#0A1628', '#1A3A6B', '#2F8CFF'];
-      case 'theme-subtle': return ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
-      case 'aurora':       return ['#000000', '#EA7980', '#1D728F'];
-      default:             return ['#080808', '#0A0A0A', '#080808'];
-    }
-  })();
-
   // Seek lock timeout (isSeeking shared value lives in positionBus)
   const seekLockTimeout = useRef<NodeJS.Timeout | null>(null);
   
@@ -1051,13 +1032,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             { overflow: 'hidden' },
           ]}
         >
-          {useThemeBg ? (
-            <LinearGradient
-              colors={themePlayerColors}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : currentSong.coverImageUri ? (
+          {currentSong.coverImageUri ? (
             <ArtworkFlowBackground
               coverImageUri={currentSong.coverImageUri}
               fallbackColors={gradientColors}
@@ -1099,19 +1074,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
               {/* An opaque base means the Island never reads as transparent. */}
               <View style={[StyleSheet.absoluteFill, { backgroundColor: '#09090c' }]} />
 
-              {useThemeBg ? (
-                 <View style={StyleSheet.absoluteFill}>
-                   <LinearGradient
-                     colors={themePlayerColors}
-                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                     style={StyleSheet.absoluteFill}
-                   />
-                 </View>
-               ) : !currentSong.coverImageUri ? (
+              {!currentSong.coverImageUri ? (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
                ) : null}
 
-              {!useThemeBg && currentSong.coverImageUri && (
+              {currentSong.coverImageUri && (
                 <ArtworkFlowBackground
                   coverImageUri={currentSong.coverImageUri}
                   fallbackColors={gradientColors}

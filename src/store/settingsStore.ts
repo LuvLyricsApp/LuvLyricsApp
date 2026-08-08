@@ -32,8 +32,6 @@ interface SettingsState {
   micEnabled: boolean;
   autoHideControls: boolean; // Toggle for hiding controls after 3.5s
   libraryBackgroundMode: 'daily' | 'aurora' | 'current' | 'black' | 'grey' | 'theme-blue' | 'purest-black' | 'theme-subtle';
-  islandBgMode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
-  classicBarBgMode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
   animateBackground: boolean;
   libraryFocusMode: boolean; // Toggle for "Focus Mode" (Black Background)
   showPerformanceHUD: boolean; // Toggle for FPS counter
@@ -66,8 +64,6 @@ interface SettingsState {
   setMicEnabled: (enabled: boolean) => void;
   setAutoHideControls: (enabled: boolean) => void;
   setLibraryBackgroundMode: (mode: 'daily' | 'aurora' | 'current' | 'black' | 'grey' | 'theme-blue' | 'purest-black' | 'theme-subtle') => void;
-  setIslandBgMode: (mode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue') => void;
-  setClassicBarBgMode: (mode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue') => void;
   setAnimateBackground: (enabled: boolean) => void;
   setLibraryFocusMode: (enabled: boolean) => void;
   setShowPerformanceHUD: (enabled: boolean) => void;
@@ -113,8 +109,6 @@ const DEFAULT_SETTINGS = {
   micEnabled: true,
   autoHideControls: true, // Default enabled
   libraryBackgroundMode: 'daily' as const,
-  islandBgMode: 'album-art' as const,
-  classicBarBgMode: 'album-art' as const,
   animateBackground: true,
   libraryFocusMode: false, // Default disabled
   defaultView: 'grid' as ViewMode,
@@ -153,8 +147,6 @@ export const useSettingsStore = create<SettingsState>()(
       setMicEnabled: (micEnabled) => set({ micEnabled }),
       setAutoHideControls: (autoHideControls) => set({ autoHideControls }),
       setLibraryBackgroundMode: (libraryBackgroundMode) => set({ libraryBackgroundMode }),
-      setIslandBgMode: (islandBgMode) => set({ islandBgMode }),
-      setClassicBarBgMode: (classicBarBgMode) => set({ classicBarBgMode }),
       setAnimateBackground: (animateBackground: boolean) => set({ animateBackground }),
       setLibraryFocusMode: (libraryFocusMode: boolean) => set({ libraryFocusMode }),
       setShowPerformanceHUD: (showPerformanceHUD: boolean) => set({ showPerformanceHUD }),

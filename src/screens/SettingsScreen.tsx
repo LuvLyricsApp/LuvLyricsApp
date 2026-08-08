@@ -45,20 +45,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 // ─── Mini player background options ──────────────────────────────────────────
 
-type MiniBgMode = 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
-
-const MINI_BG_MODES: MiniBgMode[] = ['album-art', 'song-gradient', 'aurora', 'purest-black', 'grey', 'theme-subtle', 'theme-blue'];
-
-const MINI_BG_LABELS: Record<MiniBgMode, string> = {
-  'album-art':     'Album Art',
-  'song-gradient': 'Song Gradient',
-  'aurora':        'Aurora',
-  'purest-black':  'Pure Black',
-  'grey':          'Spotify Grey',
-  'theme-subtle':  'Subtle Dark',
-  'theme-blue':    'LuvLyrics Blue',
-};
-
 // ─── Bottom Sheet ────────────────────────────────────────────────────────────
 
 interface BottomSheetProps {
@@ -800,24 +786,15 @@ const SettingsScreen: React.FC<Props> = () => {
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'miniplayer'} title="Mini Player" onClose={closeSheet}>
-        <SettingsRow
-          icon="image-outline"
-          label="Dynamic Island Background"
-          value={MINI_BG_LABELS[settings.islandBgMode as MiniBgMode] ?? 'Album Art'}
-          onPress={() => {
-            const next = MINI_BG_MODES[(MINI_BG_MODES.indexOf(settings.islandBgMode as MiniBgMode) + 1) % MINI_BG_MODES.length];
-            settings.setIslandBgMode(next);
-          }}
-        />
-        <SettingsRow
-          icon="albums-outline"
-          label="Classic Bar Background"
-          value={MINI_BG_LABELS[settings.classicBarBgMode as MiniBgMode] ?? 'Album Art'}
-          onPress={() => {
-            const next = MINI_BG_MODES[(MINI_BG_MODES.indexOf(settings.classicBarBgMode as MiniBgMode) + 1) % MINI_BG_MODES.length];
-            settings.setClassicBarBgMode(next);
-          }}
-        />
+        <View style={styles.playerFlowInfo}>
+          <View style={styles.playerFlowIcon}>
+            <Ionicons name="color-wand-outline" size={20} color="#A78BFA" />
+          </View>
+          <View style={styles.playerFlowCopy}>
+            <Text style={styles.playerFlowTitle}>Artwork Flow</Text>
+            <Text style={styles.playerFlowSubtitle}>Both player styles follow the current cover.</Text>
+          </View>
+        </View>
         {settings.navBarStyle === 'classic' && (
           <SettingsRow
             icon="layers-outline" label="Mini Player Style"
@@ -1193,6 +1170,11 @@ const styles = StyleSheet.create({
   settingsLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
   settingsValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   settingsValueText: { fontSize: 14, color: Colors.textSecondary },
+  playerFlowInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  playerFlowIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(167,139,250,0.14)' },
+  playerFlowCopy: { flex: 1 },
+  playerFlowTitle: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  playerFlowSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
 
   // Slider row
   sliderRow: { paddingTop: 14, paddingBottom: 4 },
