@@ -65,7 +65,7 @@ const createFlowPalette = (colors: string[]): FlowPalette => {
   // colours become moving fields, so the surface has a clear dominant colour
   // instead of a washed-out blend of the whole cover image.
   return [
-    darken(fallbackBase, 0.48),
+    darken(fallbackBase, 0.62),
     darken(fallbackAccent, 0.88),
     darken(fallbackLight, 0.78),
     darken(fallbackMuted, 0.82),
@@ -96,22 +96,22 @@ const colorFieldShader = Skia.RuntimeEffect.Make(`
     // Domain warping makes each colour field bend and merge rather than look
     // like a translated circle. Frequencies are deliberately incommensurate.
     float2 flow = float2(
-      sin(uv.y * 5.1 + t * 0.071) + cos((uv.x + uv.y) * 3.7 - t * 0.047),
-      cos(uv.x * 4.3 - t * 0.059) + sin((uv.x - uv.y) * 4.9 + t * 0.083)
-    ) * 0.075;
+      sin(uv.y * 5.1 + t * 0.16) + cos((uv.x + uv.y) * 3.7 - t * 0.11),
+      cos(uv.x * 4.3 - t * 0.13) + sin((uv.x - uv.y) * 4.9 + t * 0.18)
+    ) * 0.10;
     float2 warped = uv + flow;
 
     float2 anchorA = float2(
-      0.24 + sin(t * 0.067) * 0.20 + cos(t * 0.021) * 0.06,
-      0.26 + cos(t * 0.053) * 0.18
+      0.24 + sin(t * 0.14) * 0.24 + cos(t * 0.05) * 0.07,
+      0.26 + cos(t * 0.11) * 0.21
     );
     float2 anchorB = float2(
-      0.76 + cos(t * 0.041 + 1.7) * 0.19,
-      0.36 + sin(t * 0.079 + 0.8) * 0.22
+      0.76 + cos(t * 0.09 + 1.7) * 0.22,
+      0.36 + sin(t * 0.16 + 0.8) * 0.25
     );
     float2 anchorC = float2(
-      0.50 + sin(t * 0.058 + 3.1) * 0.27,
-      0.78 + cos(t * 0.037 + 2.2) * 0.16
+      0.50 + sin(t * 0.12 + 3.1) * 0.30,
+      0.78 + cos(t * 0.08 + 2.2) * 0.19
     );
 
     float weightA = field(warped, anchorA, 0.62);
@@ -187,9 +187,9 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
     extractAlbumColors(coverImageUri).then((albumPalette) => {
       if (cancelled || !albumPalette) return;
       const extracted = [
-        albumPalette.darkVibrant?.color,
         albumPalette.dominant?.color,
         albumPalette.vibrant?.color,
+        albumPalette.darkVibrant?.color,
         albumPalette.muted?.color,
         albumPalette.lightVibrant?.color,
         albumPalette.darkMuted?.color,

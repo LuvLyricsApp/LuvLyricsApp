@@ -225,7 +225,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
-  const animateBackground = useSettingsStore(state => state.animateBackground);
   const insets = useSafeAreaInsets();
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
@@ -926,7 +925,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             <ArtworkFlowBackground
               coverImageUri={currentSong.coverImageUri}
               fallbackColors={gradientColors}
-              animated={animateBackground && expanded}
+              animated={expanded}
             />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
