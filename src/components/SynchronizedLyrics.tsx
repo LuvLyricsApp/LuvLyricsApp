@@ -6,6 +6,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
   interpolateColor,
   interpolate,
   Extrapolation,
@@ -15,6 +16,8 @@ import Animated, {
   useAnimatedScrollHandler,
   scrollTo,
   runOnJS,
+  cancelAnimation,
+  Easing,
   SharedValue,
 } from 'react-native-reanimated';
 import { useSettingsStore } from '../store/settingsStore';
@@ -23,6 +26,8 @@ import { Fonts } from '../constants/fonts';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const LYRIC_LINE_HEIGHT = 68;
+const FOLLOW_GLIDE_MS = 460;
+const FOLLOW_GLIDE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 /**
  * How close to the playing line counts as "back where you started" — scroll
@@ -76,9 +81,9 @@ const LyricLine = React.memo(({
   // Spring-based 0→1 transition — physics easing feels natural, no stiffness of linear timing
   const activeValue = useDerivedValue(() =>
     withSpring(activeIndexSV.value === index ? 1 : 0, {
-      damping: 20,
-      stiffness: 260,
-      mass: 0.7,
+      damping: 22,
+      stiffness: 280,
+      mass: 0.68,
     }),
   );
 
@@ -86,9 +91,16 @@ const LyricLine = React.memo(({
     const basOpacity = activeIndexSV.value > index ? 0.45 : 0.28;
     const opacity = interpolate(activeValue.value, [0, 1], [basOpacity, 1.0], Extrapolation.CLAMP);
     // Inactive lines sit 5px below; active line rises up to its natural position
-    const translateY = interpolate(activeValue.value, [0, 1], [5, 0], Extrapolation.CLAMP);
+    const translateY = interpolate(activeValue.value, [0, 1], [6, 0], Extrapolation.CLAMP);
+    const scale = interpolate(activeValue.value, [0, 1], [0.965, 1.035], Extrapolation.CLAMP);
     const color = interpolateColor(activeValue.value, [0, 1], ['rgba(255,255,255,0.5)', '#FFFFFF']);
-    return { transform: [{ translateY }], opacity, color };
+    return {
+      transform: [{ translateY }, { scale }] as any,
+      opacity,
+      color,
+      fontFamily: activeValue.value > 0.5 ? Fonts.lyricsActive : Fonts.lyrics,
+      fontWeight: activeValue.value > 0.5 ? Fonts.lyricsActiveWeight : Fonts.lyricsWeight,
+    };
   });
 
   const instrumentWrapStyle = useAnimatedStyle(() => {
@@ -186,6 +198,8 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   const itemHeights = useRef<number[]>([]);
   const itemOffsets = useRef<number[]>([]);
   const itemOffsetsSV = useSharedValue<number[]>([]);
+  const itemHeightsSV = useSharedValue<number[]>([]);
+  const headerHeight = useRef(0);
   const containerHeightSV = useSharedValue(SCREEN_HEIGHT);
   // SharedValue mirror of the isUserScrolling prop so worklets can read it
   const isUserScrollingSV = useSharedValue(false);
@@ -193,9 +207,10 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
 
   // Track previous active index to distinguish normal advance from large seek jump
   const prevScrollIndexSV = useSharedValue(-1);
+  const autoFollowYSV = useSharedValue(0);
 
   const recomputeOffsets = useCallback(() => {
-    let offset = topSpacerHeight;
+    let offset = topSpacerHeight + headerHeight.current;
     const offsets: number[] = [];
     for (let i = 0; i < lyrics.length; i++) {
       offsets.push(offset);
@@ -203,13 +218,22 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     }
     itemOffsets.current = offsets;
     itemOffsetsSV.value = offsets.slice(); // push to UI thread
-  }, [topSpacerHeight, lyrics.length, itemOffsetsSV]);
+    itemHeightsSV.value = lyrics.map((_, index) => itemHeights.current[index] ?? LYRIC_LINE_HEIGHT);
+  }, [topSpacerHeight, lyrics, itemOffsetsSV, itemHeightsSV]);
 
   useEffect(() => { recomputeOffsets(); }, [recomputeOffsets]);
 
   const handleItemMeasured = useCallback((idx: number, height: number) => {
     if (Math.abs((itemHeights.current[idx] ?? LYRIC_LINE_HEIGHT) - height) > 1) {
       itemHeights.current[idx] = height;
+      recomputeOffsets();
+    }
+  }, [recomputeOffsets]);
+
+  const handleHeaderMeasured = useCallback((e: LayoutChangeEvent) => {
+    const nextHeight = e.nativeEvent.layout.height;
+    if (Math.abs(headerHeight.current - nextHeight) > 1) {
+      headerHeight.current = nextHeight;
       recomputeOffsets();
     }
   }, [recomputeOffsets]);
@@ -248,19 +272,6 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   // ─── UI-THREAD SCROLL ────────────────────────────────────────────
   // scrollTo worklet drives the ScrollView directly on the UI thread —
   // zero JS bridge crossings, frame-perfect sync with audio position.
-  useDerivedValue(() => {
-    if (isUserScrollingSV.value) return;
-    const idx = activeIndexDV.value;
-    if (idx < 0) return;
-    const offsets = itemOffsetsSV.value;
-    if (idx >= offsets.length) return;
-    const targetY = offsets[idx] - containerHeightSV.value * activeLinePosition;
-    // Animate for normal line-by-line advance; instant jump for large seeks
-    const shouldAnimate = Math.abs(idx - prevScrollIndexSV.value) <= 3;
-    prevScrollIndexSV.value = idx;
-    scrollTo(scrollRef, 0, Math.max(0, targetY), shouldAnimate);
-  });
-
   // activeIndexSV is written on the UI thread and read by every LyricLine
   const activeIndexSV = useSharedValue(-1);
   useAnimatedReaction(
@@ -291,12 +302,48 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   /** -1 = playing line is above the viewport, 1 = below, 0 = pill hidden. */
   const [pillDirection, setPillDirection] = useState(0);
 
-  /** Where the playing line wants the scroll offset to be. */
+  /** Where the midpoint of the playing line wants the scroll offset to be. */
   const activeTargetYSV = useDerivedValue(() => {
     const idx = activeIndexDV.value;
     const offsets = itemOffsetsSV.value;
+    const heights = itemHeightsSV.value;
     if (idx < 0 || idx >= offsets.length) return -1;
-    return Math.max(0, offsets[idx] - containerHeightSV.value * activeLinePosition);
+    const lineMidpoint = offsets[idx] + (heights[idx] ?? LYRIC_LINE_HEIGHT) / 2;
+    return Math.max(0, lineMidpoint - containerHeightSV.value * activeLinePosition);
+  });
+
+  // Only an actual destination change starts a follow animation. The audio
+  // ticker can update many times inside one lyric, but it leaves this value
+  // untouched, so no repeated native-scroll requests fight the glide.
+  useAnimatedReaction(
+    () => (isUserScrollingSV.value ? -1 : activeTargetYSV.value),
+    (targetY, previousTargetY) => {
+      if (targetY < 0) {
+        cancelAnimation(autoFollowYSV);
+        return;
+      }
+      if (targetY === previousTargetY) return;
+
+      const idx = activeIndexDV.value;
+      const isFirstPosition = prevScrollIndexSV.value < 0;
+      const isSeek = !isFirstPosition && Math.abs(idx - prevScrollIndexSV.value) > 3;
+      prevScrollIndexSV.value = idx;
+
+      if (isFirstPosition || isSeek) {
+        autoFollowYSV.value = targetY;
+      } else {
+        autoFollowYSV.value = withTiming(targetY, {
+          duration: FOLLOW_GLIDE_MS,
+          easing: FOLLOW_GLIDE_EASING,
+        });
+      }
+    },
+  );
+
+  // Reanimated samples autoFollowYSV on the UI thread and applies it as a
+  // native scroll position. No React render or JS-to-native bridge is involved.
+  useDerivedValue(() => {
+    scrollTo(scrollRef, 0, autoFollowYSV.value, false);
   });
 
   const resumeFollowing = useCallback(() => {
@@ -382,7 +429,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         }}
       >
         <View style={{ height: topSpacerHeight }} />
-        {headerContent}
+        {headerContent ? <View onLayout={handleHeaderMeasured}>{headerContent}</View> : null}
         {lyrics.map(renderLyricLine)}
         <View style={{ height: bottomSpacerHeight }} />
       </Animated.ScrollView>
