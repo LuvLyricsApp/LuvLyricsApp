@@ -1,18 +1,20 @@
 import { getNativeModule } from './nativeModule';
 
-interface Swatch {
+export interface AlbumSwatch {
   color: string;
   titleTextColor: string;
   bodyTextColor: string;
+  /** Number of sampled artwork pixels represented by this swatch. */
+  population?: number;
 }
 
 export interface AlbumPalette {
-  dominant?: Swatch;
-  vibrant?: Swatch;
-  darkVibrant?: Swatch;
-  muted?: Swatch;
-  darkMuted?: Swatch;
-  lightVibrant?: Swatch;
+  dominant?: AlbumSwatch;
+  vibrant?: AlbumSwatch;
+  darkVibrant?: AlbumSwatch;
+  muted?: AlbumSwatch;
+  darkMuted?: AlbumSwatch;
+  lightVibrant?: AlbumSwatch;
 }
 
 const mod = getNativeModule<{ extractColors: (uri: string) => Promise<string | null> }>('Palette');

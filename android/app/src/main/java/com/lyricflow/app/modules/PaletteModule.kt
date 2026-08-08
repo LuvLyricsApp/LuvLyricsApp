@@ -69,6 +69,7 @@ class PaletteModule : Module() {
         o.put("color",          colorHex(swatch.rgb))
         o.put("titleTextColor", colorHex(swatch.titleTextColor))
         o.put("bodyTextColor",  colorHex(swatch.bodyTextColor))
+        o.put("population",     swatch.population)
         return o
     }
 

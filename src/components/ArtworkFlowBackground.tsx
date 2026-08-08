@@ -30,6 +30,11 @@ interface ArtworkFlowBackgroundProps {
 
 type ColorVector = [number, number, number, number];
 type FlowPalette = [ColorVector, ColorVector, ColorVector, ColorVector];
+type PaletteCandidate = {
+  color: string;
+  population?: number;
+  role?: string;
+};
 
 const TRACK_CHANGE_MS = 950;
 const FLOW_BLUR = 30;
@@ -55,33 +60,91 @@ const darken = ([red, green, blue]: ColorVector, amount: number): ColorVector =>
   1,
 ];
 
-const colourInterest = (color: string): number => {
+const colourInterest = (color: string): { saturation: number; luminance: number } => {
   const [red, green, blue] = hexToVector(color, [0, 0, 0, 1]);
   const maximum = Math.max(red, green, blue);
   const minimum = Math.min(red, green, blue);
   const saturation = maximum === 0 ? 0 : (maximum - minimum) / maximum;
   const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
-  const usableLightness = luminance >= 0.10 && luminance <= 0.86 ? 0.32 : 0;
-  return saturation * 1.45 + usableLightness + luminance * 0.08;
+  return { saturation, luminance };
 };
 
-const createFlowPalette = (colors: string[]): FlowPalette => {
-  const ranked = [...new Set(colors.filter((color) => /^#?[0-9a-fA-F]{6}$/.test(color.trim())))]
-    .sort((left, right) => colourInterest(right) - colourInterest(left));
-  const selected = ranked.length ? ranked : colors;
-  const fallbackBase = hexToVector(selected[0], [0.06, 0.07, 0.11, 1]);
-  const fallbackAccent = hexToVector(selected[1] ?? selected[0], [0.18, 0.22, 0.36, 1]);
-  const fallbackLight = hexToVector(selected[2] ?? selected[0], fallbackAccent);
-  const fallbackMuted = hexToVector(selected[3] ?? selected[1] ?? selected[0], fallbackBase);
+const blend = (from: ColorVector, to: ColorVector, amount: number): ColorVector => [
+  from[0] + (to[0] - from[0]) * amount,
+  from[1] + (to[1] - from[1]) * amount,
+  from[2] + (to[2] - from[2]) * amount,
+  1,
+];
 
-  // The first swatch becomes an intentional, stable base. The remaining three
-  // colours become moving fields, so the surface has a clear dominant colour
-  // instead of a washed-out blend of the whole cover image.
+const colorDistance = (left: ColorVector, right: ColorVector): number => Math.hypot(
+  left[0] - right[0],
+  left[1] - right[1],
+  left[2] - right[2],
+);
+
+const normaliseCandidates = (colors: readonly (string | PaletteCandidate)[]): PaletteCandidate[] => {
+  const unique = new Map<string, PaletteCandidate>();
+
+  colors.forEach((item) => {
+    const candidate = typeof item === 'string' ? { color: item } : item;
+    const color = candidate.color.trim();
+    if (!/^#?[0-9a-fA-F]{6}$/.test(color)) return;
+
+    const key = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`;
+    const existing = unique.get(key);
+    if (!existing || (candidate.population ?? 0) > (existing.population ?? 0)) {
+      unique.set(key, { ...candidate, color: key });
+    }
+  });
+
+  return [...unique.values()];
+};
+
+/**
+ * Palette's named swatches describe different targets, not equal-weight colours.
+ * Preserve their sampled pixel population so a small neon logo cannot outweigh
+ * the cover's actual colour field. When a cover has one colour family, derived
+ * tonal neighbours keep the flow alive without introducing an unrelated hue.
+ */
+const createFlowPalette = (colors: readonly (string | PaletteCandidate)[]): FlowPalette => {
+  const candidates = normaliseCandidates(colors);
+  const maxPopulation = Math.max(...candidates.map((candidate) => candidate.population ?? 0), 1);
+  const hasMeaningfulColor = candidates.some((candidate) => {
+    const { saturation } = colourInterest(candidate.color);
+    return saturation >= 0.22 && (candidate.population ?? maxPopulation * 0.56) / maxPopulation >= 0.18;
+  });
+
+  const ranked = [...candidates].sort((left, right) => {
+    const score = (candidate: PaletteCandidate) => {
+      const { saturation, luminance } = colourInterest(candidate.color);
+      const population = Math.sqrt((candidate.population ?? maxPopulation * 0.56) / maxPopulation);
+      const neutralPenalty = hasMeaningfulColor && saturation < 0.12 ? 0.36 : 0;
+      const readableLightness = luminance >= 0.06 && luminance <= 0.88 ? 0.08 : 0;
+      const dominantBias = candidate.role === 'dominant' ? 0.06 : 0;
+      return population * 1.1 + saturation * 0.32 + readableLightness + dominantBias - neutralPenalty;
+    };
+    return score(right) - score(left);
+  });
+
+  const fallbackBase: ColorVector = [0.06, 0.07, 0.11, 1];
+  const base = hexToVector(ranked[0]?.color, fallbackBase);
+  const alternatives = ranked
+    .slice(1)
+    .map((candidate) => hexToVector(candidate.color, base))
+    .filter((candidate) => colorDistance(base, candidate) > 0.11);
+
+  const accentA = alternatives[0] ?? blend(base, [1, 1, 1, 1], 0.18);
+  const accentB = alternatives[1] ?? blend(base, [0, 0, 0, 1], 0.28);
+  const accentC = alternatives[2] ?? blend(base, [1, 1, 1, 1], 0.08);
+
+  // Keep every moving field visually tied to the winning main colour. The
+  // surface reads as one artwork-led atmosphere, rather than four competing
+  // palette swatches.
   return [
-    darken(fallbackBase, 0.46),
-    darken(fallbackAccent, 0.96),
-    darken(fallbackLight, 0.86),
-    darken(fallbackMuted, 0.90),
+    darken(base, 0.50),
+    darken(blend(base, accentA, 0.78), 0.96),
+    darken(blend(base, accentB, 0.68), 0.88),
+    darken(blend(base, accentC, 0.58), 0.92),
   ];
 };
 
@@ -186,7 +249,7 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
   const clock = useClock();
   const transition = useSharedValue(1);
   const [canvasSize, setCanvasSize] = useState({ width: 1, height: 1 });
-  const [nativeColors, setNativeColors] = useState<string[] | null>(null);
+  const [nativeColors, setNativeColors] = useState<PaletteCandidate[] | null>(null);
   const fallbackPalette = useMemo(() => createFlowPalette(fallbackColors), [fallbackColors]);
   const palette = useMemo(
     () => createFlowPalette(nativeColors?.length ? nativeColors : fallbackColors),
@@ -204,13 +267,13 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
     extractAlbumColors(coverImageUri).then((albumPalette) => {
       if (cancelled || !albumPalette) return;
       const extracted = [
-        albumPalette.dominant?.color,
-        albumPalette.vibrant?.color,
-        albumPalette.darkVibrant?.color,
-        albumPalette.muted?.color,
-        albumPalette.lightVibrant?.color,
-        albumPalette.darkMuted?.color,
-      ].filter((color): color is string => Boolean(color));
+        albumPalette.dominant && { ...albumPalette.dominant, role: 'dominant' },
+        albumPalette.vibrant && { ...albumPalette.vibrant, role: 'vibrant' },
+        albumPalette.darkVibrant && { ...albumPalette.darkVibrant, role: 'darkVibrant' },
+        albumPalette.muted && { ...albumPalette.muted, role: 'muted' },
+        albumPalette.lightVibrant && { ...albumPalette.lightVibrant, role: 'lightVibrant' },
+        albumPalette.darkMuted && { ...albumPalette.darkMuted, role: 'darkMuted' },
+      ].filter(Boolean) as PaletteCandidate[];
       // Keep the outgoing artwork palette alive while this new cover is being
       // read. Clearing it first briefly fell back to the song's generic (often
       // blue) gradient, creating a visible flash between two real palettes.
