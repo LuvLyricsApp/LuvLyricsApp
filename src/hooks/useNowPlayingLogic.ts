@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, Dimensions } from 'react-native';
+import { Alert } from 'react-native';
 // Navigation handled by screen component
-import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withRepeat, Easing, withSequence } from 'react-native-reanimated';
+import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withSequence } from 'react-native-reanimated';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
@@ -17,8 +17,6 @@ import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 
 const { Gesture } = GestureHandler;
-const { width } = Dimensions.get('window');
-
 export function useNowPlayingLogic(songId: string) {
   const colors = useThemeColors();
   const isDark = useIsDark();
@@ -90,67 +88,6 @@ export function useNowPlayingLogic(songId: string) {
     setMenuAnchor(anchor);
     setMenuVisible(true);
   };
-
-  // Background blob animations
-  const blob1TranslateX = useSharedValue(0);
-  const blob1TranslateY = useSharedValue(0);
-  const blob1Scale = useSharedValue(1);
-  const blob2TranslateX = useSharedValue(0);
-  const blob2TranslateY = useSharedValue(0);
-  const blob2Scale = useSharedValue(1);
-  const blob3TranslateX = useSharedValue(0);
-  const blob3TranslateY = useSharedValue(0);
-  const blob3Scale = useSharedValue(1);
-
-  useEffect(() => {
-    if (animateBackground) {
-      blob1TranslateX.value = withRepeat(withTiming(width * 0.5, { duration: 45000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob1TranslateY.value = withRepeat(withTiming(width * 0.3, { duration: 55000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob1Scale.value = withRepeat(withTiming(1.2, { duration: 60000, easing: Easing.inOut(Easing.ease) }), -1, true);
-
-      blob2TranslateX.value = withRepeat(withTiming(-width * 0.5, { duration: 50000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob2TranslateY.value = withRepeat(withTiming(-width * 0.4, { duration: 62000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob2Scale.value = withRepeat(withTiming(1.3, { duration: 58000, easing: Easing.inOut(Easing.ease) }), -1, true);
-
-      blob3TranslateX.value = withRepeat(withTiming(-width * 0.2, { duration: 38000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob3TranslateY.value = withRepeat(withTiming(width * 0.2, { duration: 42000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob3Scale.value = withRepeat(withTiming(1.4, { duration: 48000, easing: Easing.inOut(Easing.ease) }), -1, true);
-    } else {
-      blob1TranslateX.value = withTiming(0);
-      blob1TranslateY.value = withTiming(0);
-      blob1Scale.value = withTiming(1);
-      blob2TranslateX.value = withTiming(0);
-      blob2TranslateY.value = withTiming(0);
-      blob2Scale.value = withTiming(1);
-      blob3TranslateX.value = withTiming(0);
-      blob3TranslateY.value = withTiming(0);
-      blob3Scale.value = withTiming(1);
-    }
-  }, [animateBackground, blob1Scale, blob1TranslateX, blob1TranslateY, blob2Scale, blob2TranslateX, blob2TranslateY, blob3Scale, blob3TranslateX, blob3TranslateY]);
-
-  const blob1Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob1TranslateX.value } as any,
-      { translateY: blob1TranslateY.value } as any,
-      { scale: blob1Scale.value } as any,
-    ],
-  }));
-
-  const blob2Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob2TranslateX.value } as any,
-      { translateY: blob2TranslateY.value } as any,
-      { scale: blob2Scale.value } as any,
-    ],
-  }));
-
-  const blob3Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob3TranslateX.value } as any,
-      { translateY: blob3TranslateY.value } as any,
-      { scale: blob3Scale.value } as any,
-    ],
-  }));
 
   // Song loading
   useEffect(() => {
@@ -398,9 +335,6 @@ export function useNowPlayingLogic(songId: string) {
     showLyrics,
     setShowLyrics,
     panGesture,
-    blob1Style,
-    blob2Style,
-    blob3Style,
     processedLyrics,
     isLinear,
     flatListRef,

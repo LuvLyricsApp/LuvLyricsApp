@@ -47,9 +47,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     showLyrics,
     setShowLyrics,
     panGesture,
-    blob1Style,
-    blob2Style,
-    blob3Style,
     processedLyrics,
     isLinear,
     flatListRef,
@@ -157,9 +154,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
           animateBackground={animateBackground}
-          blob1Style={blob1Style}
-          blob2Style={blob2Style}
-          blob3Style={blob3Style}
           isDark={isDark}
         />
 
