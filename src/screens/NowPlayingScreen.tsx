@@ -12,6 +12,7 @@ import NowPlayingHeader from '../components/NowPlayingHeader';
 import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigationService';
 
 const { GestureDetector } = GestureHandler;
 
@@ -165,7 +166,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         <NowPlayingHeader
           animatedStyle={animatedStyle}
           controlsVisible={controlsVisible}
-          onGoBack={() => navigation.goBack()}
+          onGoBack={() => safeGoBack(navigation)}
           onMenuPress={handleMenuPress}
           menuVisible={menuVisible}
           onMenuClose={() => setMenuVisible(false)}

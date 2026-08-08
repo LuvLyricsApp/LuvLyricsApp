@@ -5,6 +5,7 @@ import com.lyricflow.app.luvs.LuvInteraction
 import com.lyricflow.app.luvs.LuvsEngine
 import com.lyricflow.app.luvs.LuvsPrefs
 import com.lyricflow.app.luvs.SaavnClient
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,17 @@ class LuvsEngineModule : Module() {
     }
     private val engine: LuvsEngine by lazy { LuvsEngine(prefs) }
 
+    /** Launch a suspend feed call and resolve/reject the Expo promise. */
+    private fun <T> resolveSuspend(promise: Promise, code: String, block: suspend () -> T) {
+        scope.launch {
+            try {
+                promise.resolve(block())
+            } catch (e: Throwable) {
+                promise.reject(code, e.message, e)
+            }
+        }
+    }
+
     override fun definition() = ModuleDefinition {
         Name("LuvsEngine")
 
@@ -43,20 +55,30 @@ class LuvsEngineModule : Module() {
         }
 
         // ── Feed ─────────────────────────────────────────────────────────────
-        AsyncFunction("refresh") {
-            engine.refresh().map { it.toMap() }
+        // Zero-arg Expo Coroutine { } is overload-ambiguous on Kotlin 2.x, so
+        // we resolve suspend engine calls via Promise + scope.launch instead.
+        AsyncFunction("refresh") { promise: Promise ->
+            resolveSuspend(promise, "E_LUVS_REFRESH") {
+                engine.refresh().map { it.toMap() }
+            }
         }
 
-        AsyncFunction("loadMore") {
-            engine.loadMore().map { it.toMap() }
+        AsyncFunction("loadMore") { promise: Promise ->
+            resolveSuspend(promise, "E_LUVS_LOAD_MORE") {
+                engine.loadMore().map { it.toMap() }
+            }
         }
 
-        AsyncFunction("prefetch") {
-            engine.prefetch().map { it.toMap() }
+        AsyncFunction("prefetch") { promise: Promise ->
+            resolveSuspend(promise, "E_LUVS_PREFETCH") {
+                engine.prefetch().map { it.toMap() }
+            }
         }
 
-        AsyncFunction("discoverSimilar") { songId: String ->
-            engine.discoverSimilar(songId).map { it.toMap() }
+        AsyncFunction("discoverSimilar") { songId: String, promise: Promise ->
+            resolveSuspend(promise, "E_LUVS_DISCOVER") {
+                engine.discoverSimilar(songId).map { it.toMap() }
+            }
         }
 
         Function("setCurrentIndex") { index: Int ->

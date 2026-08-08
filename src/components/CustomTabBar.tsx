@@ -87,6 +87,9 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     pointerEvents: 'box-none',
+    // Above classic mini player (root sibling) — keep elevation high on Android.
+    zIndex: 1000,
+    elevation: 100,
   },
   container: {
     width: '100%',

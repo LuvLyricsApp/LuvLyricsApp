@@ -99,13 +99,22 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
     <View style={styles.container} pointerEvents="box-none">
       {/* Pill */}
       <View style={[styles.pillContainer, { backgroundColor: pillBg, borderColor }]}>
-        {/* Dynamic Background */}
-        <View style={StyleSheet.absoluteFill}>
+        {/* Dynamic Background — oversized + heavier blur so album-art edges
+            don't read as a sharp rectangle inside the pill rim. */}
+        <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
           {isDynamicIsland && coverImageUri ? (
             <ImageBackground
               source={{ uri: coverImageUri }}
-              style={StyleSheet.absoluteFill}
-              blurRadius={40}
+              style={{
+                position: 'absolute',
+                top: -24,
+                left: -24,
+                right: -24,
+                bottom: -24,
+                transform: [{ scale: 1.25 }],
+              }}
+              blurRadius={Platform.OS === 'android' ? 50 : 60}
+              resizeMode="cover"
             >
               <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor, opacity: overlayOpacity }]} />
             </ImageBackground>
@@ -148,6 +157,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    // Above classic mini player (root sibling) — keep elevation high on Android.
+    zIndex: 1000,
+    elevation: 100,
   },
   pillContainer: {
     width: '85%',
@@ -159,6 +171,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
+    // Shadow size only — z-order above the mini player comes from the parent
+    // container's elevation. Cranking this just dumps a huge dark blob under
+    // the pill on Android.
     elevation: 24,
   },
   blur: {

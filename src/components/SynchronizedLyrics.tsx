@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { View, Dimensions, Text, Pressable, StyleSheet, LayoutChangeEvent } from 'react-native';
+import React, { useEffect, useRef, useCallback, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
+import { View, Dimensions, Text, Pressable, StyleSheet, LayoutChangeEvent, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,9 +17,18 @@ import Animated, {
   SharedValue,
 } from 'react-native-reanimated';
 import { useSettingsStore } from '../store/settingsStore';
+import InstrumentalWaveform, { isInstrumentalLyric, useIsActiveLine } from './InstrumentalWaveform';
+import { Fonts } from '../constants/fonts';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const LYRIC_LINE_HEIGHT = 68;
+
+/**
+ * How close to the playing line counts as "back where you started" — scroll
+ * within this many px of it and auto-follow re-attaches without a tap.
+ * Roughly one line, so it triggers on intent rather than on a stray pixel.
+ */
+const RESUME_SNAP_PX = 72;
 
 // ------------------------------------------------------------------
 // LyricLine
@@ -46,6 +56,13 @@ const LyricLine = React.memo(({
   songTitle,
 }: LyricLineProps) => {
   const handlePress = useCallback(() => onLyricPress(timestamp), [onLyricPress, timestamp]);
+  const isInstrumental = useMemo(() => isInstrumentalLyric(text), [text]);
+  const isActiveLine = useIsActiveLine(activeIndexSV, index);
+
+  // Apple Music style: bold active line, regular the rest.
+  // One-time JS swap per line activation (useIsActiveLine re-renders).
+  const isActiveFace = isActiveLine ? Fonts.lyricsActive : Fonts.lyrics;
+  const isActiveWeight = isActiveLine ? Fonts.lyricsActiveWeight : Fonts.lyricsWeight;
 
   const lastHeightRef = useRef<number>(0);
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
@@ -74,6 +91,14 @@ const LyricLine = React.memo(({
     return { transform: [{ translateY }], opacity, color };
   });
 
+  const instrumentWrapStyle = useAnimatedStyle(() => {
+    const basOpacity = activeIndexSV.value > index ? 0.4 : 0.25;
+    const opacity = interpolate(activeValue.value, [0, 1], [basOpacity, 1.0], Extrapolation.CLAMP);
+    const translateY = interpolate(activeValue.value, [0, 1], [5, 0], Extrapolation.CLAMP);
+    const scale = interpolate(activeValue.value, [0, 1], [0.92, 1], Extrapolation.CLAMP);
+    return { transform: [{ translateY }, { scale }], opacity } as ViewStyle;
+  });
+
   const renderedText = useMemo(() => {
     if (!songTitle) return text;
     const cleanText = text.replace(/\s+/g, ' ');
@@ -97,10 +122,16 @@ const LyricLine = React.memo(({
   }, [text, songTitle]);
 
   return (
-    <Pressable onPress={handlePress} onLayout={handleLayout}>
-      <Animated.Text style={[styles.lyricText, textStyle, animatedStyle]}>
-        {renderedText}
-      </Animated.Text>
+    <Pressable onPress={handlePress} onLayout={handleLayout} style={styles.linePressable}>
+      {isInstrumental ? (
+        <Animated.View style={[styles.instrumentalWrap, instrumentWrapStyle]}>
+          <InstrumentalWaveform active={isActiveLine} size={isActiveLine ? 'lg' : 'md'} />
+        </Animated.View>
+      ) : (
+        <Animated.Text style={[styles.lyricText, textStyle, animatedStyle, { fontFamily: isActiveFace, fontWeight: isActiveWeight }]}>
+          {renderedText}
+        </Animated.Text>
+      )}
     </Pressable>
   );
 });
@@ -124,6 +155,8 @@ interface SynchronizedLyricsProps {
   bottomSpacerHeight?: number;
   expandedAt?: number;
   fadeColor?: string;
+  /** Android-only: soft-dissolve lyric text at the top/bottom edges (px). */
+  edgeFade?: number;
 }
 
 export interface SynchronizedLyricsRef {
@@ -143,6 +176,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   songTitle,
   topSpacerHeight = SCREEN_HEIGHT * 0.4,
   bottomSpacerHeight = SCREEN_HEIGHT * 0.4,
+  edgeFade = 0,
 }, ref) => {
   // Animated ref — required for the scrollTo worklet
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -153,12 +187,6 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   const itemOffsets = useRef<number[]>([]);
   const itemOffsetsSV = useSharedValue<number[]>([]);
   const containerHeightSV = useSharedValue(SCREEN_HEIGHT);
-  const dragTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => { if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current); };
-  }, []);
-
   // SharedValue mirror of the isUserScrolling prop so worklets can read it
   const isUserScrollingSV = useSharedValue(false);
   useEffect(() => { isUserScrollingSV.value = isUserScrolling; }, [isUserScrolling, isUserScrollingSV]);
@@ -247,18 +275,61 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     onScrollStateChange?.(scrolling);
   }, [onScrollStateChange]);
 
+  // ─── DETACHED SCROLL + RESUME PILL ───────────────────────────────
+  // Once the reader scrolls, auto-follow stays off indefinitely — it never
+  // yanks the lyrics back mid-read. They come back only by tapping the pill,
+  // or by scrolling back to the playing line themselves.
+  const scrollYSV = useSharedValue(0);
+  /** -1 = playing line is above the viewport, 1 = below, 0 = pill hidden. */
+  const [pillDirection, setPillDirection] = useState(0);
+
+  /** Where the playing line wants the scroll offset to be. */
+  const activeTargetYSV = useDerivedValue(() => {
+    const idx = activeIndexDV.value;
+    const offsets = itemOffsetsSV.value;
+    if (idx < 0 || idx >= offsets.length) return -1;
+    return Math.max(0, offsets[idx] - containerHeightSV.value * activeLinePosition);
+  });
+
+  const resumeFollowing = useCallback(() => {
+    isUserScrollingSV.value = false;
+    notifyScrollState(false);
+  }, [isUserScrollingSV, notifyScrollState]);
+
+  // Scrolling back to the playing line re-attaches on its own — no tap needed.
+  useAnimatedReaction(
+    () => {
+      if (!isUserScrollingSV.value) return 0;
+      const target = activeTargetYSV.value;
+      if (target < 0) return 0;
+      const delta = target - scrollYSV.value;
+      if (Math.abs(delta) < RESUME_SNAP_PX) return 0;
+      return delta > 0 ? 1 : -1;
+    },
+    (next, prev) => {
+      if (next === prev) return;
+      if (next === 0 && isUserScrollingSV.value) runOnJS(resumeFollowing)();
+      runOnJS(setPillDirection)(next);
+    },
+  );
+
   const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      'worklet';
+      scrollYSV.value = e.contentOffset.y;
+    },
     onBeginDrag: () => {
       'worklet';
+      if (isUserScrollingSV.value) return;
       isUserScrollingSV.value = true;
       runOnJS(notifyScrollState)(true);
     },
-    onMomentumEnd: () => {
-      'worklet';
-      isUserScrollingSV.value = false;
-      runOnJS(notifyScrollState)(false);
-    },
   });
+
+  const handleResumePress = useCallback(() => {
+    // Clearing the flag lets the existing scrollTo worklet drive it home.
+    resumeFollowing();
+  }, [resumeFollowing]);
 
   // Expose scrollToIndex for external callers (e.g. tapping a search result)
   useImperativeHandle(ref, () => ({
@@ -295,16 +366,11 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         scrollEnabled={scrollEnabled}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews
+        // Native alpha dissolve of children at the clip edges — no MaskedView.
+        // Android only; iOS ignores this prop.
+        fadingEdgeLength={edgeFade > 0 ? edgeFade : undefined}
         onLayout={(e) => {
           containerHeightSV.value = e.nativeEvent.layout.height;
-        }}
-        onScrollEndDrag={() => {
-          // Fallback resume for drag-without-momentum (no onMomentumEnd fires)
-          if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
-          dragTimeoutRef.current = setTimeout(() => {
-            isUserScrollingSV.value = false;
-            notifyScrollState(false);
-          }, 2000);
         }}
       >
         <View style={{ height: topSpacerHeight }} />
@@ -312,26 +378,79 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         {lyrics.map(renderLyricLine)}
         <View style={{ height: bottomSpacerHeight }} />
       </Animated.ScrollView>
+
+      {pillDirection !== 0 && (
+        <Pressable
+          style={styles.resumePill}
+          onPress={handleResumePress}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Back to the playing line"
+        >
+          <Ionicons
+            name={pillDirection > 0 ? 'arrow-down' : 'arrow-up'}
+            size={14}
+            color="#000"
+          />
+          <Text style={styles.resumePillText}>Now playing</Text>
+        </Pressable>
+      )}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
+  // Floating over the lyrics, clear of the transport row below.
+  resumePill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  resumePillText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   container: {
     flex: 1,
     width: '100%',
   },
+  linePressable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  instrumentalWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingVertical: 10,
+    marginVertical: 8,
+  },
   lyricText: {
+    fontFamily: Fonts.lyrics,
     fontSize: 28,
-    fontWeight: '800',
     textAlign: 'left',
     marginVertical: 16,
     paddingHorizontal: 32,
   },
   // Title words inside a lyric: no background block, just a white glow.
+  // Always bold — a glow on a regular-weight line reads as a stale highlight.
   titleGlow: {
+    fontFamily: Fonts.lyricsActive,
+    fontWeight: Fonts.lyricsActiveWeight,
     color: '#FFFFFF',
-    fontWeight: '900',
     textShadowColor: 'rgba(255,255,255,0.9)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,

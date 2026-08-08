@@ -1,21 +1,18 @@
 import { Platform } from 'react-native';
-
-let VoiceInputModule: any = null;
-let eventEmitter: any = null;
-
-if (Platform.OS === 'android') {
-  try {
-    const { requireNativeModule, EventEmitter } = require('expo-modules-core');
-    VoiceInputModule = requireNativeModule('VoiceInput');
-    eventEmitter = new EventEmitter(VoiceInputModule);
-  } catch {
-    // VoiceInput native module not available — JS fallback active
-  }
-}
+import { getNativeModule, nativeAddListener } from './nativeModule';
 
 export interface VoiceResultEvent { transcript: string }
 export interface VoiceAudioLevelEvent { level: number }
 export interface VoiceErrorEvent { code: string; message?: string }
+
+type VoiceNative = {
+  startListening: () => Promise<void>;
+  stopListening: () => Promise<void>;
+  cancelListening: () => Promise<void>;
+  addListener: (event: string, cb: (data: any) => void) => { remove: () => void };
+};
+
+const VoiceInputModule = getNativeModule<VoiceNative>('VoiceInput');
 
 export const NativeVoiceInput = {
   isAvailable(): boolean {
@@ -23,36 +20,36 @@ export const NativeVoiceInput = {
   },
 
   async startListening(): Promise<void> {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !VoiceInputModule) return;
     return await VoiceInputModule.startListening();
   },
 
   async stopListening(): Promise<void> {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !VoiceInputModule) return;
     return await VoiceInputModule.stopListening();
   },
 
   async cancelListening(): Promise<void> {
-    if (!this.isAvailable()) return;
+    if (!this.isAvailable() || !VoiceInputModule) return;
     return await VoiceInputModule.cancelListening();
   },
 
   onStart(cb: () => void) {
-    return eventEmitter?.addListener('onStart', cb);
+    return nativeAddListener(VoiceInputModule, 'onStart', cb);
   },
   onResult(cb: (e: VoiceResultEvent) => void) {
-    return eventEmitter?.addListener('onResult', cb);
+    return nativeAddListener(VoiceInputModule, 'onResult', cb);
   },
   onPartialResult(cb: (e: VoiceResultEvent) => void) {
-    return eventEmitter?.addListener('onPartialResult', cb);
+    return nativeAddListener(VoiceInputModule, 'onPartialResult', cb);
   },
   onAudioLevel(cb: (e: VoiceAudioLevelEvent) => void) {
-    return eventEmitter?.addListener('onAudioLevel', cb);
+    return nativeAddListener(VoiceInputModule, 'onAudioLevel', cb);
   },
   onEnd(cb: (e: VoiceResultEvent) => void) {
-    return eventEmitter?.addListener('onEnd', cb);
+    return nativeAddListener(VoiceInputModule, 'onEnd', cb);
   },
   onError(cb: (e: VoiceErrorEvent) => void) {
-    return eventEmitter?.addListener('onError', cb);
+    return nativeAddListener(VoiceInputModule, 'onError', cb);
   },
 };

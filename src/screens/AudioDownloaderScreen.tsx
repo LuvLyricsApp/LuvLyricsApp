@@ -8,10 +8,12 @@ import { usePlayerStore } from '../store/playerStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { AudioDownloaderSearchTab } from './AudioDownloaderSearchTab';
 import { AudioDownloaderQueueTab } from './AudioDownloaderQueueTab';
+import { safeGoBack } from '../utils/navigationService';
 
 interface AudioDownloaderProps {
     navigation: {
         goBack: () => void;
+        canGoBack?: () => boolean;
         navigate: (screen: string, params?: Record<string, unknown>) => void;
     };
     route: {
@@ -63,7 +65,7 @@ export const AudioDownloaderScreen: React.FC<AudioDownloaderProps> = ({ navigati
             <SafeAreaView style={styles.safeArea}>
                 {/* Shell header: back + tab switcher */}
                 <View style={styles.header}>
-                    <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+                    <Pressable onPress={() => safeGoBack(navigation)} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={22} color="#fff" />
                     </Pressable>
 

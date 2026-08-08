@@ -12,12 +12,12 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ActivityIndicator,
   TextInput,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +51,8 @@ import * as playlistQueries from '../database/playlistQueries';
 import { PlaylistItem } from '../components/PlaylistItem';
 import { CustomMenu } from '../components/CustomMenu';
 import { CoverFlow } from '../components/CoverFlow';
+import { BouncePressable } from '../components/BouncePressable';
+import { safeGoBack } from '../utils/navigationService';
 import TimelineScrubber from '../components/TimelineScrubber';
 import { ModernDeleteModal } from '../components/ModernDeleteModal';
 import { Toast } from '../components/Toast';
@@ -86,13 +88,15 @@ export const PlaylistDetailScreen: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [songToDelete, setSongToDelete] = useState<string | null>(null);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  /** Cover rail focus (may differ from playing track while browsing). */
+  const [focusedCoverIndex, setFocusedCoverIndex] = useState(0);
 
   // Store Hooks
   const currentSongId = usePlayerStore(state => state.currentSongId);
   const currentPlaylistId = usePlayerStore(state => state.currentPlaylistId);
   const currentSong = usePlayerStore(state => state.currentSong);
   const setPlaylistQueue = usePlayerStore(state => state.setPlaylistQueue);
-  const { play, pause } = playerControls;
+  const { play } = playerControls;
   const isPlaying = usePlayerStore(state => state.isPlaying);
   const nextInPlaylist = usePlayerStore(state => state.nextInPlaylist);
   const previousInPlaylist = usePlayerStore(state => state.previousInPlaylist);
@@ -366,49 +370,28 @@ export const PlaylistDetailScreen: React.FC = () => {
   const isSongInPlaylist = currentSong && songs.some(s => s.id === currentSong.id);
   const activeSongInPlaylist = (activeIsPlaying && isSongInPlaylist) ? currentSong : null;
   
-  // Calculate neighbors for CoverFlow
-  // Calculate neighbors for CoverFlow (Use SORTED list)
-  const currentIndex = activeIsPlaying && currentSong ? filteredSongs.findIndex(s => s.id === currentSong.id) : -1;
-  const prevSong = currentIndex > 0 ? filteredSongs[currentIndex - 1] : null;
-  const nextSong = currentIndex >= 0 && currentIndex < filteredSongs.length - 1 ? filteredSongs[currentIndex + 1] : null;
-  
-  // If playing, use CoverFlow. Else static image (Playlist Cover).
-  // Note: We use CoverFlow even if not playing? 
-  // User asked for "dynamic cover coming let that area be like swipable"
-  // If not playing, we show Playlist Cover. Swiping might not make sense unless we start playing.
-  // Let's enable CoverFlow ONLY when activeIsPlaying.
-  
-  const headerImageUri = activeSongInPlaylist?.coverImageUri || playlistCover || songs[0]?.coverImageUri;
-  
-  // Reanimated Shared Values for Background Colors
-  // We initialize with the first song's colors or default
-  const bgColorTop = useSharedValue('#444');
-  const bgColorBottom = useSharedValue('#111');
+  // Playing track index in the filtered list (for rail highlight + follow).
+  const currentIndex = activeIsPlaying && currentSong
+    ? filteredSongs.findIndex(s => s.id === currentSong.id)
+    : -1;
 
-  // Trigger animation when active song changes
-  useEffect(() => {
-    let gradientColors: string[];
-    if (activeSongInPlaylist) {
-        gradientColors = getGradientForSong(activeSongInPlaylist);
-    } else if (songs[0]) {
-        gradientColors = getGradientForSong(songs[0]);
-    } else {
-        gradientColors = ['#444', '#111'];
-    }
-    
-    // Animate to new colors
-    bgColorTop.value = withTiming(gradientColors[0], { duration: 500 });
-    // Assuming 2nd color is bottom, or last color if array > 2
-    bgColorBottom.value = withTiming(gradientColors[gradientColors.length - 1], { duration: 500 });
-  }, [activeSongInPlaylist, songs, bgColorTop, bgColorBottom]);
+  const focusedSong =
+    filteredSongs[focusedCoverIndex] ??
+    filteredSongs[0] ??
+    null;
   
-  // Animated Gradient components removed as unused in favor of static memoized gradient
-  // which works better for these complex styles.
-  
+  // Blurred header bg follows the focused rail cover (browse) then playhead.
+  const headerImageUri =
+    focusedSong?.coverImageUri ||
+    activeSongInPlaylist?.coverImageUri ||
+    playlistCover ||
+    songs[0]?.coverImageUri;
+
   const activeSongGradient = useMemo(() => {
+     if (focusedSong) return getGradientForSong(focusedSong);
      if (activeSongInPlaylist) return getGradientForSong(activeSongInPlaylist);
      return getGradientForSong(songs[0] || { id: 'default', gradientId: 'dynamic' });
-  }, [activeSongInPlaylist, songs]);
+  }, [focusedSong, activeSongInPlaylist, songs]);
 
   const totalDuration = useMemo(
     () => songs.reduce((acc, song) => acc + (song.duration || 0), 0),
@@ -454,18 +437,16 @@ export const PlaylistDetailScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | undefined>(undefined);
 
-  const handleCoverPress = (event: any) => {
+  const handleCoverPress = (event?: any) => {
     if (!isEditMode) return;
     
     let pageX = 50;
     let pageY = 150;
 
     if (event?.nativeEvent?.pageX !== undefined) {
-        // Standard Pressable Event
         pageX = event.nativeEvent.pageX;
         pageY = event.nativeEvent.pageY;
     } else if (event?.absoluteX !== undefined) {
-        // Gesture Handler Event (from CoverFlow)
         pageX = event.absoluteX;
         pageY = event.absoluteY;
     }
@@ -541,19 +522,12 @@ export const PlaylistDetailScreen: React.FC = () => {
 
   }, [currentSongId, isPlaying, isEditMode, handleSongPress, handleDeleteSong, handleAddToQueue]);
 
-  // Animated Styles
+  // Like home LuvLyrics header: fully clear at rest, solid black only after scroll.
   const headerStyle = useAnimatedStyle(() => {
-    // Fade to black faster (0 to 150 scroll)
-    const opacity = interpolate(scrollY.value, [0, 150], [0, 1], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollY.value, [0, 60, 140], [0, 0.55, 1], Extrapolation.CLAMP);
     return {
       backgroundColor: `rgba(0,0,0,${opacity})`,
     };
-  });
-
-  const headerTitleStyle = useAnimatedStyle(() => {
-     // Fade in title after header is black
-     const opacity = interpolate(scrollY.value, [150, 200], [0, 1], Extrapolation.CLAMP);
-     return { opacity };
   });
 
   const animatedGradientStyle = useAnimatedStyle(() => {
@@ -584,24 +558,28 @@ export const PlaylistDetailScreen: React.FC = () => {
 
   const renderHeader = () => (
           <View style={styles.listHeader}>
-             {/* Dynamic Cover Art - NO ICON OVERLAY */}
-             {activeIsPlaying ? (
-                 <CoverFlow 
-                    currentSong={activeSongInPlaylist}
-                    prevSong={prevSong}
-                    nextSong={nextSong}
-                    onNext={nextInPlaylist}
-                    onPrev={previousInPlaylist}
+             {/* Bent CoverFlow deck + free-form fling (loop, tap-to-play, live title) */}
+             {filteredSongs.length > 0 ? (
+                 <CoverFlow
+                    songs={filteredSongs}
+                    playingIndex={currentIndex}
                     defaultGradientColors={activeSongGradient}
                     isEditMode={isEditMode}
-                    onPress={handleCoverPress}
-                    onSwipeConfirmed={pause} // Stop immediately
+                    onFocusedIndexChange={setFocusedCoverIndex}
+                    onSelectSong={(index, song) => handleSongPress(song, index)}
+                    onEditPress={handleCoverPress}
                  />
              ) : (
                  <Pressable onPress={handleCoverPress} disabled={!isEditMode}>
                    <View style={styles.coverContainer}>
                       {headerImageUri ? (
-                          <Image source={{ uri: headerImageUri }} style={styles.coverArt} />
+                          <Image
+                            source={{ uri: headerImageUri }}
+                            style={styles.coverArt}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            transition={0}
+                          />
                       ) : (
                           <LinearGradient colors={activeSongGradient as [string, string]} style={styles.coverArt}>
                               <Ionicons name="musical-notes" size={80} color="rgba(255,255,255,0.4)" />
@@ -617,7 +595,15 @@ export const PlaylistDetailScreen: React.FC = () => {
                  </Pressable>
              )}
 
-             <Text style={styles.playlistName}>{playlistName}</Text>
+             {/* Live song title under rail (same cover ≠ same song) */}
+             <Text style={styles.focusedSongTitle} numberOfLines={2}>
+               {focusedSong?.title ?? ' '}
+             </Text>
+             {!!focusedSong?.artist && (
+               <Text style={styles.focusedSongArtist} numberOfLines={1}>
+                 {focusedSong.artist}
+               </Text>
+             )}
              <View style={styles.metaContainer}>
                 <Text style={styles.playlistMeta}>{songs.length} songs • {formatTotalDuration()}</Text>
                 {/* Sort Button */}
@@ -669,11 +655,21 @@ export const PlaylistDetailScreen: React.FC = () => {
                          />
                      </View>
 
-                     {/* Buttons Row */}
+                     {/* Compact transport — BouncePressable for light alive feedback */}
                      <View style={styles.inlineControlsRow}>
-                        {/* -10s */}
-                        <Pressable 
-                            style={styles.skipButton} 
+                        <BouncePressable
+                            style={styles.skipButton}
+                            onPress={() => {
+                              if (activeIsPlaying) previousInPlaylist();
+                            }}
+                            disabled={!activeIsPlaying}
+                            hitSlop={6}
+                        >
+                            <Ionicons name="play-skip-back" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
+                        </BouncePressable>
+
+                        <BouncePressable
+                            style={styles.skipButton}
                             onPress={async () => {
                                 if (activeIsPlaying && player) {
                                     const newTime = Math.max(0, position - 10);
@@ -683,36 +679,32 @@ export const PlaylistDetailScreen: React.FC = () => {
                                 }
                             }}
                             disabled={!activeIsPlaying}
+                            hitSlop={6}
                         >
-                            <Ionicons name="play-back-outline" size={24} color={activeIsPlaying ? "#FFF" : "rgba(255,255,255,0.3)"} />
-                        </Pressable>
+                            <Ionicons name="play-back" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
+                        </BouncePressable>
 
-                        {/* Play/Pause (Central) */}
-                        <Pressable 
-                            style={styles.playButtonLarge} 
+                        <BouncePressable
+                            style={styles.playButtonLarge}
+                            strong
                             onPress={() => {
                                 if (activeIsPlaying) {
                                     usePlayerStore.getState().requestPlayback(!isPlaying);
-                                } else {
-                                    // Start from first song
-                                    if (songs.length > 0) {
-                                        // Use store to set queue and start
-                                        usePlayerStore.getState().setPlaylistQueue(playlistId, songs, 0);
-                                    }
+                                } else if (songs.length > 0) {
+                                    usePlayerStore.getState().setPlaylistQueue(playlistId, songs, 0);
                                 }
                             }}
                         >
-                            <Ionicons 
-                                name={activeIsPlaying && isPlaying ? "pause" : "play"} 
-                                size={28} 
-                                color="#000" 
-                                style={{ marginLeft: activeIsPlaying && isPlaying ? 0 : 2 }} // Optical adjustment
+                            <Ionicons
+                                name={activeIsPlaying && isPlaying ? 'pause' : 'play'}
+                                size={22}
+                                color="#000"
+                                style={{ marginLeft: activeIsPlaying && isPlaying ? 0 : 1 }}
                             />
-                        </Pressable>
+                        </BouncePressable>
 
-                        {/* +10s */}
-                        <Pressable 
-                            style={styles.skipButton} 
+                        <BouncePressable
+                            style={styles.skipButton}
                             onPress={async () => {
                                 if (activeIsPlaying && player && duration > 1) {
                                     const newTime = Math.min(duration - 1, position + 10);
@@ -722,9 +714,21 @@ export const PlaylistDetailScreen: React.FC = () => {
                                 }
                             }}
                             disabled={!activeIsPlaying}
+                            hitSlop={6}
                         >
-                            <Ionicons name="play-forward-outline" size={24} color={activeIsPlaying ? "#FFF" : "rgba(255,255,255,0.3)"} />
-                        </Pressable>
+                            <Ionicons name="play-forward" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
+                        </BouncePressable>
+
+                        <BouncePressable
+                            style={styles.skipButton}
+                            onPress={() => {
+                              if (activeIsPlaying) nextInPlaylist();
+                            }}
+                            disabled={!activeIsPlaying}
+                            hitSlop={6}
+                        >
+                            <Ionicons name="play-skip-forward" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
+                        </BouncePressable>
                      </View>
                  </View>
              )}
@@ -738,51 +742,52 @@ export const PlaylistDetailScreen: React.FC = () => {
           <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} />
         </Animated.View>
       ) : (
-        /* Dynamic Background: Blurred Cover Art (Matches Dynamic Island) */
-        <Animated.View 
+        /* Blurred cover behind the deck — expo-image cross-dissolves on source
+           change, so no hard cut when the focused track changes. */
+        <Animated.View
           style={[StyleSheet.absoluteFill, animatedGradientStyle, { backgroundColor: '#000', height: 500 }]}
-          pointerEvents="none" 
+          pointerEvents="none"
         >
-           {/* 1. The Blurred Image */}
-           {headerImageUri && (
-               <Image 
-                  source={{ uri: headerImageUri }}
-                  style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
-                  blurRadius={90}
-                  resizeMode="cover"
-               />
-           )}
-           
-           {/* 2. Fade to Black Overlay */}
-           <LinearGradient
-              colors={['transparent', '#000'] as const}
-              style={StyleSheet.absoluteFill}
-              locations={[0.2, 1]} 
-           />
+          {headerImageUri ? (
+            <Image
+              source={{ uri: headerImageUri }}
+              style={[StyleSheet.absoluteFill, { opacity: 0.62 }]}
+              contentFit="cover"
+              blurRadius={90}
+              cachePolicy="memory-disk"
+              transition={520}
+            />
+          ) : null}
+
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.35)', '#000'] as const}
+            style={StyleSheet.absoluteFill}
+            locations={[0.15, 0.55, 1]}
+          />
         </Animated.View>
       )}
 
-      {/* Sticky Header (Absolute) */}
+      {/* Sticky Header — clear at top (home-style), black only after scroll */}
       <Animated.View style={[styles.stickyHeader, { height: 50 + insets.top, paddingTop: insets.top }, headerStyle]}>
           {!isSearchActive && (
-              <Pressable 
-                  style={styles.iconButton} 
-                  onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('BottomTabs' as never)}
+              <Pressable
+                  style={styles.iconButton}
+                  hitSlop={12}
+                  onPress={() => safeGoBack(navigation)}
               >
                 <Ionicons name="chevron-back" size={28} color="#fff" />
               </Pressable>
           )}
           
-          {/* Animated Header Title (Fades in when scrolled) */}
+          {/* Title always visible over artwork (like home brand name). */}
           {!isSearchActive && (
-              <Animated.Text style={[styles.stickyHeaderTitle, headerTitleStyle]} numberOfLines={2}>
+              <Animated.Text style={styles.stickyHeaderTitle} numberOfLines={2}>
                   {playlistName}
               </Animated.Text>
           )}
           
           <View style={{flex: 1}} />
 
-          {/* Animated Search Bar */}
           {isSearchActive ? (
               <Animated.View style={[styles.searchPill, { flex: 1, marginRight: 8 }]}>
                   <Ionicons name="search" size={20} color="#666" style={{marginLeft: 12}} />
@@ -801,15 +806,16 @@ export const PlaylistDetailScreen: React.FC = () => {
           ) : (
              <Pressable 
                 style={[styles.iconButton, { marginRight: 8 }]} 
+                hitSlop={12}
                 onPress={() => setIsSearchActive(true)}
              >
                 <Ionicons name="search" size={24} color="#fff" />
              </Pressable>
           )}
           
-          {/* Quick Add Button */}
            <Pressable 
               style={[styles.iconButton, { marginRight: 8 }]} 
+              hitSlop={12}
               onPress={() => (navigation as any).navigate('AddToPlaylist', { playlistId })}
            >
               <Ionicons name="add" size={28} color="#fff" />
@@ -817,6 +823,7 @@ export const PlaylistDetailScreen: React.FC = () => {
 
           <Pressable 
              style={[styles.iconButton, isEditMode && styles.activeButton]} 
+             hitSlop={12}
              onPress={() => setIsEditMode(!isEditMode)}
           >
             <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
@@ -976,7 +983,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    // Transparent like home brand actions — no black strip at rest.
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -985,27 +993,32 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
     width: '100%',
+    // No horizontal clip — stacked cover peeks must paint outside the centre.
+    paddingHorizontal: 0,
+    overflow: 'visible',
   },
   coverContainer: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
-    marginBottom: 20,
-    marginTop: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+    marginBottom: 10,
+    marginTop: 4,
   },
   inlinePlayerContainer: {
-      marginBottom: 24,
-      marginTop: 12,
+      marginBottom: 12,
+      marginTop: 6,
       width: '100%',
+      maxWidth: 340,
+      alignSelf: 'center',
   },
   coverArt: {
-    width: 220,
-    height: 220,
-    borderRadius: 8,
+    width: 188,
+    height: 188,
+    borderRadius: 14,
   },
   editOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1026,22 +1039,41 @@ const styles = StyleSheet.create({
       alignItems: 'center'
   },
   playlistName: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 2,
+    paddingHorizontal: 8,
+  },
+  focusedSongTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 2,
+    paddingHorizontal: 20,
+  },
+  focusedSongArtist: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    marginBottom: 4,
+    paddingHorizontal: 24,
   },
   playlistMeta: {
       color: 'rgba(255,255,255,0.6)',
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '500',
   },
   metaContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 4,
-      gap: 12,
+      marginTop: 2,
+      marginBottom: 2,
+      gap: 8,
   },
   sortButton: {
       flexDirection: 'row',
@@ -1089,16 +1121,16 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   playButtonLarge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FFF',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   secondaryButton: {
     width: 48,
@@ -1132,31 +1164,38 @@ const styles = StyleSheet.create({
   },
   scrubberContainer: {
       width: '100%',
-      paddingHorizontal: 16,
-      marginBottom: 20,
+      paddingHorizontal: 4,
+      marginBottom: 6,
   },
   timerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginTop: 4,
+      marginTop: 2,
       width: '100%',
   },
   timerText: {
-      fontSize: 12,
+      fontSize: 11,
       color: '#FFFFFF',
       fontVariant: ['tabular-nums'],
   },
+  // Compact transport — buttons sit as one control cluster, not across the screen.
   inlineControlsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 50,
+      gap: 14,
+      alignSelf: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 28,
+      backgroundColor: 'rgba(255,255,255,0.06)',
   },
   skipButton: {
       alignItems: 'center',
       justifyContent: 'center',
       width: 40,
       height: 40,
+      borderRadius: 20,
   },
   skipText: {
       position: 'absolute',

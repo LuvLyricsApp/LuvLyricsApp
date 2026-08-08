@@ -38,6 +38,7 @@ import { generateId } from '../utils/formatters';
 import { formatTime } from '../utils/formatters';
 import { Song } from '../types/song';
 import { LrcSearchModal } from '../components/LrcSearchModal';
+import { safeGoBack } from '../utils/navigationService';
 import { SearchResult } from '../services/LyricsRepository';
 import { GeniusService } from '../services/GeniusService';
 import { TransliterationService } from '../services/TransliterationService';
@@ -129,11 +130,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
   }, [songId, isEditing, getSong]);
 
   const handleCancel = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Main' as never);
-    }
+    safeGoBack(navigation);
   };
 
   const handlePaste = async () => {
@@ -404,11 +401,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
       setToastType('success');
       setShowToast(true);
       setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else {
-          navigation.navigate('Main' as never);
-        }
+        safeGoBack(navigation);
       }, 500);
     } catch (error) {
       console.error('Save failed:', error);

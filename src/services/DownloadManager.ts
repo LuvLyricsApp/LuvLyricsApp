@@ -11,19 +11,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Song } from '../types/song';
 import { StagingSong } from '../hooks/useSongStaging';
 import { lyricaService } from '../services/LyricaService';
+import { getNativeModule, nativeAddListener } from './nativeModule';
 
-let DownloaderModule: any = null;
-let downloaderEmitter: any = null;
-
-if (Platform.OS === 'android') {
-  try {
-    const { requireNativeModule, EventEmitter } = require('expo-modules-core');
-    DownloaderModule = requireNativeModule('Downloader');
-    downloaderEmitter = new EventEmitter(DownloaderModule);
-  } catch {
-    // Downloader native module not available — FileSystem fallback active
-  }
-}
+// Module is already an EventEmitter on Expo SDK 52+ — do not wrap with EventEmitter.
+const DownloaderModule = getNativeModule<any>('Downloader');
 
 class DownloadManager {
     private activeDownloads: Map<string, FileSystem.DownloadResumable> = new Map();
@@ -81,7 +72,7 @@ class DownloadManager {
         if (!staging.selectedQuality) throw new Error('No quality selected');
 
         // ANDROID NATIVE PATH (WorkManager + HTTP stream + SAF copy)
-        if (Platform.OS === 'android' && DownloaderModule && downloaderEmitter) {
+        if (Platform.OS === 'android' && DownloaderModule) {
             return new Promise((resolve, reject) => {
                 const songDir = `${FileSystem.documentDirectory}music/${staging.id}/`;
                 const audioUrl = staging.selectedQuality!.url;
@@ -95,7 +86,7 @@ class DownloadManager {
                     progressSub?.remove();
                 };
 
-                progressSub = downloaderEmitter.addListener('onDownloadProgress', (event: any) => {
+                progressSub = nativeAddListener(DownloaderModule, 'onDownloadProgress', (event: any) => {
                     if (event.id !== staging.id) return;
 
                     const progress = event.progress;

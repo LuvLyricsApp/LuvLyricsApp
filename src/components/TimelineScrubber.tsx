@@ -6,9 +6,13 @@ import Animated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
+  withSequence,
   useDerivedValue,
   useAnimatedReaction,
   SharedValue,
+  Easing,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import { formatTimeSV } from '../playback/positionBus';
 
@@ -24,6 +28,11 @@ export interface TimelineScrubberProps {
   disabled?: boolean;
 }
 
+/** One shared morph clock for track + thumb — no desynced withTimings. */
+const MORPH_IN_MS = 150;
+const MORPH_OUT_MS = 170;
+const MORPH_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+
 const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   currentTime,
   duration,
@@ -35,21 +44,13 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   showTimeLabels = true,
   disabled = false,
 }) => {
-  // ---------------------------------------------------------------------------
-  // trackWidthSV: store track width as a SharedValue so the gesture worklet can
-  // read it without a JS-thread closure capture (closures in worklets capture
-  // stale values from render). A SharedValue is always fresh on the UI thread.
-  // ---------------------------------------------------------------------------
   const trackWidthSV = useSharedValue(0);
   const isScrubbing = useSharedValue(false);
   const isSettling = useSharedValue(false);
+  /** 0 = idle (thin + dot), 1 = scrubbing (thick capsule, no dot). */
+  const scrubUI = useSharedValue(0);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ---------------------------------------------------------------------------
-  // Normalise props: both raw numbers and SharedValues are accepted.
-  // We create stable internal shared values for the number case and sync them
-  // via useEffect — no conditional hook calls.
-  // ---------------------------------------------------------------------------
   const currentTimeNumberSV = useSharedValue(
     typeof currentTime === 'number' ? currentTime : 0,
   );
@@ -63,32 +64,21 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     typeof duration === 'number' ? durationNumberSV : duration;
 
   useEffect(() => {
-    if (typeof currentTime === 'number') {
-      currentTimeNumberSV.value = currentTime;
-    }
+    if (typeof currentTime === 'number') currentTimeNumberSV.value = currentTime;
   }, [currentTime, currentTimeNumberSV]);
 
   useEffect(() => {
-    if (typeof duration === 'number') {
-      durationNumberSV.value = duration;
-    }
+    if (typeof duration === 'number') durationNumberSV.value = duration;
   }, [duration, durationNumberSV]);
 
-  // ---------------------------------------------------------------------------
-  // Derived values — run entirely on the UI thread.
-  // ---------------------------------------------------------------------------
-
-  /** Playback progress in [0, 1]. */
   const scrubProgress = useDerivedValue(() => {
     'worklet';
     if (durationSV.value <= 0) return 0;
     return currentTimeSV.value / durationSV.value;
   });
 
-  /** The progress value that drives visual fill/thumb position. */
   const dragProgress = useSharedValue(0);
 
-  /** While scrubbing/settling, show drag position; otherwise playback position. */
   const displayProgress = useDerivedValue(() => {
     'worklet';
     return isScrubbing.value || isSettling.value
@@ -96,18 +86,12 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       : scrubProgress.value;
   });
 
-  // ---------------------------------------------------------------------------
-  // Time label text — computed on UI thread, sent to JS only when the
-  // formatted string changes (not on every sub-second tick). This limits
-  // React re-renders to at most ~1/sec under normal playback.
-  // ---------------------------------------------------------------------------
   const [currentTimeLabel, setCurrentTimeLabel] = useState('0:00');
   const [durationLabel, setDurationLabel] = useState('0:00');
 
-  // Derived value: formatted current time string (computed in worklet)
   const currentTimeLabelDV = useDerivedValue(() => {
     'worklet';
-    const t = isScrubbing.value
+    const t = isScrubbing.value || isSettling.value
       ? displayProgress.value * durationSV.value
       : currentTimeSV.value;
     return formatTimeSV(t);
@@ -118,29 +102,20 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     return formatTimeSV(durationSV.value);
   });
 
-  // Only push to JS state when the formatted string actually changes
-  // (i.e. when the displayed second flips — at most once per second).
   useAnimatedReaction(
     () => currentTimeLabelDV.value,
     (next, prev) => {
-      if (next !== prev) {
-        runOnJS(setCurrentTimeLabel)(next);
-      }
+      if (next !== prev) runOnJS(setCurrentTimeLabel)(next);
     },
   );
 
   useAnimatedReaction(
     () => durationLabelDV.value,
     (next, prev) => {
-      if (next !== prev) {
-        runOnJS(setDurationLabel)(next);
-      }
+      if (next !== prev) runOnJS(setDurationLabel)(next);
     },
   );
 
-  // ---------------------------------------------------------------------------
-  // Layout callback — writes to shared value directly, no setState.
-  // ---------------------------------------------------------------------------
   const onLayout = useCallback(
     (e: LayoutChangeEvent) => {
       trackWidthSV.value = e.nativeEvent.layout.width;
@@ -148,24 +123,23 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     [trackWidthSV],
   );
 
-  // ---------------------------------------------------------------------------
-  // JS-thread callbacks (called via runOnJS from gesture handlers).
-  // ---------------------------------------------------------------------------
+  // Spotify-style: preview on the bar while the finger is down; only jump
+  // audio when the gesture commits (release / tap). Live-seeking mid-drag
+  // makes the track chase the thumb and breaks the 2:00→scrub-to-1:00 model.
   const handleSeekCommit = useCallback(
     (progress: number) => {
-      const dur =
-        typeof duration === 'number' ? duration : duration.value;
+      const dur = typeof duration === 'number' ? duration : duration.value;
       onSeek(progress * dur);
     },
     [duration, onSeek],
   );
 
   const handleScrubStart = useCallback(() => {
-    if (onScrubStart) onScrubStart();
+    onScrubStart?.();
   }, [onScrubStart]);
 
   const handleScrubEnd = useCallback(() => {
-    if (onScrubEnd) onScrubEnd();
+    onScrubEnd?.();
   }, [onScrubEnd]);
 
   const startSettleWindow = useCallback(() => {
@@ -173,29 +147,38 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
     settleTimeoutRef.current = setTimeout(() => {
       isSettling.value = false;
-    }, 350);
+    }, 200);
   }, [isSettling]);
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
-    };
-  }, []);
+    },
+    [],
+  );
 
-  // ---------------------------------------------------------------------------
-  // Gesture handlers — all hot-path math runs as worklets on the UI thread.
-  // runOnJS is only called at gesture end to commit the seek to the player.
-  // ---------------------------------------------------------------------------
+  const morphIn = () => {
+    'worklet';
+    scrubUI.value = withTiming(1, { duration: MORPH_IN_MS, easing: MORPH_EASE });
+  };
+  const morphOut = () => {
+    'worklet';
+    scrubUI.value = withTiming(0, { duration: MORPH_OUT_MS, easing: MORPH_EASE });
+  };
+
   const panGesture = Gesture.Pan()
     .enabled(!disabled)
+    .minDistance(0)
     .onStart(() => {
       'worklet';
       isScrubbing.value = true;
       dragProgress.value = scrubProgress.value;
+      morphIn();
       runOnJS(handleScrubStart)();
     })
     .onUpdate((e) => {
       'worklet';
+      // UI-only preview — do not touch the player until release.
       if (trackWidthSV.value > 0) {
         dragProgress.value = Math.max(0, Math.min(1, e.x / trackWidthSV.value));
       }
@@ -204,50 +187,98 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       'worklet';
       const finalProgress = dragProgress.value;
       isScrubbing.value = false;
+      morphOut();
+      // Commit seek only when the finger lifts.
       runOnJS(handleSeekCommit)(finalProgress);
       runOnJS(startSettleWindow)();
       runOnJS(handleScrubEnd)();
+    })
+    .onFinalize(() => {
+      'worklet';
+      // Cancelled mid-drag (interrupted): abandon scrub, leave audio where it was.
+      if (isScrubbing.value) {
+        isScrubbing.value = false;
+        morphOut();
+        runOnJS(handleScrubEnd)();
+      }
     });
 
   const tapGesture = Gesture.Tap()
     .enabled(!disabled)
     .onEnd((e) => {
       'worklet';
-      if (trackWidthSV.value > 0) {
-        const newProgress = Math.max(0, Math.min(1, e.x / trackWidthSV.value));
-        dragProgress.value = newProgress;
-        runOnJS(handleSeekCommit)(newProgress);
-        runOnJS(startSettleWindow)();
-      }
+      if (trackWidthSV.value <= 0) return;
+      const newProgress = Math.max(0, Math.min(1, e.x / trackWidthSV.value));
+      dragProgress.value = newProgress;
+      // Tap = instant jump (no drag hold). One sequence — calling morphIn() then
+      // morphOut() in the same frame just cancels the first, so nothing pulsed.
+      scrubUI.value = withSequence(
+        withTiming(1, { duration: MORPH_IN_MS, easing: MORPH_EASE }),
+        withTiming(0, { duration: MORPH_OUT_MS, easing: MORPH_EASE }),
+      );
+      runOnJS(handleSeekCommit)(newProgress);
+      runOnJS(startSettleWindow)();
     });
 
   const composedGesture = Gesture.Race(panGesture, tapGesture);
 
-  // ---------------------------------------------------------------------------
-  // Animated styles — UI thread only.
-  // ---------------------------------------------------------------------------
-  const trackHeightStyle = useAnimatedStyle(() => {
+  // Track height + always-pill corners from one scrubUI clock.
+  const trackStyle = useAnimatedStyle(() => {
     'worklet';
+    const h = interpolate(scrubUI.value, [0, 1], [3.5, 14], Extrapolation.CLAMP);
     return {
-      height: withTiming(isScrubbing.value ? 10 : 4, { duration: 200 }),
-      borderRadius: withTiming(isScrubbing.value ? 5 : 2, { duration: 200 }),
+      height: h,
+      borderRadius: h / 2,
     };
   });
 
   const fillStyle = useAnimatedStyle(() => {
     'worklet';
+    const p = Math.max(0, Math.min(1, displayProgress.value));
+    const h = interpolate(scrubUI.value, [0, 1], [3.5, 14], Extrapolation.CLAMP);
     return {
-      width: `${Math.max(0, Math.min(1, displayProgress.value)) * 100}%`,
+      width: `${p * 100}%`,
+      // Leading edge of fill is always a soft cap (reads as curve while scrubbing).
+      borderTopRightRadius: h / 2,
+      borderBottomRightRadius: h / 2,
     };
   });
 
+  /**
+   * Thumb / track handoff (no gap where only the dot shows):
+   *  expand 0→1: thumb out by 0.35, track already thickening the whole time
+   *  collapse 1→0: track thins whole time, thumb returns only after 0.55
+   */
   const thumbStyle = useAnimatedStyle(() => {
     'worklet';
+    const p = Math.max(0, Math.min(1, displayProgress.value));
+    const opacity = interpolate(
+      scrubUI.value,
+      [0, 0.3, 0.55, 1],
+      [1, 0, 0, 0],
+      Extrapolation.CLAMP,
+    );
+    const scale = interpolate(
+      scrubUI.value,
+      [0, 0.3, 1],
+      [1, 0.55, 0.4],
+      Extrapolation.CLAMP,
+    );
     return {
-      left: `${Math.max(0, Math.min(1, displayProgress.value)) * 100}%`,
-      opacity: withTiming(isScrubbing.value ? 0 : 1, { duration: 200 }),
+      left: `${p * 100}%`,
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  const glowStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      opacity: interpolate(scrubUI.value, [0, 0.4, 1], [0, 0.35, 0.5], Extrapolation.CLAMP),
       transform: [
-        { scale: withTiming(isScrubbing.value ? 0.5 : 1, { duration: 200 }) },
+        {
+          scaleY: interpolate(scrubUI.value, [0, 1], [0.6, 1], Extrapolation.CLAMP),
+        },
       ],
     };
   });
@@ -263,23 +294,25 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       ]}
     >
       <GestureDetector gesture={composedGesture}>
-        {/* Hit Area — larger than the visible track */}
         <View
-          style={styles.hitArea}
+          style={[styles.hitArea, isIsland && styles.islandHitArea]}
           onLayout={onLayout}
-          hitSlop={{ top: 20, bottom: isIsland ? 20 : 6, left: 10, right: 10 }}
+          // Classic uses a short layout height (top-of-bar pin); keep fat hitSlop.
+          hitSlop={{ top: isIsland ? 16 : 14, bottom: isIsland ? 16 : 14, left: 4, right: 4 }}
         >
-          {/* Track Wrapper for vertical centering */}
           <View style={styles.trackWrapper}>
-            {/* Background Track */}
+            {!isIsland && (
+              <Animated.View style={[styles.scrubGlow, glowStyle]} pointerEvents="none" />
+            )}
+
+            {/* Always-visible pill track — never drops to 0 height/opacity */}
             <Animated.View
               style={[
                 styles.trackBase,
                 isIsland ? styles.islandTrackBg : styles.classicTrackBg,
-                trackHeightStyle,
+                trackStyle,
               ]}
             >
-              {/* Filled Part */}
               <Animated.View
                 style={[
                   styles.fillBase,
@@ -289,22 +322,21 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               />
             </Animated.View>
 
-            {/* Thumb — absolute, sits over the track */}
-            <Animated.View
-              style={[
-                styles.thumbBase,
-                isIsland ? styles.islandThumb : styles.classicThumb,
-                thumbStyle,
-              ]}
-            />
+            {/* Island only. The classic bar is YT-Music style: no dot at rest —
+                the track itself thickens under the finger. A dot cannot be both
+                concentric with a 3.5px track and flush with the bar's top edge,
+                and it was already fading to 0 the moment a scrub began, so it
+                was decoration that cost the track its flush position. */}
+            {isIsland && (
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.thumbBase, styles.islandThumb, thumbStyle]}
+              />
+            )}
           </View>
         </View>
       </GestureDetector>
 
-      {/* Time Labels — Classic only.
-          Text updates via useAnimatedReaction: the worklet formats the string
-          on the UI thread and only calls runOnJS when the second boundary
-          flips — so at most ~1 re-render/sec instead of every tick. */}
       {!isIsland && showTimeLabels && (
         <View style={styles.timeContainer}>
           <Text style={styles.timeText}>{currentTimeLabel}</Text>
@@ -320,64 +352,82 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
   },
+  // Full-bleed: the track runs screen edge to screen edge with no inset, and takes
+  // its width from the measured layout (trackWidthSV via onLayout), so it adapts to
+  // whatever the device reports rather than any hardcoded width. The pill's rounded
+  // ends therefore run off the screen edges — that is intended, don't re-inset.
+  // Zero vertical padding + flex-start so nothing biases the track below y=0;
+  // `container` centers, which must not apply here.
   classicContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    justifyContent: 'flex-start',
   },
   islandContainer: {
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
   hitArea: {
+    height: 18,
+    // Classic: the track is welded to y=0 of the hit box, which the MiniPlayer
+    // wrapper aligns with the bar's top edge. Zero padding — any inset here reads
+    // as the track sitting a pixel or two under the seam. The box stays 18 tall
+    // (plus hitSlop) purely as touch target; the visible track is the top 3.5px.
+    justifyContent: 'flex-start',
+    paddingTop: 0,
+  },
+  islandHitArea: {
     height: 30,
     justifyContent: 'center',
+    paddingTop: 0,
   },
   trackWrapper: {
-    height: 10,
-    justifyContent: 'center',
+    height: 14,
+    justifyContent: 'flex-start',
+  },
+  scrubGlow: {
+    position: 'absolute',
+    left: -2,
+    right: -2,
+    top: 0,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   trackBase: {
     width: '100%',
     overflow: 'hidden',
-    position: 'absolute',
-    alignSelf: 'center',
+    // Relative in the top-aligned trackWrapper (not absolute center)
   },
   fillBase: {
     height: '100%',
-    width: '100%',
   },
   thumbBase: {
     position: 'absolute',
-    width: 12,
-    height: 12,
+    width: 11,
+    height: 11,
     borderRadius: 6,
-    top: '50%',
-    marginTop: -6,
-    marginLeft: -6,
+    marginLeft: -5.5,
   },
-  // Classic Visuals
+  // Unplayed remainder: low enough that the blurred cover art reads through it and
+  // it feels part of the artwork, high enough to still register as a line. The
+  // affordance is carried by the contrast against the solid white played portion,
+  // not by this being bright in its own right.
   classicTrackBg: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   classicFill: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
   },
-  classicThumb: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  // Island Visuals (Darker/Glass)
   islandTrackBg: {
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   islandFill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
   },
   islandThumb: {
+    top: '50%',
+    marginTop: -5.5,
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -385,11 +435,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  // Text
   timeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 4,
+    paddingHorizontal: 2,
   },
   timeText: {
     fontSize: 12,
@@ -399,4 +449,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(TimelineScrubber);
+export default TimelineScrubber;

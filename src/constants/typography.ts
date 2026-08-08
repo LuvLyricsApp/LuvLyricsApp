@@ -2,11 +2,13 @@
  * LyricFlow - Typography Constants
  */
 
+import { Fonts } from './fonts';
+
 export const Typography = {
-  // Font families (using system fonts, can be replaced with custom)
   fontFamily: {
-    display: 'System',    // SF Pro Display on iOS, Roboto on Android
-    body: 'System',       // SF Pro Text on iOS, Roboto on Android
+    display: Fonts.interBold,
+    body: Fonts.interRegular,
+    lyrics: Fonts.lyrics,
   },
   
   // Font sizes
@@ -75,13 +77,13 @@ export const TextStyles = {
     fontWeight: Typography.fontWeight.regular,
   },
   
-  // Lyrics
+  // Lyrics (Inter faces carry weight — no fontWeight)
   lyricCurrent: {
+    fontFamily: Fonts.lyricsActive,
     fontSize: Typography.fontSize.lyricCurrent,
-    fontWeight: Typography.fontWeight.bold,
   },
   lyricOther: {
+    fontFamily: Fonts.interBold,
     fontSize: Typography.fontSize.lyricOther,
-    fontWeight: Typography.fontWeight.medium,
   },
 } as const;

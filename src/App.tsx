@@ -21,6 +21,7 @@ import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { getPreloadedData } from './services/NativeStartup';
 import { ensureSearchIndex } from './services/NativeSearch';
+import { INTER_FONT_MAP, SF_FONT_MAP } from './constants/fonts';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
 
@@ -100,7 +101,11 @@ const App: React.FC = () => {
               playsInSilentMode: true,
               interruptionMode: 'doNotMix',
             }),
-            Font.loadAsync(Ionicons.font),
+            Font.loadAsync({
+              ...Ionicons.font,
+              ...INTER_FONT_MAP,
+              ...SF_FONT_MAP,
+            }),
           ]);
 
           // Open the write connection (fast — Kotlin already opened read-only above)

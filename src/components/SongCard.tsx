@@ -129,7 +129,6 @@ export const SongCard: React.FC<SongCardProps> = memo(({
                 <Ionicons name="disc" size={48} color={isDark ? 'rgba(255,255,255,0.3)' : colors.textMuted} />
               </View>
             )}
-            <View style={styles.thumbnailOverlay} />
             <Pressable
               style={({ pressed }) => [styles.heartButton, pressed && { opacity: 0.7 }]}
               onPress={handleHeartPress}
@@ -177,7 +176,6 @@ const styles = StyleSheet.create({
   thumbnailContainer: { aspectRatio: 1, borderRadius: 8, overflow: 'hidden' },
   defaultThumbnail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   thumbnail: { flex: 1 },
-  thumbnailOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.1)' },
   info: { gap: 2, marginTop: 8 },
   title: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   subtitle: { fontSize: 12 },

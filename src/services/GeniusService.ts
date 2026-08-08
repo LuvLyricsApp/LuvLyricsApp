@@ -9,13 +9,6 @@ import { GeniusHitResponse, GeniusSearchResponse } from '../types/providerRespon
 const GENIUS_API_URL = 'https://api.genius.com';
 const ACCESS_TOKEN = process.env.EXPO_PUBLIC_GENIUS_ACCESS_TOKEN ?? '';
 
-if (!ACCESS_TOKEN && __DEV__) {
-  console.warn(
-    '[GeniusService] EXPO_PUBLIC_GENIUS_ACCESS_TOKEN is not set. ' +
-    'Copy .env.example to .env and add your token.'
-  );
-}
-
 export interface GeniusTrack {
   id: number;
   title: string;
@@ -33,6 +26,9 @@ export const GeniusService = {
    * 1. Search Genius API for a song to get its URL
    */
   searchGenius: async (query: string): Promise<GeniusTrack[]> => {
+    // No token → skip quietly (optional provider; .env may leave it blank).
+    if (!ACCESS_TOKEN) return [];
+
     try {
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('TIMEOUT')), 10000)

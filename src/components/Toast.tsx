@@ -1,186 +1,271 @@
-import React, { useLayoutEffect, useRef, useCallback } from 'react';
-import { Animated, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Animated, StyleSheet, Text, View, Pressable, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettingsStore } from '../store/settingsStore';
 
 interface ToastProps {
   visible: boolean;
-  message: string; // Should be user-friendly; use getLyricsFriendlyError() for fetch errors
+  message: string;
   type?: 'success' | 'error' | 'info';
   onDismiss: () => void;
+  /** Auto-hide delay in ms. Default 4000. */
   duration?: number;
 }
 
-export const Toast: React.FC<ToastProps> = ({ 
-  visible, 
-  message, 
-  type = 'success', 
+const ENTER_MS = 280;
+const EXIT_MS = 240;
+const DEFAULT_DURATION = 4000;
+const SLIDE = 16; // short, calm slide — no spring bounce
+
+/**
+ * Single professional toast: one fade+slide in, hold ~4s, fade out.
+ * Replaces glitchy multi-bounce springs and re-entrant effect loops.
+ */
+export const Toast: React.FC<ToastProps> = ({
+  visible,
+  message,
+  type = 'success',
   onDismiss,
-  duration = 3000 
+  duration = DEFAULT_DURATION,
 }) => {
   const insets = useSafeAreaInsets();
-  const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
-  const isIsland = miniPlayerStyle === 'island';
+  const isIsland = useSettingsStore(state => state.miniPlayerStyle === 'island');
 
-  // Animation Values
-  // Initial values set far off-screen
-  const initialY = isIsland ? 200 : -200;
-  const translateY = useRef(new Animated.Value(initialY)).current;
+  // Stay mounted through the exit animation (parent often flips visible=false).
+  const [mounted, setMounted] = useState(false);
+  const [displayMessage, setDisplayMessage] = useState(message);
+  const [displayType, setDisplayType] = useState(type);
+
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(isIsland ? SLIDE : -SLIDE)).current;
   const progress = useRef(new Animated.Value(1)).current;
 
-  const handleDismiss = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: isIsland ? 100 : -100, // Exit direction matches entry
-        duration: 300,
-        useNativeDriver: true
-      }),
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissingRef = useRef(false);
+  // Generation token — ignore stale timers / animation callbacks.
+  const genRef = useRef(0);
+  // Lock entry direction for this show cycle so mid-toast style flips don't re-animate.
+  const fromBottomRef = useRef(isIsland);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
+  const clearAnims = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (animRef.current) {
+      animRef.current.stop();
+      animRef.current = null;
+    }
+  }, []);
+
+  const runExit = useCallback((gen: number) => {
+    if (dismissingRef.current && gen === genRef.current) return;
+    dismissingRef.current = true;
+    clearAnims();
+
+    const exitY = fromBottomRef.current ? SLIDE : -SLIDE;
+    const anim = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 300,
-        useNativeDriver: true
-      })
-    ]).start(() => onDismiss());
-  }, [isIsland, onDismiss, opacity, translateY]);
+        duration: EXIT_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: exitY,
+        duration: EXIT_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+    animRef.current = anim;
+    anim.start(({ finished }) => {
+      if (gen !== genRef.current) return;
+      setMounted(false);
+      dismissingRef.current = false;
+      if (finished) onDismissRef.current();
+    });
+  }, [clearAnims, opacity, translateY]);
 
-  // Use useLayoutEffect to prevent initial flash
-  useLayoutEffect(() => {
-    if (visible) {
-      // RESET values immediately
-      progress.setValue(1); 
-      translateY.setValue(isIsland ? 200 : -200);
+  const runEnter = useCallback(
+    (nextMessage: string, nextType: ToastProps['type'], gen: number, holdMs: number) => {
+      clearAnims();
+      dismissingRef.current = false;
+      fromBottomRef.current = isIsland;
+      setDisplayMessage(nextMessage);
+      setDisplayType(nextType ?? 'success');
+      setMounted(true);
+
+      const enterY = fromBottomRef.current ? SLIDE : -SLIDE;
       opacity.setValue(0);
-      
-      // Slide In
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0, 
-          useNativeDriver: true,
-          tension: 50,
-          friction: 9
-        }),
+      translateY.setValue(enterY);
+      progress.setValue(1);
+
+      const anim = Animated.parallel([
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 300,
-          useNativeDriver: true
-        })
-      ]).start();
+          duration: ENTER_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: ENTER_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: holdMs,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }),
+      ]);
+      animRef.current = anim;
+      anim.start();
 
-      // Progress Bar Animation
-      Animated.timing(progress, {
-        toValue: 0,
-        duration: duration,
-        useNativeDriver: false, 
-      }).start();
+      timerRef.current = setTimeout(() => {
+        if (gen !== genRef.current) return;
+        runExit(gen);
+      }, holdMs);
+    },
+    [clearAnims, isIsland, opacity, progress, runExit, translateY]
+  );
 
-      // Auto Dismiss
-      const timer = setTimeout(() => {
-        handleDismiss();
-      }, duration);
-
-      return () => clearTimeout(timer);
+  useEffect(() => {
+    if (visible) {
+      genRef.current += 1;
+      const gen = genRef.current;
+      runEnter(message, type, gen, duration);
+      return () => {
+        // StrictMode / unmount: stop timers so nothing double-fires.
+        if (gen === genRef.current) clearAnims();
+      };
     }
-  }, [visible, isIsland, duration, handleDismiss, opacity, progress, translateY]);
 
-  if (!visible) return null;
+    if (mounted && !dismissingRef.current) {
+      genRef.current += 1;
+      runExit(genRef.current);
+    }
+    return undefined;
+    // Only react to show/hide, message replacement, and hold length.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, message, duration]);
 
-  const backgroundColor = 
-    type === 'success' ? '#1E1E1E' : 
-    type === 'error' ? '#FF3B30' : 
-    '#1E1E1E';
-  
-  const iconColor = type === 'success' ? '#4CD964' : '#FFF';
+  useEffect(() => () => clearAnims(), [clearAnims]);
 
-  const iconName = 
-    type === 'success' ? 'checkmark-circle' : 
-    type === 'error' ? 'alert-circle' : 
-    'information-circle';
+  if (!mounted) return null;
 
-  // Dynamic Styles based on position preference
-  // User requested "want down near tonav bar" - implies minimal offset.
-  const positionStyle = isIsland ? {
-      bottom: insets.bottom + 90, // Adjusted to be above Tab Bar
-      right: 20, 
-      minWidth: 200,
-      maxWidth: 300, 
-  } : {
-      top: insets.top + 10,
-      right: 20,
-      minWidth: 200,
-      maxWidth: 300, // Fixed: Use number to satisfy TypeScript
-  };
+  const isError = displayType === 'error';
+  const isInfo = displayType === 'info';
+  const accent = isError ? '#FF453A' : isInfo ? '#64D2FF' : '#30D158';
+  const iconName =
+    displayType === 'success'
+      ? 'checkmark-circle'
+      : displayType === 'error'
+        ? 'alert-circle'
+        : 'information-circle';
+
+  const positionStyle = fromBottomRef.current
+    ? { bottom: insets.bottom + 88, left: 20, right: 20 }
+    : { top: insets.top + 12, left: 20, right: 20 };
 
   return (
-    <Animated.View style={[
-      styles.container, 
-      positionStyle,
-      { 
-        transform: [{ translateY }],
-        opacity,
-        backgroundColor 
-      }
-    ]}>
-      <TouchableOpacity onPress={handleDismiss} activeOpacity={0.8} style={styles.content}>
-        <Ionicons name={iconName} size={24} color={iconColor} />
-        <Text style={styles.text}>{message}</Text>
-      </TouchableOpacity>
-      
-      {/* Progress Bar */}
-      <View style={styles.progressBarContainer}>
-        <Animated.View 
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.wrap,
+        positionStyle,
+        { opacity, transform: [{ translateY }] },
+      ]}
+    >
+      <Pressable
+        onPress={() => {
+          genRef.current += 1;
+          runExit(genRef.current);
+        }}
+        style={styles.card}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+      >
+        <View style={styles.row}>
+          <View style={[styles.iconDot, { backgroundColor: `${accent}22` }]}>
+            <Ionicons name={iconName} size={18} color={accent} />
+          </View>
+          <Text style={styles.text} numberOfLines={3}>
+            {displayMessage}
+          </Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <Animated.View
             style={[
-                styles.progressBar, 
-                { 
-                    width: progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0%', '100%']
-                    }),
-                    backgroundColor: iconColor
-                }
-            ]} 
-        />
-      </View>
+              styles.progressFill,
+              {
+                backgroundColor: accent,
+                width: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
+        </View>
+      </Pressable>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrap: {
     position: 'absolute',
     zIndex: 9999,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.30,
-    shadowRadius: 4.65,
-    elevation: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
   },
-  content: {
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(28,28,30,0.96)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  iconDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   text: {
-    color: '#FFF',
-    fontWeight: '600',
+    flex: 1,
+    color: '#F5F5F7',
     fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 19,
   },
-  progressBarContainer: {
-    height: 3,
+  progressTrack: {
+    height: 2,
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  progressBar: {
+  progressFill: {
     height: '100%',
-  }
+  },
 });
