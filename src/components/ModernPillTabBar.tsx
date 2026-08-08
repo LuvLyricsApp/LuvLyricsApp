@@ -46,14 +46,16 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
     : ['rgba(255,255,255,0.1)', 'rgba(248,248,252,0.5)'];
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
 
-  // Split routes: left half and right half (mic occupies center slot)
-  const midpoint = Math.ceil(state.routes.length / 2);
-  const leftRoutes = state.routes.slice(0, midpoint);
-  const rightRoutes = state.routes.slice(midpoint);
+  // Settings stays inside the tab navigator to keep this bar visible, but it
+  // remains a header-only destination rather than a fifth tab icon.
+  const visibleRoutes = state.routes.filter(route => route.name !== 'Settings');
+  const midpoint = Math.ceil(visibleRoutes.length / 2);
+  const leftRoutes = visibleRoutes.slice(0, midpoint);
+  const rightRoutes = visibleRoutes.slice(midpoint);
 
-  const renderTab = (route: typeof state.routes[0], index: number, offset = 0) => {
+  const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = state.index === index + offset;
+    const isFocused = state.routes[state.index]?.key === route.key;
 
     const onPress = async () => {
       const event = navigation.emit({
@@ -128,7 +130,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
           <View style={styles.tabsRow}>
             {/* Left tabs */}
             <View style={styles.tabGroup}>
-              {leftRoutes.map((route, i) => renderTab(route, i, 0))}
+              {leftRoutes.map(renderTab)}
             </View>
 
             {/* Center mic button — inline inside the pill */}
@@ -140,7 +142,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
             {/* Right tabs */}
             <View style={styles.tabGroup}>
-              {rightRoutes.map((route, i) => renderTab(route, i, midpoint))}
+              {rightRoutes.map(renderTab)}
             </View>
           </View>
         </BlurView>

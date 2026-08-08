@@ -21,7 +21,7 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { RootStackScreenProps } from '../types/navigation';
+import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
@@ -330,7 +330,7 @@ const PINNABLE_ITEMS: Record<PinId, {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-type Props = RootStackScreenProps<'Settings'>;
+type Props = TabScreenProps<'Settings'>;
 
 const SettingsScreen: React.FC<Props> = () => {
   const insets = useSafeAreaInsets();

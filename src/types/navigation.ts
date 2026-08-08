@@ -10,7 +10,6 @@ import { CompositeScreenProps } from '@react-navigation/native';
 export type RootStackParamList = {
   Main: undefined;
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
-  Settings: undefined; // moved off the tab bar; reached from the Home header
   AudioDownloader: {
     fromBrowser?: boolean;
     videoTitle?: string;
@@ -36,6 +35,7 @@ export type TabParamList = {
   Luvs: undefined;
   Library: undefined; // Was Playlists
   Search: undefined; // replaced Settings in the tab bar
+  Settings: undefined; // hidden route so Settings retains the bottom navigation
 };
 
 /**

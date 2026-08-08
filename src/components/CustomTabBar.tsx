@@ -20,13 +20,16 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const micEnabled = useSettingsStore(s => s.micEnabled);
-  const midpoint = Math.ceil(state.routes.length / 2);
-  const leftRoutes = state.routes.slice(0, midpoint);
-  const rightRoutes = state.routes.slice(midpoint);
+  // Settings is a hidden tab route so its screen can retain this navigator. It
+  // must not reserve an empty icon slot in the visible four-tab layout.
+  const visibleRoutes = state.routes.filter(route => route.name !== 'Settings');
+  const midpoint = Math.ceil(visibleRoutes.length / 2);
+  const leftRoutes = visibleRoutes.slice(0, midpoint);
+  const rightRoutes = visibleRoutes.slice(midpoint);
 
-  const renderTab = (route: typeof state.routes[0], index: number, offset = 0) => {
+  const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = state.index === index + offset;
+    const isFocused = state.routes[state.index]?.key === route.key;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -59,7 +62,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
-            {leftRoutes.map((r, i) => renderTab(r, i, 0))}
+            {leftRoutes.map(renderTab)}
           </View>
 
           {/* Center mic button — inline, inside the bar */}
@@ -71,7 +74,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
           {/* Right tabs */}
           <View style={styles.tabGroup}>
-            {rightRoutes.map((r, i) => renderTab(r, i, midpoint))}
+            {rightRoutes.map(renderTab)}
           </View>
         </View>
       </View>

@@ -15,6 +15,7 @@ import LuvsScreen from '../screens/LuvsScreen';
 import PlaylistsScreen from '../screens/PlaylistsScreen';
 import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
@@ -88,6 +89,9 @@ export const TabNavigator: React.FC = () => {
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
       <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
+      {/* Settings is reached from the Home header, but lives in the tab navigator
+          so the existing bottom navigation remains available while editing it. */}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 };
