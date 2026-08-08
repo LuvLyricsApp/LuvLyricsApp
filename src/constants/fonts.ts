@@ -26,7 +26,12 @@ export const Fonts = {
   /** MiniPlayer lyric tray */
   lyricsTray: isIOS ? 'System' : 'SF-Pro-Text-Semibold',
   /** Brand header (LuvLyrics) — SF Pro, heavy black on iOS, bold face on Android */
-  brand: isIOS ? 'System' : 'SF-Pro-Text-Bold',
+  /**
+   * LuvLyrics wordmark — platform default face, weight only. Deliberately NOT
+   * SF Pro: the brand reads better in the system font, and it keeps the
+   * wordmark free of Apple's font licensing.
+   */
+  brand: undefined as TextStyle['fontFamily'],
   /**
    * iOS-only weights — required to pick an SF Pro weight from 'System'.
    * Cast is needed: a ternary that can yield `undefined` is not a literal, so
@@ -36,7 +41,8 @@ export const Fonts = {
   lyricsWeight: (isIOS ? '400' : undefined) as TextStyle['fontWeight'],
   lyricsActiveWeight: (isIOS ? '700' : undefined) as TextStyle['fontWeight'],
   lyricsTrayWeight: (isIOS ? '600' : undefined) as TextStyle['fontWeight'],
-  brandWeight: (isIOS ? '900' : undefined) as TextStyle['fontWeight'],
+  /** Both platforms: the system face carries weight via fontWeight, so set it. */
+  brandWeight: '900' as TextStyle['fontWeight'],
 } as const;
 
 /** Map for expo-font loadAsync */

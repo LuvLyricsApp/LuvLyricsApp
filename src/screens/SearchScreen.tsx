@@ -89,23 +89,33 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
 
     const isCurrentlyPlaying = playerCurrentSong?.id === song.id;
 
+    // The results you are looking at are the queue. This used to call
+    // setInitialSong + loadSong with no queue at all, so next/previous were
+    // silent no-ops for anything started from search.
+    const queueIndex = results.findIndex(s => s.id === song.id);
+    const startFromResults = () => {
+      setCurrentSong(song);
+      if (queueIndex !== -1) {
+        usePlayerStore.getState().setPlaylistQueue('search', results, queueIndex);
+      } else {
+        usePlayerStore.getState().setInitialSong(song);
+        usePlayerStore.getState().loadSong(song.id);
+      }
+    };
+
     if (playInMiniPlayerOnly) {
       if (isCurrentlyPlaying) {
         setMiniPlayerHidden(true);
         navigation.navigate('NowPlaying', { songId: song.id });
       } else {
-        setCurrentSong(song);
-        usePlayerStore.getState().setInitialSong(song);
-        usePlayerStore.getState().loadSong(song.id);
+        startFromResults();
       }
     } else {
-      setCurrentSong(song);
       setMiniPlayerHidden(true);
-      usePlayerStore.getState().setInitialSong(song);
-      usePlayerStore.getState().loadSong(song.id);
+      startFromResults();
       navigation.navigate('NowPlaying', { songId: song.id });
     }
-  }, [navigation, setCurrentSong, setMiniPlayerHidden, playInMiniPlayerOnly, playerCurrentSong?.id]);
+  }, [navigation, setCurrentSong, setMiniPlayerHidden, playInMiniPlayerOnly, playerCurrentSong?.id, results]);
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#000000' : colors.background }]}>

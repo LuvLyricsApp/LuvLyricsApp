@@ -11,7 +11,12 @@ const ARTIST_SONGS_MAX = 20;
 export type RecentlyPlayedMode = 'recent' | 'artist';
 
 interface RecentlyPlayedGridProps {
-  onSongPress: (song: Song) => void;
+  /**
+   * Receives the row's own list as the queue — the list you tapped from is the
+   * list you then skip through. Without it the caller queued the whole library
+   * and next/previous walked off into unrelated songs.
+   */
+  onSongPress: (song: Song, queue: Song[]) => void;
   onSongLongPress: (song: Song) => void;
   onLikePress: (id: string) => void;
   onMagicPress: (song: Song) => void;
@@ -98,7 +103,7 @@ export const RecentlyPlayedGrid: React.FC<RecentlyPlayedGridProps> = React.memo(
             coverImageUri={song.coverImageUri} 
             duration={song.duration} 
             isLiked={song.isLiked}
-            onPress={() => onSongPress(song)} 
+            onPress={() => onSongPress(song, visibleSongs)}
             onLongPress={() => onSongLongPress(song)}
             onLikePress={() => onLikePress(song.id)} 
             onMagicPress={() => onMagicPress(song)}

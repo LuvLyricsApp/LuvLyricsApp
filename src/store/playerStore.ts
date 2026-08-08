@@ -65,6 +65,39 @@ export function registerSongsGetter(fn: () => Song[]): void {
   _getSongs = fn;
 }
 
+/**
+ * Guarantee there is a queue to step through, rebuilding it from the library
+ * around the current song when one was never set.
+ *
+ * Songs can start playing without a queue from several paths — Recently Played,
+ * a search result, a widget tap, a resumed session. Skip used to no-op in that
+ * state: `nextInPlaylist` only rebuilt when `currentPlaylistId === 'library'`,
+ * and `previousInPlaylist` had no rebuild at all and returned silently. That is
+ * why previous seeks to 0:00 and then appears dead, and why next does nothing.
+ *
+ * Returns false only when there is genuinely nothing to build a queue from.
+ */
+function ensureQueue(
+  get: () => PlayerState,
+  set: (partial: Partial<PlayerState>) => void,
+): boolean {
+  const state = get();
+  if (state.playlistQueue && state.playlistQueue.length > 0) return true;
+
+  if (!state.currentSongId) return false;
+  const allSongs: Song[] = _getSongs ? _getSongs() : [];
+  if (allSongs.length === 0) return false;
+
+  const idx = allSongs.findIndex((s: Song) => s.id === state.currentSongId);
+  set({
+    playlistQueue: allSongs,
+    currentQueueIndex: idx !== -1 ? idx : 0,
+    // Claim the library as the queue source so later skips take the fast path.
+    currentPlaylistId: state.currentPlaylistId ?? 'library',
+  });
+  return true;
+}
+
 interface PlayerState {
   currentSongId: string | null;
   currentSong: Song | null;
@@ -308,23 +341,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
   
   nextInPlaylist: async () => {
-    const state = get();
-
-    // Safety net: queue was never set (e.g. song launched via fallback path or Recently Played)
-    // Rebuild from memory so auto-next still works — no circular dep to songsStore
-    if (!state.playlistQueue || state.playlistQueue.length === 0) {
-      if (state.currentPlaylistId === 'library' && state.currentSongId) {
-        const allSongs: Song[] = _getSongs ? _getSongs() : [];
-        if (allSongs.length > 0) {
-          const idx = allSongs.findIndex((s: Song) => s.id === state.currentSongId);
-          set({ playlistQueue: allSongs, currentQueueIndex: idx !== -1 ? idx : 0 });
-        } else {
-          return;
-        }
-      } else {
-        return;
-      }
-    }
+    // Queue may never have been set (Recently Played, search result, widget tap).
+    if (!ensureQueue(get, set)) return;
 
     const freshState = get();
     if (!freshState.playlistQueue) return;
@@ -370,6 +388,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   previousInPlaylist: () => {
+    // Same safety net as nextInPlaylist — without it, previous was a silent
+    // no-op whenever the song did not start from a playlist.
+    if (!ensureQueue(get, set)) return;
+
     const state = get();
     if (!state.playlistQueue || state.playlistQueue.length === 0) return;
 

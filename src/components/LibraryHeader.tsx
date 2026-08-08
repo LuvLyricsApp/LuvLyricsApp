@@ -5,7 +5,8 @@ import { Song } from '../types/song';
 
 interface LibraryHeaderProps {
   hasSongs: boolean;
-  onSongPress: (song: Song) => void;
+  /** Second arg is the tapped row's own list, which becomes the play queue. */
+  onSongPress: (song: Song, queue: Song[]) => void;
   onSongLongPress: (song: Song) => void;
   onLikePress: (id: string) => void;
   onMagicPress: (song: Song) => void;
@@ -38,7 +39,9 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
 };
 
 const styles = StyleSheet.create({
-  recentlyPlayedGrid: { marginBottom: 4 },
+  // Extra top gap so the art squares sit clear of the brand row, not tucked
+  // right under it.
+  recentlyPlayedGrid: { marginTop: 6, marginBottom: 4 },
 });
 
 export default React.memo(LibraryHeader);

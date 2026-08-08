@@ -211,9 +211,11 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     navigation,
   });
 
-  const handleSongPress = useCallback((song: Song) => {
+  // `queue` is whatever list the tap came from — the Recently Played / artist
+  // row passes its own. Only the main list omits it and falls back to itself.
+  const handleSongPress = useCallback((song: Song, queue?: Song[]) => {
     InteractionManager.runAfterInteractions(() => {
-      playSong(song, filteredSongs, songs);
+      playSong(song, queue ?? filteredSongs, songs);
     });
   }, [playSong, filteredSongs, songs]);
 
@@ -586,13 +588,15 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 8 : 4, paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Nudged off the status bar (0 read as pinned to the very top), with real
+  // breathing room before the Recently Played row rather than none at all.
+  brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 6 : 3, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
   brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
   brandActionButton: { padding: 4, position: 'relative' },
   brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
   brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
+  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 0, flexShrink: 0 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
   recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },

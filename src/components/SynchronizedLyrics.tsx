@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Dimensions, Text, Pressable, StyleSheet, LayoutChangeEvent, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -59,10 +60,9 @@ const LyricLine = React.memo(({
   const isInstrumental = useMemo(() => isInstrumentalLyric(text), [text]);
   const isActiveLine = useIsActiveLine(activeIndexSV, index);
 
-  // Apple Music style: bold active line, regular the rest.
-  // One-time JS swap per line activation (useIsActiveLine re-renders).
-  const isActiveFace = isActiveLine ? Fonts.lyricsActive : Fonts.lyrics;
-  const isActiveWeight = isActiveLine ? Fonts.lyricsActiveWeight : Fonts.lyricsWeight;
+  // Every line renders in one face at one size — the active line is carried by
+  // colour and opacity alone. Swapping to a bold face on activation made the
+  // current line read as physically larger than its neighbours.
 
   const lastHeightRef = useRef<number>(0);
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
@@ -128,7 +128,7 @@ const LyricLine = React.memo(({
           <InstrumentalWaveform active={isActiveLine} size={isActiveLine ? 'lg' : 'md'} />
         </Animated.View>
       ) : (
-        <Animated.Text style={[styles.lyricText, textStyle, animatedStyle, { fontFamily: isActiveFace, fontWeight: isActiveWeight }]}>
+        <Animated.Text style={[styles.lyricText, textStyle, animatedStyle]}>
           {renderedText}
         </Animated.Text>
       )}
@@ -266,7 +266,15 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   useAnimatedReaction(
     () => activeIndexDV.value,
     (next, prev) => {
-      if (next !== prev) activeIndexSV.value = next;
+      if (next === prev) return;
+      // A jump of more than a few lines is a scrub or a track change, not normal
+      // playback advancing. Treat it as an explicit "take me there" and re-attach
+      // auto-follow, so scrubbing always lands the lyrics on the new position
+      // even if the reader had scrolled away earlier.
+      if (prev !== null && Math.abs(next - prev) > 3 && isUserScrollingSV.value) {
+        isUserScrollingSV.value = false;
+      }
+      activeIndexSV.value = next;
     },
   );
 
@@ -387,10 +395,13 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
           accessibilityRole="button"
           accessibilityLabel="Back to the playing line"
         >
+          {/* Glass, not a white chip — it picks up the blurred cover art behind
+              the lyrics instead of punching a bright hole through them. */}
+          <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
           <Ionicons
             name={pillDirection > 0 ? 'arrow-down' : 'arrow-up'}
             size={14}
-            color="#000"
+            color="#fff"
           />
           <Text style={styles.resumePillText}>Now playing</Text>
         </Pressable>
@@ -411,7 +422,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    // BlurView fills this; the tint and hairline rim are what make it read as
+    // glass rather than a flat translucent rectangle.
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
@@ -419,7 +435,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   resumePillText: {
-    color: '#000',
+    color: '#fff',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -442,7 +458,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.lyrics,
     fontSize: 28,
     textAlign: 'left',
-    marginVertical: 16,
+    marginVertical: 8,
     paddingHorizontal: 32,
   },
   // Title words inside a lyric: no background block, just a white glow.
