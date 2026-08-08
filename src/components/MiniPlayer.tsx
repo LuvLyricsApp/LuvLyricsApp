@@ -1089,7 +1089,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
               {/* Vignette — stronger top/bottom so half & full lyric expand don't
                   leave a sharp cover-art edge at the pill rim. */}
               <LinearGradient
-                colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.72)']}
+                colors={['rgba(0,0,0,0.42)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.58)']}
                 locations={[0, 0.25, 0.65, 1]}
                 start={{x: 0, y: 0}}
                 end={{x: 0, y: 1}}

@@ -60,6 +60,12 @@ const darken = ([red, green, blue]: ColorVector, amount: number): ColorVector =>
   1,
 ];
 
+const boostChroma = ([red, green, blue]: ColorVector, amount: number): ColorVector => {
+  const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+  const boost = (channel: number) => Math.min(1, Math.max(0, luminance + (channel - luminance) * amount));
+  return [boost(red), boost(green), boost(blue), 1];
+};
+
 const colourInterest = (color: string): { saturation: number; luminance: number } => {
   const [red, green, blue] = hexToVector(color, [0, 0, 0, 1]);
   const maximum = Math.max(red, green, blue);
@@ -136,15 +142,16 @@ const createFlowPalette = (colors: readonly (string | PaletteCandidate)[]): Flow
   const accentA = alternatives[0] ?? blend(base, [1, 1, 1, 1], 0.18);
   const accentB = alternatives[1] ?? blend(base, [0, 0, 0, 1], 0.28);
   const accentC = alternatives[2] ?? blend(base, [1, 1, 1, 1], 0.08);
+  const vividBase = boostChroma(base, 1.18);
 
   // Keep every moving field visually tied to the winning main colour. The
   // surface reads as one artwork-led atmosphere, rather than four competing
   // palette swatches.
   return [
-    darken(base, 0.50),
-    darken(blend(base, accentA, 0.78), 0.96),
-    darken(blend(base, accentB, 0.68), 0.88),
-    darken(blend(base, accentC, 0.58), 0.92),
+    darken(vividBase, 0.64),
+    darken(boostChroma(blend(vividBase, accentA, 0.78), 1.28), 1.03),
+    darken(boostChroma(blend(vividBase, accentB, 0.68), 1.20), 0.96),
+    darken(boostChroma(blend(vividBase, accentC, 0.58), 1.16), 0.98),
   ];
 };
 
@@ -195,13 +202,13 @@ const colorFieldShader = Skia.RuntimeEffect.Make(`
     float weightC = field(warped, anchorC, 0.64);
 
     float3 colour = baseColor.rgb;
-    colour = mix(colour, fieldA.rgb, weightA * 0.84);
-    colour = mix(colour, fieldB.rgb, weightB * 0.76);
-    colour = mix(colour, fieldC.rgb, weightC * 0.72);
+    colour = mix(colour, fieldA.rgb, weightA * 0.90);
+    colour = mix(colour, fieldB.rgb, weightB * 0.84);
+    colour = mix(colour, fieldC.rgb, weightC * 0.80);
 
     // Edge falloff and final grade protect large white lyric text.
     float edge = smoothstep(0.28, 0.78, length(uv - float2(0.5)));
-    colour *= mix(0.92, 0.54, edge);
+    colour *= mix(0.96, 0.72, edge);
     return half4(clamp(colour, float3(0.0), float3(1.0)), 1.0);
   }
 `);
