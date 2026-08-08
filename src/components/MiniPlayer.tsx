@@ -14,6 +14,8 @@ import Animated, {
   useSharedValue,
   withTiming,
   withSequence,
+  withRepeat,
+  withDelay,
   withSpring,
   interpolate,
   Extrapolation,
@@ -21,6 +23,7 @@ import Animated, {
   useDerivedValue,
   useAnimatedReaction,
   Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
@@ -73,6 +76,61 @@ interface TrackInfoProps {
   onPress: () => void;
   onBodyPress: () => void;
 }
+
+const TITLE_MARQUEE_PAUSE_MS = 3500;
+const TITLE_MARQUEE_PIXELS_PER_SECOND = 28;
+
+/**
+ * Long titles read from their first character, then make one complete leftward
+ * pass. They return to the start and rest before the next pass; no distracting
+ * ping-pong motion and no JS timer running during playback.
+ */
+const MarqueeTitle = memo(({ title, textStyle }: { title: string; textStyle?: any }) => {
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    const overflow = Math.max(0, textWidth - viewportWidth);
+    cancelAnimation(progress);
+    progress.value = 0;
+    if (overflow <= 1) return;
+
+    const travelMs = Math.max(2600, (overflow / TITLE_MARQUEE_PIXELS_PER_SECOND) * 1000);
+    progress.value = withRepeat(
+      withSequence(
+        withDelay(TITLE_MARQUEE_PAUSE_MS, withTiming(1, { duration: travelMs, easing: Easing.linear })),
+        withTiming(0, { duration: 1 }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => cancelAnimation(progress);
+  }, [progress, textWidth, title, viewportWidth]);
+
+  const marqueeStyle = useAnimatedStyle(() => {
+    const overflow = Math.max(0, textWidth - viewportWidth);
+    return { transform: [{ translateX: -overflow * progress.value }] };
+  });
+
+  return (
+    <View
+      style={styles.marqueeViewport}
+      onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+    >
+      <Animated.Text
+        numberOfLines={1}
+        style={[styles.title, textStyle, styles.marqueeText, marqueeStyle]}
+        onLayout={(event) => setTextWidth(event.nativeEvent.layout.width)}
+      >
+        {title}
+      </Animated.Text>
+    </View>
+  );
+});
+MarqueeTitle.displayName = 'MarqueeTitle';
+
 const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBodyPress }: TrackInfoProps) => (
   <>
     <Pressable onPress={(e) => { e.stopPropagation(); onPress(); }}>
@@ -88,7 +146,7 @@ const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBod
       )}
     </Pressable>
     <Pressable onPress={(e) => { e.stopPropagation(); onBodyPress(); }} style={styles.info}>
-      <Text style={styles.title} numberOfLines={1}>{title}</Text>
+      <MarqueeTitle title={title} />
       <Text style={[styles.artist, isIsland && { display: 'none' }]} numberOfLines={1}>
         {artist || 'Unknown Artist'}
       </Text>
@@ -1047,9 +1105,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
                         {/* Info */}
                         <View style={styles.expandedInfo}>
-                            <Text style={styles.expandedTitle} numberOfLines={1}>
-                                {currentSong.title}
-                            </Text>
+                            <MarqueeTitle title={currentSong.title} textStyle={styles.expandedTitle} />
                             <Text style={styles.artist} numberOfLines={1}>
                                 {currentSong.artist}
                             </Text>
@@ -1326,7 +1382,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: CLASSIC_TRANSPORT_H,
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 8,
     // Room for the top-edge scrubber track
     paddingTop: 12,
     width: '100%',
@@ -1568,6 +1625,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  marqueeViewport: {
+    width: '100%',
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  marqueeText: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   artist: {
     fontSize: 12,
