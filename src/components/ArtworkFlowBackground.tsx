@@ -187,7 +187,6 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    setNativeColors(null);
 
     extractAlbumColors(coverImageUri).then((albumPalette) => {
       if (cancelled || !albumPalette) return;
@@ -199,6 +198,9 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
         albumPalette.lightVibrant?.color,
         albumPalette.darkMuted?.color,
       ].filter((color): color is string => Boolean(color));
+      // Keep the outgoing artwork palette alive while this new cover is being
+      // read. Clearing it first briefly fell back to the song's generic (often
+      // blue) gradient, creating a visible flash between two real palettes.
       if (extracted.length) setNativeColors(extracted);
     });
 

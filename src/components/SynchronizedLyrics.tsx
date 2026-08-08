@@ -92,10 +92,11 @@ const LyricLine = React.memo(({
     const opacity = interpolate(activeValue.value, [0, 1], [basOpacity, 1.0], Extrapolation.CLAMP);
     // Inactive lines sit 5px below; active line rises up to its natural position
     const translateY = interpolate(activeValue.value, [0, 1], [6, 0], Extrapolation.CLAMP);
-    const scale = interpolate(activeValue.value, [0, 1], [0.965, 1.035], Extrapolation.CLAMP);
     const color = interpolateColor(activeValue.value, [0, 1], ['rgba(255,255,255,0.5)', '#FFFFFF']);
     return {
-      transform: [{ translateY }, { scale }] as any,
+      // Highlight through contrast and weight only. Scaling the active line
+      // changed its perceived font size and made every lyric jump in place.
+      transform: [{ translateY }] as any,
       opacity,
       color,
       fontFamily: activeValue.value > 0.5 ? Fonts.lyricsActive : Fonts.lyrics,
@@ -504,7 +505,8 @@ const styles = StyleSheet.create({
   lyricText: {
     fontFamily: Fonts.lyrics,
     fontSize: 28,
-    textAlign: 'left',
+    alignSelf: 'stretch',
+    textAlign: 'center',
     marginVertical: 8,
     paddingHorizontal: 32,
   },
