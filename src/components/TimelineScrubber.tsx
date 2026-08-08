@@ -225,7 +225,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   // Track height + always-pill corners from one scrubUI clock.
   const trackStyle = useAnimatedStyle(() => {
     'worklet';
-    const h = interpolate(scrubUI.value, [0, 1], [3.5, 14], Extrapolation.CLAMP);
+    const h = interpolate(scrubUI.value, [0, 1], [3.5, 6], Extrapolation.CLAMP);
     return {
       height: h,
       borderRadius: h / 2,
@@ -235,7 +235,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   const fillStyle = useAnimatedStyle(() => {
     'worklet';
     const p = Math.max(0, Math.min(1, displayProgress.value));
-    const h = interpolate(scrubUI.value, [0, 1], [3.5, 14], Extrapolation.CLAMP);
+    const h = interpolate(scrubUI.value, [0, 1], [3.5, 6], Extrapolation.CLAMP);
     return {
       width: `${p * 100}%`,
       // Leading edge of fill is always a soft cap (reads as curve while scrubbing).
