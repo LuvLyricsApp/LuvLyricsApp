@@ -47,7 +47,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   const trackWidthSV = useSharedValue(0);
   const isScrubbing = useSharedValue(false);
   const isSettling = useSharedValue(false);
-  /** 0 = idle (thin + dot), 1 = scrubbing (thick capsule, no dot). */
+  /** 0 = idle thin line, 1 = a thicker touch target. */
   const scrubUI = useSharedValue(0);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -244,33 +244,6 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     };
   });
 
-  /**
-   * Thumb / track handoff (no gap where only the dot shows):
-   *  expand 0→1: thumb out by 0.35, track already thickening the whole time
-   *  collapse 1→0: track thins whole time, thumb returns only after 0.55
-   */
-  const thumbStyle = useAnimatedStyle(() => {
-    'worklet';
-    const p = Math.max(0, Math.min(1, displayProgress.value));
-    const opacity = interpolate(
-      scrubUI.value,
-      [0, 0.3, 0.55, 1],
-      [1, 0, 0, 0],
-      Extrapolation.CLAMP,
-    );
-    const scale = interpolate(
-      scrubUI.value,
-      [0, 0.3, 1],
-      [1, 0.55, 0.4],
-      Extrapolation.CLAMP,
-    );
-    return {
-      left: `${p * 100}%`,
-      opacity,
-      transform: [{ scale }],
-    };
-  });
-
   const glowStyle = useAnimatedStyle(() => {
     'worklet';
     return {
@@ -322,17 +295,7 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               />
             </Animated.View>
 
-            {/* Island only. The classic bar is YT-Music style: no dot at rest —
-                the track itself thickens under the finger. A dot cannot be both
-                concentric with a 3.5px track and flush with the bar's top edge,
-                and it was already fading to 0 the moment a scrub began, so it
-                was decoration that cost the track its flush position. */}
-            {isIsland && (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.thumbBase, styles.islandThumb, thumbStyle]}
-              />
-            )}
+            {/* No floating round thumb: the line itself is the seek affordance. */}
           </View>
         </View>
       </GestureDetector>
@@ -402,13 +365,6 @@ const styles = StyleSheet.create({
   fillBase: {
     height: '100%',
   },
-  thumbBase: {
-    position: 'absolute',
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    marginLeft: -5.5,
-  },
   // Unplayed remainder: low enough that the blurred cover art reads through it and
   // it feels part of the artwork, high enough to still register as a line. The
   // affordance is carried by the contrast against the solid white played portion,
@@ -424,16 +380,6 @@ const styles = StyleSheet.create({
   },
   islandFill: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
-  },
-  islandThumb: {
-    top: '50%',
-    marginTop: -5.5,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 2,
   },
   timeContainer: {
     flexDirection: 'row',

@@ -19,7 +19,8 @@ import Animated, {
   Extrapolation,
   runOnJS,
   useDerivedValue,
-  useAnimatedReaction
+  useAnimatedReaction,
+  Easing,
 } from 'react-native-reanimated';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
@@ -37,6 +38,8 @@ import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
 
 const { width } = Dimensions.get('window');
+const ISLAND_OPEN_MS = 420;
+const ISLAND_OPEN_EASE = Easing.bezier(0.22, 1, 0.36, 1);
 
 // Transport / song row height inside the classic shell (scrubber sits on its top edge).
 const CLASSIC_TRANSPORT_H = CLASSIC_MINI_PLAYER_HEIGHT;
@@ -411,43 +414,24 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, isIsland, ytVideoPreview, currentSong?.youtubeVideoId]);
 
-  // Classic Height Animation
+  // The Island has one deliberate transition: a compact player grows upward
+  // into lyrics while its transport row stays docked at the bottom.
   const animatedIslandStyle = useAnimatedStyle(() => {
     if (!isIsland) return {};
 
     const currentWidth = interpolate(
-      expansionProgress.value,
+      lyricExpansionProgress.value,
       [0, 1],
-      [width * 0.62, width - 24], // Matches the centered collapsed pill before it grows.
+      [width * 0.62, width - 24],
       Extrapolation.CLAMP
     );
-
-    const trayHeight = interpolate(expansionProgress.value, [0, 1], [50, 190], Extrapolation.CLAMP);
-    const halfHeight = screenHeight * 0.5;
-    const fullHeight = screenHeight * 0.9; // Final stage (90% height)
-
     const currentHeight = interpolate(
-      fullExpansionProgress.value,
+      lyricExpansionProgress.value,
       [0, 1],
-      [
-        interpolate(lyricExpansionProgress.value, [0, 1], [trayHeight, halfHeight], Extrapolation.CLAMP),
-        fullHeight
-      ],
-      Extrapolation.CLAMP
+      [50, screenHeight * 0.56],
+      Extrapolation.CLAMP,
     );
-    
-    const currentRadius = interpolate(
-      fullExpansionProgress.value,
-      [0, 1],
-      [
-        interpolate(lyricExpansionProgress.value, [0, 1], 
-          [interpolate(expansionProgress.value, [0, 1], [30, 44], Extrapolation.CLAMP), 24], 
-          Extrapolation.CLAMP
-        ),
-        28 // Slightly more rounded again at full screen for aesthetics
-      ],
-      Extrapolation.CLAMP
-    );
+    const currentRadius = interpolate(lyricExpansionProgress.value, [0, 1], [25, 30], Extrapolation.CLAMP);
 
     return {
       width: currentWidth,
@@ -455,6 +439,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       borderRadius: currentRadius,
     };
   });
+
+  const animatedIslandContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lyricExpansionProgress.value, [0, 0.24, 1], [0, 0, 1], Extrapolation.CLAMP),
+    transform: [{
+      translateY: interpolate(lyricExpansionProgress.value, [0, 1], [20, 0], Extrapolation.CLAMP),
+    }],
+  }));
 
   // Classic Height Animation — three stages: collapsed → half → full (95%).
   // Height lives on the SHELL (not only content) so overflow clips cleanly and
@@ -663,6 +654,15 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           }
         }
       } else if (expandedSV.value) {
+        // Island is intentionally one-stage. A downward drag follows the same
+        // progress clock as the tap animation; there is no tray/full-screen hop.
+        if (isIslandSV.value) {
+          if (event.translationY > 0) {
+            lyricExpansionProgress.value = Math.max(1 - event.translationY / 230, 0);
+            expansionProgress.value = lyricExpansionProgress.value;
+          }
+          return;
+        }
         if (!lyricExpandedSV.value && !fullLyricExpandedSV.value) {
           if (event.translationY > 0) {
             lyricExpansionProgress.value = Math.min(
@@ -759,6 +759,21 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         const vel = event.velocityY;
         const trans = event.translationY;
 
+        if (isIslandSV.value) {
+          const shouldClose = trans > 56 || vel > 650;
+          const target = shouldClose ? 0 : 1;
+          lyricExpansionProgress.value = withTiming(target, { duration: ISLAND_OPEN_MS, easing: ISLAND_OPEN_EASE }, (finished) => {
+            if (finished && shouldClose) {
+              runOnJS(setExpanded)(false);
+              runOnJS(setLyricExpanded)(false);
+              runOnJS(setFullLyricExpanded)(false);
+            }
+          });
+          expansionProgress.value = withTiming(target, { duration: ISLAND_OPEN_MS, easing: ISLAND_OPEN_EASE });
+          fullExpansionProgress.value = withTiming(0, { duration: 160 });
+          return;
+        }
+
         if (!lyricExpandedSV.value && !fullLyricExpandedSV.value) {
           if (trans > 50 || vel > 500) {
             lyricExpansionProgress.value = withSpring(1);
@@ -791,6 +806,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
   // Transport row (and the whole island tree, which still shares this instance).
   const panGesture = buildStageGesture();
+  const islandHeaderGesture = buildStageGesture();
+  const islandLyricsGesture = buildStageGesture();
   // Classic only: narrow rails down the left/right screen edges over the lyrics,
   // so the middle of the bar belongs to the lyric ScrollView and can scroll.
   const stageRailLeftGesture = buildStageGesture();
@@ -798,22 +815,38 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
   const toggleExpand = useCallback(() => {
     if (expanded) {
-      expansionProgress.value = withSpring(0);
-      lyricExpansionProgress.value = withSpring(0);
+      const islandAnimation = { duration: ISLAND_OPEN_MS, easing: ISLAND_OPEN_EASE };
+      expansionProgress.value = isIsland ? withTiming(0, islandAnimation) : withSpring(0);
+      lyricExpansionProgress.value = isIsland
+        ? withTiming(0, islandAnimation, (finished) => {
+            if (finished) {
+              runOnJS(setExpanded)(false);
+              runOnJS(setLyricExpanded)(false);
+              runOnJS(setFullLyricExpanded)(false);
+              runOnJS(setClassicFullExpanded)(false);
+            }
+          })
+        : withSpring(0);
       fullExpansionProgress.value = withSpring(0);
       classicFullProgress.value = withSpring(0);
-      setExpanded(false);
-      setLyricExpanded(false);
-      setFullLyricExpanded(false);
-      setClassicFullExpanded(false);
+      if (!isIsland) {
+        setExpanded(false);
+        setLyricExpanded(false);
+        setFullLyricExpanded(false);
+        setClassicFullExpanded(false);
+      }
       return;
     }
     
     // Canonical HALF pair — pin both, never assume classicFullProgress is already 0.
-    expansionProgress.value = withSpring(1);
+    expansionProgress.value = isIsland
+      ? withTiming(1, { duration: ISLAND_OPEN_MS, easing: ISLAND_OPEN_EASE })
+      : withSpring(1);
     classicFullProgress.value = withSpring(0);
     if (isIsland) {
-      lyricExpansionProgress.value = withSpring(1);
+      lyricExpansionProgress.value = withTiming(1, { duration: ISLAND_OPEN_MS, easing: ISLAND_OPEN_EASE });
+      fullExpansionProgress.value = 0;
+      setFullLyricExpanded(false);
       setLyricExpanded(true);
     }
     setExpanded(true);
@@ -997,9 +1030,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         {/* Expanded View Content */}
         {/* Expanded View Content */}
         {isIsland && expanded ? (
-            <View style={styles.expandedContent}>
+            <Animated.View style={[styles.expandedContent, animatedIslandContentStyle]}>
                 {/* Top Row: Vinyl + Info + Controls */}
-                <GestureDetector gesture={panGesture}>
+                <GestureDetector gesture={islandHeaderGesture}>
                     <View style={styles.expandedTopRow}>
                         {/* Rotating Vinyl */}
                         <Pressable onPress={toggleExpand} style={styles.vinylMargin}>
@@ -1039,12 +1072,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 </GestureDetector>
                 
                 {/* Unified Lyrics Block with GestureDetector */}
-                <GestureDetector gesture={panGesture}>
+                <GestureDetector gesture={islandLyricsGesture}>
                     <Pressable 
                         onPress={(e) => {
                             e.stopPropagation();
-                            // If in Half Mode (and not Full), tap to expand
-                            if ((lyricExpanded || fullLyricExpanded) && !fullLyricExpanded) {
+                            // Classic has a second reading stage. The docked Island
+                            // stays in this lyric stage so controls never jump away.
+                            if (!isIsland && (lyricExpanded || fullLyricExpanded) && !fullLyricExpanded) {
                                 runOnJS(setFullLyricExpanded)(true);
                                 fullExpansionProgress.value = withSpring(1);
                             }
@@ -1075,15 +1109,15 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                                 <SynchronizedLyrics
                                     lyrics={lyricsToUse || []}
                                     currentTime={positionSV}
-                                    onLyricPress={handleLyricPress}
+                                    onLyricPress={handleClassicLyricSeek}
                                     isUserScrolling={false}
-                                    scrollEnabled={fullLyricExpanded}
+                                    scrollEnabled
                                     expandedAt={lyricExpandedAt}
                                     textStyle={styles.expandedLyricText}
                                     activeLinePosition={0.3} 
                                     songTitle={currentSong?.title}
-                                    topSpacerHeight={fullLyricExpanded ? 300 : 150} 
-                                    bottomSpacerHeight={fullLyricExpanded ? 300 : 150}
+                                    topSpacerHeight={120}
+                                    bottomSpacerHeight={120}
                                 />
                             </View>
                         )}
@@ -1102,7 +1136,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         )}
                     </Pressable>
                 </GestureDetector>
-            </View>
+            </Animated.View>
         ) : isIsland ? (
             // ISLAND COLLAPSED
             <GestureDetector gesture={panGesture}>

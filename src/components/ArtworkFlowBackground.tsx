@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import {
   Blur,
   Canvas,
@@ -150,8 +150,13 @@ const FlowLayer: React.FC<FlowLayerProps> = ({ palette, opacity, width, height, 
 
   if (!colorFieldShader) return null;
 
+  // A 30px blur is gorgeous on a lyric sheet but turns a 50px Island into a
+  // single flat swatch. Scale it to the actual canvas so compact surfaces keep
+  // visible moving colour shapes.
+  const blurRadius = Math.min(FLOW_BLUR, Math.max(6, height * 0.16));
+
   return (
-    <Group opacity={opacity} layer={<Paint><Blur blur={FLOW_BLUR} mode="mirror" /></Paint>}>
+    <Group opacity={opacity} layer={<Paint><Blur blur={blurRadius} mode="mirror" /></Paint>}>
       <Fill>
         <Shader source={colorFieldShader} uniforms={uniforms} />
       </Fill>
@@ -164,10 +169,10 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
   fallbackColors,
   animated,
 }) => {
-  const { width, height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const clock = useClock();
   const transition = useSharedValue(1);
+  const [canvasSize, setCanvasSize] = useState({ width: 1, height: 1 });
   const [nativeColors, setNativeColors] = useState<string[] | null>(null);
   const fallbackPalette = useMemo(() => createFlowPalette(fallbackColors), [fallbackColors]);
   const palette = useMemo(
@@ -223,25 +228,34 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
 
   const frontOpacity = useDerivedValue(() => transition.value);
   const backOpacity = useDerivedValue(() => 1 - transition.value);
-  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 1000 : 0));
+  // Slightly quicker than a screen-sized lyric backdrop. In a compact Island
+  // this keeps the colour drift perceptible while remaining calm.
+  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 520 : 0));
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCanvasSize((previous) => (
+      previous.width === width && previous.height === height ? previous : { width, height }
+    ));
+  };
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={handleLayout}>
       <Canvas style={StyleSheet.absoluteFill}>
         {backPalette && (
           <FlowLayer
             palette={backPalette}
             opacity={backOpacity}
-            width={width}
-            height={height}
+            width={canvasSize.width}
+            height={canvasSize.height}
             time={flowTime}
           />
         )}
         <FlowLayer
           palette={frontPalette}
           opacity={frontOpacity}
-          width={width}
-          height={height}
+          width={canvasSize.width}
+          height={canvasSize.height}
           time={flowTime}
         />
       </Canvas>
