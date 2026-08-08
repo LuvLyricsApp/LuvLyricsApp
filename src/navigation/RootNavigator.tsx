@@ -18,7 +18,6 @@ import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
-import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 
@@ -26,17 +25,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
-  const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
 
-  // Island mode: only render MiniPlayer on the Home tab.
-  // Classic bar mode: render MiniPlayer on every tab/screen — except Luvs, which is
-  // a full-bleed reels feed running its own audio pool. The bar used to paint over
-  // it and its transport controlled a different player than the one you could hear.
-  const showMiniPlayer = currentRoute !== 'Luvs' && (
-    miniPlayerStyle === 'island'
-      ? currentRoute === 'Home'
-      : true
-  );
+  // Both player styles live above the bottom chrome. Luvs remains excluded because
+  // it owns a separate full-screen audio experience.
+  const showMiniPlayer = currentRoute !== 'Luvs';
 
   return (
     <NavigationContainer

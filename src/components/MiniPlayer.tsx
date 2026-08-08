@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
-import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform, type ViewStyle } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
@@ -56,8 +55,6 @@ const CLASSIC_SCRUBBER_HIT_H = 32;
 const CLASSIC_HALF_RATIO = 0.54;
 const CLASSIC_FULL_RATIO = 0.915;
 
-const ISLAND_COVER_BLUR = Platform.OS === 'android' ? 30 : 36;
-const COVER_BLEED = 20; // px the blurred image overshoots the clip on each side
 
 // Create Animated Pressable
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -222,7 +219,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
-  const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const insets = useSafeAreaInsets();
@@ -274,7 +270,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const fullExpansionProgress = useSharedValue(0); // 0 = half screen, 1 = full screen (island)
   const classicFullProgress = useSharedValue(0); // 0 = half-opened, 1 = 95% full (classic only)
   
-  const isIsland = miniPlayerStyle === 'island' && isHomeTab;
+  const isIsland = miniPlayerStyle === 'island';
   
   const screenHeight = Dimensions.get('window').height;
 
@@ -422,7 +418,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     const currentWidth = interpolate(
       expansionProgress.value,
       [0, 1],
-      [width * 0.52, width - 24], // Expand to full width minus margin * 2 (12 + 12)
+      [width * 0.62, width - 24], // Matches the centered collapsed pill before it grows.
       Extrapolation.CLAMP
     );
 
@@ -816,9 +812,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // Canonical HALF pair — pin both, never assume classicFullProgress is already 0.
     expansionProgress.value = withSpring(1);
     classicFullProgress.value = withSpring(0);
+    if (isIsland) {
+      lyricExpansionProgress.value = withSpring(1);
+      setLyricExpanded(true);
+    }
     setExpanded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
+  }, [expanded, isIsland]);
 
   const handleLyricPress = useCallback((timestamp: number) => {
       if (!fullLyricExpanded) {
@@ -895,13 +895,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const classicShellStyle = [
     styles.container,
     isIsland ? styles.islandContainer : styles.barContainer,
-    !isIsland && {
+    {
       bottom: tabChromeH,
       // No elevation — Android elevates above the in-navigator tab bar otherwise.
       elevation: 0,
       zIndex: 10,
     },
-    isIsland && expanded && { alignItems: 'center' as const, marginHorizontal: 12, marginRight: 12 },
   ];
 
   return (
@@ -948,7 +947,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       
       <AnimatedPressable 
         onPress={!expanded ? toggleExpand : undefined} 
-        pointerEvents={(!isIsland && expanded) ? 'box-none' : 'auto'}
+        pointerEvents={expanded ? 'box-none' : 'auto'}
         style={[
           styles.content, 
           isIsland && styles.islandContent,
@@ -957,42 +956,31 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           !isIsland && styles.classicContent,
         ]}
       >
-        {/* Dynamic Background for Classic Mode */}
+        {/* Opaque palette-driven background for the docked Island. */}
         {isIsland && (
            <View style={[StyleSheet.absoluteFill, { borderRadius: expanded ? 40 : 30, overflow: 'hidden' }]}>
-              {/* Frosted glass base — blurs app content behind the island pill */}
-              <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+              {/* An opaque base means the Island never reads as transparent. */}
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: '#09090c' }]} />
 
               {useThemeBg ? (
-                 /* Semi-transparent theme gradient over the blur */
-                 <View style={[StyleSheet.absoluteFill, { opacity: 0.65 }]}>
+                 <View style={StyleSheet.absoluteFill}>
                    <LinearGradient
                      colors={themePlayerColors}
                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                      style={StyleSheet.absoluteFill}
                    />
                  </View>
-               ) : !libraryFocusMode && currentSong.coverImageUri ? (
-                  /* Oversized + stronger blur so half-open lyric stage doesn't
-                     show a hard album-art rectangle through the glass. */
-                  <Image
-                    source={{ uri: currentSong.coverImageUri }}
-                    style={{
-                      position: 'absolute',
-                      top: -COVER_BLEED,
-                      left: -COVER_BLEED,
-                      right: -COVER_BLEED,
-                      bottom: -COVER_BLEED,
-                      opacity: 0.5,
-                      transform: [{ scale: 1.2 }],
-                    }}
-                    resizeMode="cover"
-                    blurRadius={ISLAND_COVER_BLUR}
-                  />
-               ) : (
-                  /* Solid fallback when no cover art — prevents transparent look */
+               ) : !currentSong.coverImageUri ? (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
-               )}
+               ) : null}
+
+              {!useThemeBg && currentSong.coverImageUri && (
+                <ArtworkFlowBackground
+                  coverImageUri={currentSong.coverImageUri}
+                  fallbackColors={gradientColors}
+                  animated
+                />
+              )}
 
               {/* Vignette — stronger top/bottom so half & full lyric expand don't
                   leave a sharp cover-art edge at the pill rim. */}
@@ -1308,20 +1296,19 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   islandContainer: {
-    top: Platform.OS === 'ios' ? 58 : 40, // 58 = iOS Dynamic Island clearance, 40 = Android status bar height
-    marginLeft: 12,
-    marginRight: 8,
-    alignItems: 'flex-end', // Right-aligned
+    alignItems: 'center',
+    width: '100%',
   },
   islandContent: {
-    backgroundColor: 'transparent', 
+    backgroundColor: '#09090c',
     borderRadius: 30,
     height: 50, 
-    width: '100%',
+    width: width * 0.62,
     paddingHorizontal: 4, // Reduced from 8 to move content left
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: "#000", // Deep black shadow
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
@@ -1404,7 +1391,8 @@ const styles = StyleSheet.create({
     flex: 1, 
     width: '100%', 
     paddingHorizontal: 10, 
-    paddingVertical: 10
+    paddingVertical: 10,
+    flexDirection: 'column-reverse',
   },
   expandedTopRow: {
     flexDirection: 'row', 
