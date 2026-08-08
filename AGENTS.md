@@ -11,7 +11,7 @@
 - **Zustand** for all app state (`src/store/`)
 - **React Navigation** (native-stack + bottom-tabs)
 - **Reanimated 3** + **Gesture Handler** for animations and gestures
-- **FlashList** (`@shopify/flash-list`) — used in `SynchronizedLyrics`; prefer over FlatList for long lists
+- **Reanimated 3** shared values and Gesture Handler own timed lyric follow and player motion; keep playback tracking off the React render path
 - **SQLite** via `expo-sqlite` for the local song library
 - **TypeScript** strict — run `npm run typecheck` before pushing
 
@@ -21,7 +21,9 @@
 - `PlayerContext.tsx` — wraps `useAudioPlayer`, syncs status to Zustand, handles auto-next
 - `playerStatusGuard.ts` — returns `true` to preserve playing state during buffering/seek to prevent UI flicker
 - `usePlayerStore` (Zustand) — single source of truth for `isPlaying`, `currentSong`, `currentSongId`, `position`, queue
-- `MiniPlayer.tsx` — owns the expanded player UI, Dynamic Island style + Classic style, handles seek
+- `MiniPlayer.tsx` — the sole docked player surface: Classic Bar, Dynamic Island, lyrics, seek, and title marquee
+- `ArtworkFlowBackground.tsx` — Skia cover-art palette flow shared by both player presentations
+- `SynchronizedLyrics.tsx` — UI-thread timestamp lookup and centred lyric follow; do not restore active-text scaling
 
 ### Scrub/seek pattern (must follow everywhere)
 ```ts
@@ -34,8 +36,8 @@ if (wasPlaying) player.play();
 ### Auto-next (end of song)
 `PlayerContext` uses `didJustFinish` (cross-platform signal) as primary, plus a `isNearEndFallback` (within 0.35s of end) as secondary. The fallback only triggers when `store.isPlaying` is true — prevents auto-advancing when user manually pauses near end.
 
-### Audio load guard (NowPlayingScreen)
-Effect uses `activeLoadSongIdRef` to prevent duplicate `player.replace()` calls and a `cancelled` flag to abort if deps change or component unmounts mid-load.
+### Player presentation
+There is no standalone Now Playing screen. Keep lyrics in `MiniPlayer` so controls stay docked when the reader opens. The Dynamic Island and Classic Bar must use the same opaque artwork-flow background. Settings is a hidden tab route, so the normal tab bar remains visible there.
 
 ### Library auto-next
 `nextInPlaylist()` in `playerStore.ts` dynamically `require`s `songsStore` (circular dep workaround) to rebuild queue when `currentPlaylistId === 'library'` and queue is null.
@@ -46,7 +48,7 @@ Effect uses `activeLoadSongIdRef` to prevent duplicate `player.replace()` calls 
 |------|-------|
 | Playback engine | `src/contexts/PlayerContext.tsx`, `src/contexts/playerStatusGuard.ts` |
 | Player state | `src/store/playerStore.ts` |
-| Main UI | `src/components/MiniPlayer.tsx`, `src/screens/NowPlayingScreen.tsx` |
+| Main UI | `src/components/MiniPlayer.tsx`, `src/components/ArtworkFlowBackground.tsx` |
 | Lyrics | `src/components/SynchronizedLyrics.tsx`, `src/components/LyricsLine.tsx` |
 | Scrubber | `src/components/TimelineScrubber.tsx` |
 | Downloads | `src/services/DownloadManager.ts`, `src/components/BackgroundDownloader.tsx` |
@@ -56,9 +58,9 @@ Effect uses `activeLoadSongIdRef` to prevent duplicate `player.replace()` calls 
 
 ## Rules
 - No `console.log` in production paths — wrap with `if (__DEV__)` or use the existing `logDesktopEvent` pattern
-- No `as any` unless unavoidable (FlashList type shim is the one exception)
+- No `as any` unless unavoidable
 - No mock DB in tests — always hit real SQLite
-- Don't introduce shadow styles on NowPlayingScreen — intentionally removed for clean look
+- Don't reintroduce a standalone Now Playing route or an active-lyric text-scale animation
 - `DesktopBridgeService` is disabled — don't re-enable without also enabling the full `stop()` cleanup
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 

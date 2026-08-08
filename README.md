@@ -53,7 +53,9 @@ Recent highlights:
   - `DownloaderModule` uses WorkManager `CoroutineWorker` so downloads survive app backgrounding and device restarts
 - Player end-of-song detection is more reliable with a near-end fallback that triggers the next track even when `didJustFinish` misses
 - Download progress UI is smoother with throttled callbacks and concurrent downloads increased to 2
-- Lyrics scrolling is buttery-smooth with `@shopify/flash-list` view recycling, debounced layout measurements, and binary-search active-line detection
+- **Dynamically themed docked player** — choose Classic Bar or a bottom-centred Dynamic Island; both keep controls available while lyrics expand upward
+- **Artwork flow background** — cover-art colours are extracted locally and transition directly from the outgoing track into the incoming track
+- **UI-thread lyric follow** — timestamp lookup, centred scrolling, and focus styling stay smooth without changing the active line's size
 - Desktop bridge is temporarily disabled (code preserved for future re-enablement)
 
 ---
@@ -97,7 +99,11 @@ _Contribute to a real production app. Earn GSSoC leaderboard points. Build your 
 
 ## ✨ Features
 
-- Synced lyrics display with smooth active-line scrolling powered by `@shopify/flash-list`
+- Synced lyrics display with UI-thread active-line tracking, centre-follow scrolling, and a fixed-size active text treatment
+- Bottom-docked player in Classic Bar or Dynamic Island presentation, with lyrics expanding upward above persistent transport controls
+- Cover-art palette flow that cross-fades directly from one track to the next
+- Slim timeline scrubber with optimistic seeking and a subtle drag-thickness response
+- One-pass marquee for long track titles in both player presentations
 - Plain lyrics auto-scroll for lyrics without timestamps
 - Local SQLite song and playlist storage
 - Playlist management and per-playlist loop behavior
@@ -138,8 +144,13 @@ _Contribute to a real production app. Earn GSSoC leaderboard points. Build your 
 PlayerContext.tsx          →  wraps useAudioPlayer, syncs status to Zustand, handles auto-next
 playerStatusGuard.ts       →  preserves playing state during buffering/seek to prevent UI flicker
 usePlayerStore (Zustand)   →  single source of truth for isPlaying, currentSong, position, queue
-MiniPlayer.tsx             →  expanded player UI (Dynamic Island + Classic styles), handles seek
+MiniPlayer.tsx             →  sole docked player surface: Classic Bar, Dynamic Island, transport, lyrics, and title marquee
+SynchronizedLyrics.tsx     →  UI-thread timestamp lookup and centred lyric follow
+ArtworkFlowBackground.tsx  →  Skia cover-art palette flow and direct track-to-track transition
+TimelineScrubber.tsx       →  optimistic seek gesture and slim progress treatment
 ```
+
+Read the [Player & Lyrics Experience guide](./docs/player-lyrics-experience.md) before changing the player UI.
 
 ### Scrub/seek pattern (must follow everywhere)
 
@@ -312,6 +323,7 @@ Please do not report secrets or vulnerabilities in public issues. Read [SECURITY
 | [SECURITY.md](./SECURITY.md) | Security policy |
 | [Database Schema Guide](./docs/database-schema.md) | SQLite tables, migrations, and schema-change checklist |
 | [README_DETAILED.md](./README_DETAILED.md) | Architecture notes and historical feature details |
+| [Player & Lyrics Experience](./docs/player-lyrics-experience.md) | Current docked-player, artwork-flow, lyric-reader, scrubber, and navigation contracts |
 
 ---
 

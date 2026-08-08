@@ -27,12 +27,15 @@ LuvLyrics was built on three core pillars:
 
 ## 🧠 Technical Foundations
 
-### 60fps Scroll Engine
-Traditional lyrics apps often use `setInterval` for auto-scrolling, which leads to "micro-stuttering" on modern high-refresh-rate displays.
-- **Implementation**: Located in `NowPlayingScreen.tsx`, we use a custom `requestAnimationFrame` loop.
-- **Logic**: It calculates a high-precision `deltaTime` (ms since last frame) to update the scroll offset and playback tick.
-- **Auto-Hide Logic**: Controls automatically fade out after 3.5 seconds of inactivity during playback.
-- **Battery Saver**: Background animations can be disabled via the top-right menu to reduce GPU load.
+### Current Player & Lyrics Reader
+The standalone Now Playing screen was removed. `MiniPlayer.tsx` is the only player surface: both the Classic Bar and bottom-centred Dynamic Island keep transport controls docked while lyrics expand upward.
+
+- **Artwork flow**: `ArtworkFlowBackground.tsx` extracts a local cover-art palette and cross-fades directly from the outgoing track to the incoming track on a Skia canvas.
+- **Tracking**: `SynchronizedLyrics.tsx` reads shared playback values and finds the active timestamp with binary search on the UI thread.
+- **Glide**: Measured lyric-row midpoints are centred at 50% of the reader viewport. Destination changes use a 460 ms UI-thread glide; large seeks jump immediately.
+- **Typography**: The active line changes colour, opacity, and font treatment without scaling, so the lyric layout remains stable.
+
+See [Player & Lyrics Experience](./docs/player-lyrics-experience.md) for the maintained interaction contract.
 
 ### Robust Database Singleton
 Expo SQLite can throw `NullPointerException` if multiple parts of the app try to open or query the database simultaneously.
@@ -70,11 +73,8 @@ The player needs to reliably advance to the next track when a song finishes, but
   - **Deduplication**: A `endHandledForSongIdRef` ensures the advance logic only fires once per song, preventing double-skipping or rapid-fire next calls.
 - **Result**: Auto-next is now rock-solid even when the native player event system drops frames or reports slightly inaccurate finish states.
 
-### FlashList Integration ⚡
-To solve list virtualization issues on large libraries (>2,000 songs), we migrated from `FlatList` to `@shopify/flash-list`.
-- **Why**: `FlashList` runs on the UI thread and recycles views instantly, eliminating blank spaces during fast scrolls.
-- **Metrics**: Frame drops reduced by ~95% on low-end Android devices.
-- **Optimization**: Removed complex `getItemLayout` calculations as FlashList handles dynamic measurement natively with `estimatedItemSize`.
+### Timed Lyric Reader
+Timed lyrics use an animated scroll container rather than a separate screen. Playback time and active-index resolution stay on shared values; React only updates the reader when the target lyric line changes. This avoids issuing a native scroll command on every audio-position tick.
 
 ### Download Pipeline Performance
 The download manager handles audio, cover art, and lyrics downloads while keeping the UI responsive.
@@ -82,16 +82,8 @@ The download manager handles audio, cover art, and lyrics downloads while keepin
 - **Concurrent Downloads**: `MAX_CONCURRENT` increased from 1 to 2, improving throughput without overwhelming the network stack.
 - **Async Overhead Removal**: Progress updates no longer use `await` + `setTimeout` delays, keeping the download I/O thread unblocked.
 
-### Lyrics Rendering Performance
-The lyrics display (`SynchronizedLyrics.tsx`) was rebuilt for 60fps smoothness on long tracks with hundreds of lines.
-- **Problem**: `FlatList` rendered every lyric line into memory, causing frame drops and laggy active-line transitions on songs with 200+ lines.
-- **Solution**: Migrated to `@shopify/flash-list` which recycles off-screen views and runs layout on the UI thread.
-- **Stable Render Item**: The `renderItem` function is created once and never recreated on active-line changes. Instead, a live `activeIndexRef` is read inside the callback, and `extraData` forces FlashList to re-render only the visible cells that actually changed state.
-- **Debounced Measurements**: `onLayout` only fires when a line's height changes by more than 1px, eliminating measurement thrashing during fast scrolls.
-- **Binary Search Active Index**: Replaced `findIndex` (O(n)) with a binary search (O(log n)) since lyric timestamps are sorted. An incremental forward-scan shortcut catches 99% of sequential playback frames without any loop at all.
-- **Memoized Phrase Matching**: The song-title phrase-highlighting (`indexOf` + string slicing) is wrapped in `useMemo` so it only recomputes when the line text or song title changes, not on every animation frame.
-- **Lighter Animations**: Switched from `withSpring` to `withTiming(200ms)` on the UI thread for snappier, less CPU-intensive active-line transitions.
-- **MaskedView Edge Fades**: Uses `@react-native-masked-view/masked-view` with a `LinearGradient` mask to create a true text fade-out at the top and bottom edges. The gradient mask transitions from `transparent` → `black` → `black` → `transparent`, so lyrics softly disappear as they scroll off-screen — just like Apple Music. This is the most visually accurate approach and the slight rendering cost is acceptable given the smooth FlashList foundation.
+### Lyric Reader Motion
+`SynchronizedLyrics.tsx` measures row heights and uses their midpoints to centre the active line precisely. Normal active-line changes glide with a 460 ms cubic-bezier animation driven on the UI thread. An initial position or a seek that spans more than three lines snaps directly to its destination. The active line deliberately has no scale animation; only colour, opacity, vertical lift, and font treatment change.
 
 ### State Isolation Architecture
 We implemented strict **Zustand Slicing** to prevent "render cascades".
@@ -139,12 +131,12 @@ The desktop bridge feature is **currently commented out** in `DesktopBridgeServi
 | `LrcSearchModal.tsx` | Unified search interface with **Preview Mode** |
 | `AuroraHeader.tsx` | **Skia-powered** organic blurred background |
 | `VinylRecord.tsx` | Rotating vinyl record UI |
-| `LyricsLine.tsx` | Animated line with scale, opacity, and glow |
+| `LyricsLine.tsx` | Reusable lyric-line presentation helpers |
 | `PlayerControls.tsx` | Playback control buttons |
-| `Scrubber.tsx` | Timeline progress bar with optimistic seeking |
-| `MiniPlayer.tsx` | Compact player for background playback |
-| `IslandScrubber.tsx` | Dynamic Island style progress indicator |
-| `SynchronizedLyrics.tsx` | High-precision synced lyrics renderer |
+| `MiniPlayer.tsx` | Docked Classic Bar and Dynamic Island player surface |
+| `TimelineScrubber.tsx` | Slim timeline progress bar with optimistic seeking |
+| `ArtworkFlowBackground.tsx` | Skia-rendered cover-art palette flow |
+| `SynchronizedLyrics.tsx` | UI-thread synced lyrics reader with centred line follow |
 | `MagicModeModal.tsx` | AI-powered magic lyrics search |
 | `ManualSyncModal.tsx` | Manual timestamp synchronization |
 | `LanguagePickerModal.tsx` | Transliteration language selector |
@@ -161,13 +153,11 @@ The desktop bridge feature is **currently commented out** in `DesktopBridgeServi
 | `CreatePlaylistModal.tsx` | Create playlist |
 | `GradientPicker.tsx` | Theme gradient selector |
 | `BackgroundDownloader.tsx` | Background download manager with concurrent queue |
-| `SynchronizedLyrics.tsx` | High-performance synced lyrics renderer with FlashList recycling and BlurView edge fades |
 
 ### `src/screens/`
 | Screen | Description |
 |--------|-------------|
 | `LibraryScreen.tsx` | Home view (Grid + List) |
-| `NowPlayingScreen.tsx` | Lyric reader (60fps Engine) |
 | `AddEditLyricsScreen.tsx` | Manual entry |
 | `SearchScreen.tsx` | Library search |
 | `SettingsScreen.tsx` | App preferences |
@@ -229,7 +219,7 @@ The desktop bridge feature is **currently commented out** in `DesktopBridgeServi
 3. **Preview**: User scrolls through results and previews the text.
 4. **Parsing**: `timestampParser.ts` identifies timestamps and cleans text.
 5. **Storage**: `queries.ts` saves to SQLite.
-6. **Animation**: The **60fps Scroll Engine** starts.
+6. **Animation**: The docked timed lyric reader follows the active line.
 
 ---
 
