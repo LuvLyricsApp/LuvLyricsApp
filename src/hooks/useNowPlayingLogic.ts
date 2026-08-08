@@ -290,10 +290,11 @@ export function useNowPlayingLogic(songId: string) {
     isSeeking.value = false;
   };
 
-  // Match Apple Music's player: any album image drives the whole backdrop.
-  // Saved gradients remain the fallback for tracks without artwork.
-  const isDynamicTheme = Boolean(currentSong?.coverImageUri);
-  const effectiveGradientId = currentSong?.gradientId || 'aurora';
+  // Dynamic theme
+  const isDynamicTheme = currentSong?.gradientId === 'dynamic';
+  const effectiveGradientId = (isDynamicTheme && !currentSong?.coverImageUri)
+    ? 'aurora'
+    : (currentSong?.gradientId || 'aurora');
 
   // Palette colors extracted natively from album art (Android only; null on iOS/no cover)
   const [extractedColors, setExtractedColors] = useState<string[] | null>(null);

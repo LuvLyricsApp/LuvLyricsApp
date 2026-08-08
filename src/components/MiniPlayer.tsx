@@ -36,15 +36,11 @@ import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
 import { RotatingVinyl } from './VinylRecord';
+import ArtworkFlowBackground from './ArtworkFlowBackground';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
 
 const { width } = Dimensions.get('window');
-
-// Tallest the classic bar's blurred artwork ever needs to be — the full-expand
-// stage is 0.915 of the screen, with headroom so the image is never the thing
-// that runs out. Held constant so the Android blur bitmap is computed once.
-const CLASSIC_BG_HEIGHT = Dimensions.get('window').height * 0.95;
 
 // Transport / song row height inside the classic shell (scrubber sits on its top edge).
 const CLASSIC_TRANSPORT_H = CLASSIC_MINI_PLAYER_HEIGHT;
@@ -63,8 +59,6 @@ const CLASSIC_SCRUBBER_HIT_H = 32;
 const CLASSIC_HALF_RATIO = 0.54;
 const CLASSIC_FULL_RATIO = 0.915;
 
-// Soft enough to hide hard crop edges, light enough that cover colour still reads.
-const CLASSIC_COVER_BLUR = Platform.OS === 'android' ? 28 : 32;
 const ISLAND_COVER_BLUR = Platform.OS === 'android' ? 30 : 36;
 const COVER_BLEED = 20; // px the blurred image overshoots the clip on each side
 
@@ -236,6 +230,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
+  const animateBackground = useSettingsStore(state => state.animateBackground);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const isDark = useIsDark();
@@ -966,27 +961,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             />
           ) : currentSong.coverImageUri ? (
             <>
-              {/* Fixed to the tallest size the bar ever reaches, anchored to the
-                  bottom, rather than absoluteFill. blurRadius on Android is a CPU
-                  bitmap blur that re-runs whenever the view resizes, so an image
-                  that grows with the container shows the previous bitmap's hard
-                  edge for a frame or two mid-expand. At a constant size the
-                  bitmap is blurred once and the container just reveals more.
-                  Oversized + scaled so album-art rectangle edges and blur
-                  kernel roll-off sit outside the visible clip. */}
-              <Image
-                source={{ uri: currentSong.coverImageUri }}
-                style={{
-                  position: 'absolute',
-                  left: -COVER_BLEED,
-                  right: -COVER_BLEED,
-                  bottom: -COVER_BLEED,
-                  height: CLASSIC_BG_HEIGHT + COVER_BLEED * 2,
-                  // Slight scale keeps blur kernel roll-off outside the clip.
-                  transform: [{ scale: 1.04 }],
-                }}
-                resizeMode="cover"
-                blurRadius={CLASSIC_COVER_BLUR}
+              {/* The moving artwork field is visible behind lyrics in the
+                  half- and full-expanded Classic Bar. */}
+              <ArtworkFlowBackground
+                coverImageUri={currentSong.coverImageUri}
+                fallbackColors={gradientColors}
+                animated={animateBackground}
               />
               <Animated.View style={[StyleSheet.absoluteFill, animatedClassicScrimStyle]}>
                 {/* Soft tint only — expanded opacity is tiny so colour stays vivid. */}
