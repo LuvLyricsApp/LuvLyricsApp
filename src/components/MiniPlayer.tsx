@@ -1229,7 +1229,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             isUserScrolling={false}
                             scrollEnabled={expanded}
                             textStyle={styles.expandedLyricText}
-                            activeLinePosition={0.4}
+                            activeLinePosition={0.5}
                             songTitle={currentSong?.title}
                             topSpacerHeight={50}
                             bottomSpacerHeight={50}
