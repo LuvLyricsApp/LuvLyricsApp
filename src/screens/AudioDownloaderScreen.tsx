@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DarkColors } from '../constants/colors';
-import { usePlayerStore } from '../store/playerStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { AudioDownloaderSearchTab } from './AudioDownloaderSearchTab';
 import { AudioDownloaderQueueTab } from './AudioDownloaderQueueTab';
 import { TabScreenProps } from '../types/navigation';
-import { TAB_BAR_HEIGHT } from '../constants/layout';
+import { CLASSIC_MINI_PLAYER_HEIGHT, TAB_BAR_HEIGHT } from '../constants/layout';
 
 type ShellTab = 'search' | 'queue';
 
@@ -28,17 +27,9 @@ const QueueBadge = () => {
 
 export const AudioDownloaderScreen: React.FC<TabScreenProps<'AudioDownloader'>> = ({ navigation, route }) => {
     const [activeShellTab, setActiveShellTab] = useState<ShellTab>('search');
-    const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
     const insets = useSafeAreaInsets();
     const voiceQuery = route.params?.voiceQuery;
     const autoDownload = route.params?.autoDownload;
-
-    useEffect(() => {
-        setMiniPlayerHidden(true);
-        return () => {
-            setMiniPlayerHidden(false);
-        };
-    }, [setMiniPlayerHidden]);
 
     return (
         <View style={styles.container}>
@@ -50,7 +41,9 @@ export const AudioDownloaderScreen: React.FC<TabScreenProps<'AudioDownloader'>> 
                 start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.45 }}
             />
 
-            <SafeAreaView style={[styles.safeArea, { paddingBottom: TAB_BAR_HEIGHT + insets.bottom }]}>
+            <SafeAreaView style={[styles.safeArea, {
+                paddingBottom: TAB_BAR_HEIGHT + CLASSIC_MINI_PLAYER_HEIGHT + insets.bottom,
+            }]}>
                 {/* Shell header: back + tab switcher */}
                 <View style={styles.header}>
                     <Pressable onPress={() => navigation.navigate('Home')} style={styles.backBtn}>
@@ -86,6 +79,7 @@ export const AudioDownloaderScreen: React.FC<TabScreenProps<'AudioDownloader'>> 
                     <AudioDownloaderSearchTab
                         autoSearchQuery={voiceQuery}
                         autoDownload={autoDownload}
+                        isActive={activeShellTab === 'search'}
                         onDownloadStarted={() => setActiveShellTab('queue')}
                     />
                 </View>

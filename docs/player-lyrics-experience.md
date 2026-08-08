@@ -9,6 +9,7 @@ This document is the source of truth for the in-app player and lyrics reader. Th
 - The Dynamic Island uses one open/close transition rather than separate tray and full-screen stages. It is opaque and has the same animated artwork treatment as the Classic Bar.
 - Show the player on the normal app routes, including Settings. Luvs is the intentional exception.
 - Settings and Audio Downloader are hidden routes within the tab navigator. The normal navigation bar remains visible while either screen is open.
+- Audio Downloader keeps the player visible and reserves room for the tab bar plus the collapsed Classic Bar, so queue rows and download actions never sit behind player chrome.
 
 ## Artwork colour flow
 

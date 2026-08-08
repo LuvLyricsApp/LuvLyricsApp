@@ -4,12 +4,14 @@ import {
     ActivityIndicator, ScrollView, FlatList, SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useThemeColors } from '../contexts/ThemeContext';
 import { Toast } from '../components/Toast';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { UnifiedSong } from '../types/song';
 import { useSongsStore } from '../store/songsStore';
+import { usePlayerStore } from '../store/playerStore';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import { useDownloaderTabStore, SearchTab as SearchTabState } from '../store/downloaderTabStore';
@@ -113,13 +115,14 @@ const BulkHeader: React.FC<BulkHeaderProps> = memo((props) => (
 // --- Main SearchTab ---
 
 interface AudioDownloaderSearchTabProps {
-    autoSearchQuery?: string;
-    autoDownload?: boolean;
-    onDownloadStarted?: () => void;
+  autoSearchQuery?: string;
+  autoDownload?: boolean;
+  isActive: boolean;
+  onDownloadStarted?: () => void;
 }
 
 // Isolated: no props — reads from stores directly, never re-renders on queue progress
-export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, onDownloadStarted }: AudioDownloaderSearchTabProps) => {
+export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, isActive, onDownloadStarted }: AudioDownloaderSearchTabProps) => {
     const colors = useThemeColors();
 
     // --- Store ---
@@ -150,6 +153,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     // --- Refs ---
     const previewSoundRef = useRef<AudioPlayer | null>(null);
+    const previewSessionRef = useRef(0);
     const downloadContextRef = useRef<'single' | 'selected' | 'bulk'>('single');
     const pendingSingleRef = useRef<UnifiedSong | null>(null);
     const hasAutoSearchedRef = useRef(false);
@@ -180,30 +184,61 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
         runSearchWithQuery(query, searchMode);
     }, [searchMode, titleQuery, artistQuery, runSearchWithQuery]);
 
+    const stopPreview = useCallback(() => {
+        previewSessionRef.current += 1;
+        const preview = previewSoundRef.current;
+        previewSoundRef.current = null;
+        preview?.remove();
+        setPlayingPreviewId(null);
+    }, []);
+
     const handlePreviewToggle = useCallback(async (song: UnifiedSong) => {
-        // expo-audio has no stop(): remove() tears the player down outright.
         if (playingPreviewId === song.id) {
-            previewSoundRef.current?.remove();
-            previewSoundRef.current = null;
-            setPlayingPreviewId(null);
+            stopPreview();
             return;
         }
-        if (previewSoundRef.current) {
-            previewSoundRef.current.remove();
-            previewSoundRef.current = null;
-        }
+
+        stopPreview();
         const url = song.streamUrl || song.downloadUrl;
         if (!url) return;
+
+        // Preview is a separate audio player. Pause the real player first and
+        // never auto-resume it when the short preview ends.
+        usePlayerStore.getState().requestPlayback(false);
+        const session = previewSessionRef.current + 1;
+        previewSessionRef.current = session;
+
         try {
             const sound = createAudioPlayer({ uri: url });
             previewSoundRef.current = sound;
-            sound.play();
             setPlayingPreviewId(song.id);
             sound.addListener('playbackStatusUpdate', s => {
-                if (s.isLoaded && s.didJustFinish) { setPlayingPreviewId(null); previewSoundRef.current = null; }
+                if (s.isLoaded && s.didJustFinish && previewSessionRef.current === session) {
+                    previewSoundRef.current = null;
+                    setPlayingPreviewId(null);
+                    sound.remove();
+                }
             });
-        } catch {}
-    }, [playingPreviewId]);
+            sound.play();
+        } catch {
+            if (previewSessionRef.current === session) stopPreview();
+        }
+    }, [playingPreviewId, stopPreview]);
+
+    // The search tree stays mounted while the queue tab is visible, and hidden
+    // tab routes stay mounted after navigating away. Tie preview cleanup to both
+    // visibility paths so no sample can leak into another screen.
+    useEffect(() => {
+        if (!isActive) stopPreview();
+    }, [isActive, stopPreview]);
+
+    useEffect(() => () => stopPreview(), [stopPreview]);
+
+    useFocusEffect(useCallback(() => () => stopPreview(), [stopPreview]));
+
+    useEffect(() => {
+        stopPreview();
+    }, [activeTabId, stopPreview]);
 
     const handlePress = useCallback((item: UnifiedSong) => {
         if (selectionMode || (activeTab.selectedSongs ?? []).length > 0) {
