@@ -313,7 +313,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     
   // Per-style background mode (island vs classic bar each have their own setting)
   const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
-  const useThemeBg = activeBgMode !== 'album-art';
+  // The docked Island always follows its current artwork; choosing an old static
+  // theme must not quietly disable the Apple-Music-style colour motion there.
+  const useThemeBg = !isIsland && activeBgMode !== 'album-art';
 
   const themePlayerColors: [string, string, string] = (() => {
     switch (activeBgMode) {
