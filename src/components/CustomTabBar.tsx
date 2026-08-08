@@ -6,11 +6,10 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceMicButton } from './VoiceMicButton';
 import { useSettingsStore } from '../store/settingsStore';
+import { TAB_BAR_HEIGHT } from '../constants/layout';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -21,8 +20,6 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const micEnabled = useSettingsStore(s => s.micEnabled);
-  // The classic mini player paints its artwork behind this bar; the island style
-  // floats at the top and does not, so the blur is still needed there.
   const midpoint = Math.ceil(state.routes.length / 2);
   const leftRoutes = state.routes.slice(0, midpoint);
   const rightRoutes = state.routes.slice(midpoint);
@@ -58,23 +55,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
       {/* edgeToEdgeEnabled draws under the system bars, so the inset has to be
           reserved as padding too — growing the height alone just re-centres the
           icons into the gesture pill / 3-button strip. */}
-      <View style={[styles.container, { height: 64 + insets.bottom, paddingBottom: insets.bottom }]}>
-        {/* Translucent backdrop — list content scrolls through behind it.
-            The scrim on top of the blur keeps icons legible over bright art. */}
-        <BlurView
-          intensity={40}
-          tint="dark"
-          style={StyleSheet.absoluteFill}
-        />
-        {/* Densest at the very bottom, near-clear at the top where it meets the
-            song pill — so the bar has weight against the system nav without
-            cutting a hard edge across the player above it. */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.97)']}
-          locations={[0, 0.45, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+      <View style={[styles.container, { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
@@ -106,11 +87,17 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     pointerEvents: 'box-none',
+    // Above classic mini player (root sibling) — keep elevation high on Android.
+    zIndex: 1000,
+    elevation: 100,
   },
   container: {
     width: '100%',
-    height: 64,
-    backgroundColor: 'transparent',
+    height: TAB_BAR_HEIGHT,
+    // Solid black, not a blur — list content used to read straight through the
+    // bar and collide with the icons, and an opaque bar meets the near-black
+    // bottom of the song pill without a visible seam.
+    backgroundColor: '#000000',
     borderTopWidth: 0,
     overflow: 'hidden',
   },

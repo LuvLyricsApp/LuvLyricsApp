@@ -8,19 +8,10 @@
 import { Platform } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { UnifiedSong } from '../types/song';
+import { getNativeModule, nativeAddListener } from './nativeModule';
 
-let LuvsPlayerModule: any = null;
-let luvsEventEmitter: any = null;
-
-if (Platform.OS === 'android') {
-  try {
-    const { requireNativeModule, EventEmitter } = require('expo-modules-core');
-    LuvsPlayerModule = requireNativeModule('LuvsPlayer');
-    luvsEventEmitter = new EventEmitter(LuvsPlayerModule);
-  } catch {
-    // LuvsPlayer native module not available — expo-audio fallback active
-  }
-}
+// Module is already an EventEmitter on Expo SDK 52+ — do not wrap with EventEmitter.
+const LuvsPlayerModule = getNativeModule<any>('LuvsPlayer');
 
 // iOS Sliding Window limits
 const BUFFER_BEHIND = 1; 
@@ -360,9 +351,9 @@ class LuvsBufferManager {
   async setStatusUpdateCallback(callback: (status: any) => void) {
     this.activeStatusCallback = callback;
 
-    if (Platform.OS === 'android' && LuvsPlayerModule && luvsEventEmitter) {
+    if (Platform.OS === 'android' && LuvsPlayerModule) {
       this.nativeStatusSub?.remove();
-      this.nativeStatusSub = luvsEventEmitter.addListener('onLuvsStatus', (event: any) => {
+      this.nativeStatusSub = nativeAddListener(LuvsPlayerModule, 'onLuvsStatus', (event: any) => {
         if (this.activeStatusCallback) {
           this.activeStatusCallback({
             positionMillis: event.position,

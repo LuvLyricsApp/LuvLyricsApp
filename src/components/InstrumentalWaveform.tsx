@@ -1,71 +1,96 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming, 
-  withSequence, 
-  Easing, 
-  cancelAnimation 
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, ViewStyle } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS,
+  withRepeat,
+  withTiming,
+  withDelay,
+  withSequence,
+  Easing,
+  cancelAnimation,
+  SharedValue,
 } from 'react-native-reanimated';
-
 
 interface InstrumentalWaveformProps {
   active: boolean;
+  /** Compact for inactive rows; larger when the line is current. */
+  size?: 'sm' | 'md' | 'lg';
+  style?: ViewStyle;
 }
 
-const InstrumentalWaveform: React.FC<InstrumentalWaveformProps> = ({ active }) => {
-  // Shared values for 3 bars
-  const h1 = useSharedValue(10);
-  const h2 = useSharedValue(16);
-  const h3 = useSharedValue(10);
+const EASE = Easing.inOut(Easing.sin);
+
+type BarSpec = { min: number; max: number; duration: number; delay: number };
+
+const SPECS: BarSpec[] = [
+  { min: 8, max: 22, duration: 420, delay: 0 },
+  { min: 12, max: 34, duration: 360, delay: 80 },
+  { min: 16, max: 42, duration: 300, delay: 40 },
+  { min: 12, max: 34, duration: 380, delay: 120 },
+  { min: 8, max: 22, duration: 440, delay: 60 },
+];
+
+function Bar({
+  active,
+  min,
+  max,
+  duration,
+  delay,
+  scale,
+}: BarSpec & { active: boolean; scale: number }) {
+  const h = useSharedValue(min * scale);
 
   useEffect(() => {
+    cancelAnimation(h);
     if (active) {
-      // Bar 1 Animation
-      h1.value = withRepeat(
-        withSequence(
-            withTiming(24, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-            withTiming(10, { duration: 500, easing: Easing.inOut(Easing.ease) })
-        ), -1, true
-      );
-
-      // Bar 2 Animation (Slightly faster/different)
-      h2.value = withRepeat(
-        withSequence(
-            withTiming(32, { duration: 400, easing: Easing.inOut(Easing.ease) }),
-            withTiming(16, { duration: 400, easing: Easing.inOut(Easing.ease) })
-        ), -1, true
-      );
-
-      // Bar 3 Animation (Offset)
-      h3.value = withRepeat(
-        withSequence(
-            withTiming(24, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-            withTiming(10, { duration: 600, easing: Easing.inOut(Easing.ease) })
-        ), -1, true
+      h.value = min * scale;
+      h.value = withDelay(
+        delay,
+        withRepeat(
+          withSequence(
+            withTiming(max * scale, { duration, easing: EASE }),
+            withTiming(min * scale, { duration, easing: EASE }),
+          ),
+          -1,
+          false,
+        ),
       );
     } else {
-      cancelAnimation(h1);
-      cancelAnimation(h2);
-      cancelAnimation(h3);
-      h1.value = withTiming(4);
-      h2.value = withTiming(4);
-      h3.value = withTiming(4);
+      h.value = withTiming(Math.max(4, min * scale * 0.45), {
+        duration: 280,
+        easing: Easing.out(Easing.quad),
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, min, max, duration, delay, scale, h]);
 
-  const style1 = useAnimatedStyle(() => ({ height: h1.value }));
-  const style2 = useAnimatedStyle(() => ({ height: h2.value }));
-  const style3 = useAnimatedStyle(() => ({ height: h3.value }));
+  const style = useAnimatedStyle(() => ({
+    height: h.value,
+    opacity: active ? 1 : 0.35,
+  }));
+
+  return <Animated.View style={[styles.bar, active && styles.activeBar, style]} />;
+}
+
+/**
+ * Equalizer bars shown in place of "[INSTRUMENTAL]" lyric lines.
+ * Active = dancing; inactive = quiet resting bars.
+ */
+const InstrumentalWaveform: React.FC<InstrumentalWaveformProps> = ({
+  active,
+  size = 'md',
+  style,
+}) => {
+  const scale = size === 'lg' ? 1.15 : size === 'sm' ? 0.75 : 1;
+  const rowH = size === 'lg' ? 52 : size === 'sm' ? 32 : 44;
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.bar, style1, active && styles.activeBar]} />
-      <Animated.View style={[styles.bar, style2, active && styles.activeBar]} />
-      <Animated.View style={[styles.bar, style3, active && styles.activeBar]} />
+    <View style={[styles.container, { height: rowH }, style]} accessibilityLabel="Instrumental">
+      {SPECS.map((spec, i) => (
+        <Bar key={i} active={active} scale={scale} {...spec} />
+      ))}
     </View>
   );
 };
@@ -73,26 +98,52 @@ const InstrumentalWaveform: React.FC<InstrumentalWaveformProps> = ({ active }) =
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center', // Center vertically: Since bars grow from center or bottom? 
-    // If we want them to grow from center, we need justifyContent center. 
-    // And bars need active height change. 
-    // Let's use alignItems 'flex-end' to simulate ground? Or 'center' for eq.
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    height: 40
+    gap: 5,
+    minWidth: 72,
+    paddingVertical: 4,
   },
   bar: {
     width: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 3,
   },
   activeBar: {
-    backgroundColor: '#ffffff', // White to match lyrics
-    shadowColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-  }
+    shadowOpacity: 0.55,
+    shadowRadius: 6,
+  },
 });
 
 export default InstrumentalWaveform;
+
+/**
+ * Bridge a Reanimated active-index to React state — the waveform needs a real
+ * boolean, not a shared value. Shared by every lyric renderer.
+ */
+export function useIsActiveLine(activeIndexSV: SharedValue<number>, index: number): boolean {
+  const [isActive, setIsActive] = useState(false);
+  useAnimatedReaction(
+    () => activeIndexSV.value === index,
+    (next, prev) => {
+      if (next !== prev) runOnJS(setIsActive)(next);
+    },
+    [index],
+  );
+  return isActive;
+}
+
+/** Detect instrumental / music-break markers so UI can swap text for the EQ. */
+export function isInstrumentalLyric(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  // [INSTRUMENTAL], [Instrumental Break], Instrumental, ♪ Instrumental ♪, etc.
+  const stripped = t
+    .replace(/^[\s[(【♪🎵🎤]+/, '')
+    .replace(/[\s\])】♪🎵🎤]+$/, '')
+    .trim();
+  return /^(instrumental)(\s+(break|interlude|solo|outro|intro|section))?$/i.test(stripped);
+}

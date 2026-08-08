@@ -33,6 +33,7 @@ import { CoverArtSearchScreen } from './CoverArtSearchScreen';
 import { SongVersionSearchModal } from '../components/SongVersionSearchModal';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
+import { Fonts } from '../constants/fonts';
 import { Song } from '../types/song';
 import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
 import * as ImagePicker from 'expo-image-picker';
@@ -43,7 +44,6 @@ import { useSortedSongs } from '../hooks/useSortedSongs';
 import { usePlaybackQueue } from '../hooks/usePlaybackQueue';
 import { FlashList, FlashListRef } from '@shopify/flash-list';
 import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, useDerivedValue, interpolate, Extrapolation } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import LibraryHeader from '../components/LibraryHeader';
 import LibraryEmptyState from '../components/LibraryEmptyState';
 import LibraryBottomSheet from '../components/LibraryBottomSheet';
@@ -63,6 +63,13 @@ const setSongItemLayout = (layout: SongItemLayout) => {
 // to the top brings it straight back.
 const AURORA_FADE_DISTANCE = 140;
 
+// Android list top-edge dissolve under the sticky "LuvLyrics" brand bar.
+// Must be 0 at rest — a fixed length keeps the top row faded even when fully
+// scrolled to the top (irritating). Binary rather than ramped: `fadingEdgeLength`
+// is a native prop, so every intermediate step costs a full screen re-render
+// mid-gesture, and the ramp resolved within the first few px anyway.
+const LIST_EDGE_FADE_MAX = 56;
+
 type Props = TabScreenProps<'Library'>;
 
 const LibraryScreen: React.FC<Props> = ({ navigation }) => {
@@ -81,7 +88,8 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const playerCurrentSongId = usePlayerStore(state => state.currentSong?.id);
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
   const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-  const { recentArts, addRecentArt } = useArtHistoryStore();
+  const recentArts = useArtHistoryStore(s => s.recentArts);
+  const addRecentArt = useArtHistoryStore(s => s.addRecentArt);
   const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
   const playInMiniPlayerOnly = useSettingsStore(state => state.playInMiniPlayerOnly);
   const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
@@ -108,7 +116,10 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
 
   const scrollY = useSharedValue(0);
   const lastSentFocusMode = useSharedValue(false);
+  const lastEdgeFadeLen = useSharedValue(0);
   const flatListRef = React.useRef<FlashListRef<Song>>(null);
+  // Android-only prop — keep JS state so FlashList re-renders with the new length.
+  const [listEdgeFadeLength, setListEdgeFadeLength] = useState(0);
 
   const isSolidBg = libraryBackgroundMode === 'purest-black'
     || libraryBackgroundMode === 'grey'
@@ -145,6 +156,14 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
       if (isFocusZone !== lastSentFocusMode.value) {
         lastSentFocusMode.value = isFocusZone;
         runOnJS(updateFocusMode)(isFocusZone);
+      }
+
+      // Top-edge dissolve only once the user leaves rest position. At y<=0 the
+      // list must be fully sharp under the LuvLyrics brand bar.
+      const nextEdge = y <= 0 ? 0 : LIST_EDGE_FADE_MAX;
+      if (nextEdge !== lastEdgeFadeLen.value) {
+        lastEdgeFadeLen.value = nextEdge;
+        runOnJS(setListEdgeFadeLength)(nextEdge);
       }
     },
   });
@@ -449,6 +468,10 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           }
           onScroll={scrollHandler}
           scrollEventThrottle={16}
+          // Rows/covers dissolve under the brand bar while scrolling. Length is
+          // driven by scrollY so fully-at-top is sharp (no permanent blur).
+          // Android-only; a no-op on iOS.
+          fadingEdgeLength={listEdgeFadeLength}
           ListEmptyComponent={
             <LibraryEmptyState
               onAddPress={handleAddPress}
@@ -471,15 +494,6 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           keyboardDismissMode="on-drag"
         />
       </SafeAreaView>
-
-      {/* Fade aurora gradient at bottom so it doesn't bleed below song list */}
-      {isDark && (
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.85)']}
-          style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 180 }}
-          pointerEvents="none"
-        />
-      )}
 
       <LibraryBottomSheet
         visible={showBottomSheet}
@@ -576,11 +590,11 @@ const styles = StyleSheet.create({
   brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
   brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
   brandActionButton: { padding: 4, position: 'relative' },
-  brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#007AFF', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
+  brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
   brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  brandName: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
+  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  recentArtContainer: { backgroundColor: '#06152B', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
+  recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
   recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },
   recentArtScroll: { paddingHorizontal: 20 },
   recentArtItem: { width: 120, height: 120, borderRadius: 12, overflow: 'hidden', marginRight: 12 },

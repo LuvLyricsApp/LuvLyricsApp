@@ -17,7 +17,7 @@ export const ProcessingOverlay: React.FC<ProcessingOverlayProps> = ({
   return (
     <View style={styles.processingOverlay}>
       <View style={styles.processingCard}>
-        <ActivityIndicator size="large" color="#2F8CFF" />
+        <ActivityIndicator size="large" color="#EDEDED" />
         <Text style={styles.processingStage}>{stage}</Text>
         <View style={styles.progressBarContainer}>
           <View 
@@ -48,13 +48,13 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   processingCard: {
-    backgroundColor: '#06152B',
+    backgroundColor: '#0A0A0A',
     borderRadius: 20,
     padding: 32,
     alignItems: 'center',
     minWidth: 280,
     borderWidth: 1,
-    borderColor: '#112A4A',
+    borderColor: '#262626',
   },
   processingStage: {
     fontSize: 16,
@@ -67,14 +67,14 @@ const styles = StyleSheet.create({
   progressBarContainer: {
     width: '100%',
     height: 6,
-    backgroundColor: '#112A4A',
+    backgroundColor: '#262626',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 12,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#2F8CFF',
+    backgroundColor: '#1A1A1A',
     borderRadius: 3,
   },
   processingPercent: {

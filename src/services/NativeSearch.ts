@@ -1,10 +1,10 @@
-import { Platform } from 'react-native';
-import { requireNativeModule } from 'expo-modules-core';
 import { Song } from '../types/song';
+import { getNativeModule } from './nativeModule';
 
-const mod = Platform.OS === 'android'
-  ? (() => { try { return requireNativeModule('Search'); } catch { return null; } })()
-  : null;
+const mod = getNativeModule<{
+  search: (q: string) => Promise<string>;
+  ensureIndex: () => Promise<void>;
+}>('Search');
 
 export async function nativeSearch(query: string): Promise<Song[] | null> {
   if (!mod) return null;

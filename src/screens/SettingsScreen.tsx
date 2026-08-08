@@ -34,6 +34,7 @@ import { SettingsStrings } from '../constants/uiStrings';
 import { exportAllSongs, shareExportedFile, importSongsFromJson } from '../utils/exportImport';
 import { clearAllData } from '../database/queries';
 import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
+import { LanguagePickerModal } from '../components/LanguagePickerModal';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
 import { trustedPairingService, TrustedDesktopRecord } from '../services/TrustedPairingService';
 import { useSongsStore } from '../store/songsStore';
@@ -192,52 +193,6 @@ const bs = StyleSheet.create({
   },
 });
 
-// ─── Luv Languages Modal ──────────────────────────────────────────────────────
-
-const LuvsLanguagesModal = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
-  const { preferredLanguages, updateLanguageWeight } = useLuvsPreferencesStore();
-  return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{
-          width: '90%', maxHeight: '80%', backgroundColor: Colors.card,
-          borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.textPrimary }}>{SettingsStrings.musicLanguages}</Text>
-            <Pressable onPress={onClose}>
-              <Ionicons name="close-circle" size={28} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ width: '100%' }}>
-            <Text style={{ color: Colors.textSecondary, marginBottom: 16, fontSize: 13 }}>
-              Adjust preferences to curate your Luvs feed. Set weight to 0% to disable a language.
-            </Text>
-            {preferredLanguages.map((item) => (
-              <View key={item.language} style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: Colors.textPrimary, fontWeight: '600' }}>{item.language}</Text>
-                  <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '700' }}>
-                    {item.weight === 0 ? 'DISABLED' : `${item.weight}%`}
-                  </Text>
-                </View>
-                <Slider
-                  style={{ width: '100%', height: 40 }}
-                  minimumValue={0} maximumValue={100} step={10}
-                  value={item.weight}
-                  onSlidingComplete={(v) => updateLanguageWeight(item.language, v)}
-                  minimumTrackTintColor={Colors.primary}
-                  maximumTrackTintColor={Colors.cardHover}
-                  thumbTintColor={Colors.primary}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // ─── Reusable rows ───────────────────────────────────────────────────────────
 
@@ -254,7 +209,7 @@ const useSettingsDividerColor = () => {
     case 'grey':
       return '#282828';
     case 'theme-subtle':
-      return '#1E2A3A';
+      return '#1F1F1F';
     case 'theme-blue':
       return '#1C3E6B';
     default:
@@ -434,7 +389,7 @@ const SettingsScreen: React.FC<Props> = () => {
         themeColors = ['#121212', '#212121', '#121212'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0E1722', '#1E2A3A', '#0E1722'];
+        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-blue') {
         themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];
@@ -458,8 +413,18 @@ const SettingsScreen: React.FC<Props> = () => {
   useFocusEffect(React.useCallback(() => { setMiniPlayerHidden(false); }, [setMiniPlayerHidden]));
   const likedCount = usePlaylistStore(state => state.likedSongIds.size);
   const [hiddenSongsVisible, setHiddenSongsVisible] = React.useState(false);
+  const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
+
+  // Luvs pulls its feed from whichever languages carry weight, so the row reflects
+  // the live store — edits take effect on the next batch the engine requests.
+  const preferredLanguages = useLuvsPreferencesStore(s => s.preferredLanguages);
+  const activeLanguages = preferredLanguages.filter(l => l.weight > 0).map(l => l.language);
+  const luvsLanguageSummary = activeLanguages.length === 0
+    ? 'None'
+    : activeLanguages.length <= 2
+      ? activeLanguages.join(', ')
+      : `${activeLanguages.length} selected`;
   const { hiddenSongs, fetchHiddenSongs, hideSong: unhideSong } = useSongsStore();
-  const [luvsLangModalVisible, setLuvsLangModalVisible] = React.useState(false);
   const { desktopConnectEnabled, allowDesktopDownloads, setDesktopConnectEnabled, setAllowDesktopDownloads } = useDesktopBridgeSettingsStore();
   const [pairingModalVisible, setPairingModalVisible] = React.useState(false);
   const [pairingPayloadText, setPairingPayloadText] = React.useState('');
@@ -906,6 +871,12 @@ const SettingsScreen: React.FC<Props> = () => {
           onToggle={settings.setShowThumbnails}
         />
         <SettingsRow
+          icon="language-outline"
+          label="Luvs Languages"
+          value={luvsLanguageSummary}
+          onPress={() => { closeSheet(); setLanguagePickerVisible(true); }}
+        />
+        <SettingsRow
           icon="scan-outline"
           label="Scan Local Audio"
           onPress={() => { closeSheet(); handleImportLocalAudio(); }}
@@ -958,6 +929,11 @@ const SettingsScreen: React.FC<Props> = () => {
 
       {/* ── Alerts & Utility Modals ──────────────────────────────────────────── */}
 
+      <LanguagePickerModal
+        visible={languagePickerVisible}
+        onClose={() => setLanguagePickerVisible(false)}
+      />
+
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
@@ -1008,7 +984,7 @@ const SettingsScreen: React.FC<Props> = () => {
               )}
             </View>
             <Pressable style={styles.selectAllButton} onPress={toggleSelectAll}>
-              <Ionicons name={selectedFiles.size === availableAudioFiles.length ? 'checkbox' : 'square-outline'} size={24} color="#007AFF" />
+              <Ionicons name={selectedFiles.size === availableAudioFiles.length ? 'checkbox' : 'square-outline'} size={24} color="#EDEDED" />
               <Text style={styles.selectAllText}>Select All</Text>
             </Pressable>
             <ScrollView style={styles.selectionList} keyboardShouldPersistTaps="handled">
@@ -1020,7 +996,7 @@ const SettingsScreen: React.FC<Props> = () => {
               ) : (
                 filteredAudioFiles.map(file => (
                   <Pressable key={file.uri} style={styles.selectionItem} onPress={() => toggleFileSelection(file.uri)}>
-                    <Ionicons name={selectedFiles.has(file.uri) ? 'checkbox' : 'square-outline'} size={24} color={selectedFiles.has(file.uri) ? '#007AFF' : Colors.textSecondary} />
+                    <Ionicons name={selectedFiles.has(file.uri) ? 'checkbox' : 'square-outline'} size={24} color={selectedFiles.has(file.uri) ? '#EDEDED' : Colors.textSecondary} />
                     <View style={styles.selectionItemInfo}>
                       <Text style={styles.selectionItemTitle} numberOfLines={1}>{file.filename.replace(/\.[^/.]+$/, '')}</Text>
                       <Text style={styles.selectionItemArtist} numberOfLines={1}>{file.artist || file.album || 'Unknown'}</Text>
@@ -1098,7 +1074,7 @@ const SettingsScreen: React.FC<Props> = () => {
                       style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: 'rgba(0,122,255,0.1)' }}
                       onPress={() => unhideSong(song.id, false)}
                     >
-                      <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>{SettingsStrings.unhide}</Text>
+                      <Text style={{ color: '#EDEDED', fontWeight: 'bold' }}>{SettingsStrings.unhide}</Text>
                     </Pressable>
                   </View>
                 ))
@@ -1113,7 +1089,6 @@ const SettingsScreen: React.FC<Props> = () => {
         </Pressable>
       </Modal>
 
-      <LuvsLanguagesModal visible={luvsLangModalVisible} onClose={() => setLuvsLangModalVisible(false)} />
     </View>
   );
 };
@@ -1219,7 +1194,7 @@ const styles = StyleSheet.create({
   nameInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, fontSize: 15, color: Colors.textPrimary, marginBottom: 18 },
   nameModalButtons: { flexDirection: 'row', gap: 10 },
   nameModalButton: { flex: 1, padding: 13, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
-  nameModalButtonPrimary: { backgroundColor: '#007AFF' },
+  nameModalButtonPrimary: { backgroundColor: '#2E2E2E' },
   nameModalButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   nameModalButtonTextPrimary: { color: '#fff' },
   pairingHint: { color: Colors.textSecondary, fontSize: 13, marginBottom: 10 },
@@ -1240,7 +1215,7 @@ const styles = StyleSheet.create({
   emptySearchContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
   emptySearchText: { fontSize: 14, color: Colors.textMuted, textAlign: 'center' },
   selectAllButton: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  selectAllText: { fontSize: 15, fontWeight: '600', color: '#007AFF' },
+  selectAllText: { fontSize: 15, fontWeight: '600', color: '#EDEDED' },
   selectionList: { maxHeight: 400 },
   selectionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 12 },
   selectionItemInfo: { flex: 1 },
@@ -1249,7 +1224,7 @@ const styles = StyleSheet.create({
   selectionActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 18 },
   selectionButton: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
   selectionButtonCancel: { backgroundColor: 'rgba(255,255,255,0.1)' },
-  selectionButtonImport: { backgroundColor: '#007AFF' },
+  selectionButtonImport: { backgroundColor: '#2E2E2E' },
   selectionButtonDisabled: { backgroundColor: 'rgba(0,122,255,0.3)' },
   selectionButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   selectionButtonTextImport: { color: '#fff' },

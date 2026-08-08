@@ -1,8 +1,9 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { TabParamList } from '../types/navigation';
+import { TabParamList, LibraryStackParamList } from '../types/navigation';
 import { ModernPillTabBar } from '../components/ModernPillTabBar';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { useSettingsStore } from '../store/settingsStore';
@@ -12,9 +13,25 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import LibraryScreen from '../screens/LibraryScreen';
 import LuvsScreen from '../screens/LuvsScreen';
 import PlaylistsScreen from '../screens/PlaylistsScreen';
+import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
+const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
+
+/**
+ * Drilling into a playlist keeps the tab bar and mini player, because the detail
+ * screen is pushed inside the tab rather than on top of the whole tab navigator.
+ */
+const LibraryStackScreen: React.FC = () => (
+  <LibraryStack.Navigator
+    id="LibraryStack"
+    screenOptions={{ headerShown: false, animation: 'slide_from_bottom' }}
+  >
+    <LibraryStack.Screen name="PlaylistsHome" component={PlaylistsScreen} />
+    <LibraryStack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
+  </LibraryStack.Navigator>
+);
 
 
 
@@ -34,6 +51,9 @@ const SearchIcon = ({ color, focused }: { color: string; focused: boolean }) => 
   <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />
 );
 
+// Luvs keeps the nav bar so the feed is escapable by tapping another tab; only the
+// mini player is suppressed there (see RootNavigator) because Luvs runs its own
+// audio pool and a transport for a different player would be misleading.
 const renderModernPillTabBar = (props: BottomTabBarProps) => <ModernPillTabBar {...props} />;
 const renderCustomTabBar = (props: BottomTabBarProps) => <CustomTabBar {...props} />;
 
@@ -66,7 +86,7 @@ export const TabNavigator: React.FC = () => {
     >
       <Tab.Screen name="Home" component={LibraryScreen} options={{ tabBarLabel: 'Home', tabBarIcon: HomeIcon }} />
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
-      <Tab.Screen name="Library" component={PlaylistsScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
+      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
     </Tab.Navigator>
   );

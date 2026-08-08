@@ -22,6 +22,7 @@ import { useSongsStore } from '../store/songsStore';
 import { RootStackParamList } from '../types/navigation';
 import { Song, Playlist } from '../types/song';
 import * as playlistQueries from '../database/playlistQueries';
+import { safeGoBack } from '../utils/navigationService';
 
 type AddToPlaylistNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AddToPlaylistRouteProp = RouteProp<RootStackParamList, 'AddToPlaylist'>;
@@ -104,7 +105,7 @@ export const AddToPlaylistModal = () => {
       } else if (targetSongId) {
         await Promise.all(Array.from(selectedItems).map(pid => addSongToPlaylist(pid, targetSongId)));
       }
-      navigation.goBack();
+      safeGoBack(navigation);
     } catch (e) {
       console.error('Failed to save', e);
       setLoading(false);
@@ -226,7 +227,7 @@ export const AddToPlaylistModal = () => {
                 <Ionicons name={viewMode === 'grid' ? 'list' : 'grid'} size={22} color="#fff" />
               </Pressable>
             )}
-            <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+            <Pressable onPress={() => safeGoBack(navigation)} style={styles.iconBtn}>
               <Ionicons name="close" size={24} color="#fff" />
             </Pressable>
           </View>

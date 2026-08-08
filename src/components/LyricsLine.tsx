@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useThemeColors } from '../contexts/ThemeContext';
 import { useSettingsStore, FONT_SIZE_MAP, LINE_SPACING_MAP } from '../store/settingsStore';
+import InstrumentalWaveform, { isInstrumentalLyric, useIsActiveLine } from './InstrumentalWaveform';
+import { Fonts } from '../constants/fonts';
 
 interface LyricsLineProps {
   text: string;
@@ -28,6 +30,14 @@ export const LyricsLine: React.FC<LyricsLineProps> = memo(({
   const lineSpacing = useSettingsStore(state => state.lineSpacing);
   const fontSizes = FONT_SIZE_MAP[lyricsFontSize];
   const lh = LINE_SPACING_MAP[lineSpacing];
+  const isInstrumental = useMemo(() => isInstrumentalLyric(text), [text]);
+  const isActiveLine = useIsActiveLine(activeIndexSV, index);
+
+  // Apple Music style: bold active line, regular the rest.
+  // One-time JS swap per line activation (useIsActiveLine re-renders) —
+  // not per-frame, so layout cost is fine.
+  const fontFamily = isActiveLine ? Fonts.lyricsActive : Fonts.lyrics;
+  const fontWeight = isActiveLine ? Fonts.lyricsActiveWeight : Fonts.lyricsWeight;
 
   // Use active font size for all lines — scale transform handles the inactive shrink.
   // fontSize/lineHeight must NOT live in useAnimatedStyle: they trigger a layout
@@ -58,15 +68,29 @@ export const LyricsLine: React.FC<LyricsLineProps> = memo(({
     };
   });
 
+  const instrumentStyle = useAnimatedStyle(() => {
+    const isActive = activeIndexSV.value === index;
+    return {
+      transform: [{ translateY: withSpring(isActive ? 0 : 6, { damping: 20, stiffness: 260, mass: 0.7 }) }],
+      opacity: withTiming(isActive ? 1 : 0.35, { duration: 180 }),
+    };
+  });
+
   return (
     <Pressable style={styles.container} onPress={onPress}>
-      <Animated.Text style={[
-        styles.text,
-        { fontSize, lineHeight, fontWeight: '800' },
-        animatedStyle,
-      ]}>
-        {text}
-      </Animated.Text>
+      {isInstrumental ? (
+        <Animated.View style={[styles.instrumental, instrumentStyle]}>
+          <InstrumentalWaveform active={isActiveLine} size={isActiveLine ? 'lg' : 'md'} />
+        </Animated.View>
+      ) : (
+        <Animated.Text style={[
+          styles.text,
+          { fontFamily, fontWeight, fontSize, lineHeight },
+          animatedStyle,
+        ]}>
+          {text}
+        </Animated.Text>
+      )}
     </Pressable>
   );
 });
@@ -77,6 +101,12 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: 12,
     paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  instrumental: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   text: {
     textAlign: 'left',

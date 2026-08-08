@@ -28,6 +28,7 @@ import { YoutubeBrowserStrings } from '../constants/uiStrings';
 import { WebView, WebViewNavigation, WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { safeGoBack } from '../utils/navigationService';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
@@ -275,7 +276,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Pressable onPress={() => safeGoBack(navigation)} style={styles.headerBtn}>
             <Ionicons name="close" size={24} color="#fff" />
           </Pressable>
           <View style={styles.urlBar}>

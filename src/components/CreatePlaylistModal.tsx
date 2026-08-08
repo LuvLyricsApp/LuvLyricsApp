@@ -13,6 +13,7 @@ import { BlurView } from 'expo-blur';
 import { useThemeColors } from '../contexts/ThemeContext';
 import { usePlaylistStore } from '../store/playlistStore';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { safeGoBack } from '../utils/navigationService';
 
 export const CreatePlaylistModal = () => {
     const colors = useThemeColors();
@@ -36,7 +37,7 @@ export const CreatePlaylistModal = () => {
             } else {
                 await createPlaylist(name.trim());
             }
-            navigation.goBack();
+            safeGoBack(navigation);
         } catch {
             Alert.alert('Error', `Failed to ${isEditMode ? 'update' : 'create'} playlist`);
         }
@@ -65,7 +66,7 @@ export const CreatePlaylistModal = () => {
                     <View style={styles.buttons}>
                         <Pressable 
                             style={styles.cancelButton} 
-                            onPress={() => navigation.goBack()}
+                            onPress={() => safeGoBack(navigation)}
                         >
                             <Text style={styles.cancelText}>Cancel</Text>
                         </Pressable>

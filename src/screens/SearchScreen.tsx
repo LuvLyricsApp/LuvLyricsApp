@@ -16,6 +16,7 @@ import SearchHeader from '../components/SearchHeader';
 import SearchFilterChips from '../components/SearchFilterChips';
 import SearchRecentSearches from '../components/SearchRecentSearches';
 import SearchResultsList from '../components/SearchResultsList';
+import { safeGoBack } from '../utils/navigationService';
 
 type Props = TabScreenProps<'Search'>;
 
@@ -113,7 +114,15 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
           query={query}
           onQueryChange={handleSearch}
           onSubmit={handleSearchSubmit}
-          onGoBack={() => navigation.goBack()}
+          onGoBack={() => {
+            // Tab root has no stack history — clear the query instead of GO_BACK noise.
+            if (navigation.canGoBack()) {
+              safeGoBack(navigation);
+            } else if (query.length > 0) {
+              setQuery('');
+              setResults([]);
+            }
+          }}
           isDark={isDark}
           colors={colors}
         />

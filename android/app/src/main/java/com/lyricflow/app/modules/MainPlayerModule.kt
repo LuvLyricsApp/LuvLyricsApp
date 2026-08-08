@@ -1,6 +1,5 @@
 package com.lyricflow.app.modules
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Handler
@@ -8,13 +7,16 @@ import android.os.Looper
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import com.lyricflow.app.services.PlaybackService
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "LyrFlow"
+private const val META_MAX = 500
 
 class MainPlayerModule : Module() {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -22,7 +24,7 @@ class MainPlayerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("MainPlayer")
 
-        Events("onPlaybackStatus", "onRemoteCommand")
+        Events("onPlaybackStatus", "onRemoteCommand", "onTrackAdvanced")
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
@@ -39,15 +41,23 @@ class MainPlayerModule : Module() {
             PlayerBridge.onRemoteCommand = { command ->
                 sendEvent("onRemoteCommand", mapOf("command" to command))
             }
+            PlayerBridge.onTrackAdvanced = { mediaId ->
+                sendEvent("onTrackAdvanced", mapOf("mediaId" to mediaId))
+            }
         }
 
         OnDestroy {
             PlayerBridge.onStatusUpdate = null
             PlayerBridge.onRemoteCommand = null
+            PlayerBridge.onTrackAdvanced = null
         }
 
         AsyncFunction("load") { uri: String, metadata: Map<String, String> ->
-            Log.d(TAG, "load() called uri=$uri")
+            if (!isAllowedUri(uri)) {
+                Log.w(TAG, "load() rejected uri scheme")
+                return@AsyncFunction
+            }
+            Log.d(TAG, "load() called")
             val context = appContext.reactContext ?: throw Exception("React context not available")
 
             // startService, not startForegroundService: MediaSessionService posts
@@ -55,11 +65,8 @@ class MainPlayerModule : Module() {
             // begins. Starting it as a foreground service here would demand a
             // startForeground() call within ~5s that never comes while the user is
             // merely loading a track, which Android kills the process for.
-            // load() is always driven by a user action, so the app is in the
-            // foreground and a plain startService is permitted.
             val intent = Intent(context, PlaybackService::class.java)
             context.startService(intent)
-            Log.d(TAG, "load() startService sent")
 
             var retries = 0
             while (PlayerBridge.getPlayer() == null && retries < 100) {
@@ -72,45 +79,67 @@ class MainPlayerModule : Module() {
                 Log.e(TAG, "load() TIMEOUT — player still null after ${retries * 20}ms")
                 return@AsyncFunction
             }
-            Log.d(TAG, "load() player ready after ${retries * 20}ms, setting media item")
 
-            val mediaMetadata = MediaMetadata.Builder()
-                .setTitle(metadata["title"])
-                .setArtist(metadata["artist"])
-                .setAlbumTitle(metadata["album"])
-                .apply {
-                    metadata["artworkUri"]?.let {
-                        if (it.isNotEmpty()) setArtworkUri(Uri.parse(it))
-                    }
-                }
-                .build()
-
-            val mediaItem = MediaItem.Builder()
-                .setUri(uri)
-                .setMediaMetadata(mediaMetadata)
-                .build()
-
+            val mediaItem = buildMediaItem(uri, metadata, metadata["mediaId"] ?: "")
             val latch = CountDownLatch(1)
             mainHandler.post {
                 player.setMediaItem(mediaItem)
                 player.prepare()
-                Log.d(TAG, "load() setMediaItem+prepare done on main thread")
                 latch.countDown()
             }
-            val latched = latch.await(5, TimeUnit.SECONDS)
-            Log.d(TAG, "load() latch released=$latched, returning to JS")
+            latch.await(5, TimeUnit.SECONDS)
+        }
+
+        /**
+         * Queue the following track so Media3 can auto-advance without a JS reload.
+         * mediaId must be the app song id — used to sync the store on transition.
+         */
+        Function("prepareNext") { uri: String, metadata: Map<String, String>, mediaId: String ->
+            if (!isAllowedUri(uri) || mediaId.isBlank()) return@Function null
+            val player = PlayerBridge.getPlayer() ?: return@Function null
+            val item = buildMediaItem(uri, metadata, mediaId)
+            mainHandler.post {
+                // Keep only current + this next (drop any stale prepared item).
+                val current = player.currentMediaItemIndex
+                while (player.mediaItemCount > current + 1) {
+                    player.removeMediaItem(player.mediaItemCount - 1)
+                }
+                val existingNext = player.getMediaItemAtOrNull(current + 1)
+                if (existingNext?.mediaId == mediaId) return@post
+                player.addMediaItem(item)
+            }
+            null
+        }
+
+        /**
+         * If the next MediaItem is already [mediaId], seek to it natively.
+         * Returns true only when the seek was issued — JS must not call load().
+         */
+        AsyncFunction("seekToNextIfReady") { mediaId: String ->
+            if (mediaId.isBlank()) return@AsyncFunction false
+            val player = PlayerBridge.getPlayer() ?: return@AsyncFunction false
+            val ok = AtomicBoolean(false)
+            val latch = CountDownLatch(1)
+            mainHandler.post {
+                val nextIndex = player.currentMediaItemIndex + 1
+                if (nextIndex < player.mediaItemCount &&
+                    player.getMediaItemAt(nextIndex).mediaId == mediaId
+                ) {
+                    player.seekToNextMediaItem()
+                    ok.set(true)
+                }
+                latch.countDown()
+            }
+            latch.await(2, TimeUnit.SECONDS)
+            ok.get()
         }
 
         Function("play") {
-            val player = PlayerBridge.getPlayer()
-            Log.d(TAG, "play() called, player=$player")
-            player?.let { mainHandler.post { it.play() } }
+            PlayerBridge.getPlayer()?.let { player -> mainHandler.post { player.play() } }
         }
 
         Function("pause") {
-            val player = PlayerBridge.getPlayer()
-            Log.d(TAG, "pause() called, player=$player")
-            player?.let { mainHandler.post { it.pause() } }
+            PlayerBridge.getPlayer()?.let { player -> mainHandler.post { player.pause() } }
         }
 
         Function("seekTo") { seconds: Double ->
@@ -124,16 +153,7 @@ class MainPlayerModule : Module() {
             PlayerBridge.getPlayer()?.let { player ->
                 mainHandler.post {
                     val currentItem = player.currentMediaItem ?: return@post
-                    val updatedMetadata = MediaMetadata.Builder()
-                        .setTitle(metadata["title"])
-                        .setArtist(metadata["artist"])
-                        .setAlbumTitle(metadata["album"])
-                        .apply {
-                            metadata["artworkUri"]?.let {
-                                if (it.isNotEmpty()) setArtworkUri(Uri.parse(it))
-                            }
-                        }
-                        .build()
+                    val updatedMetadata = mediaMetadataOf(metadata)
                     val newItem = currentItem.buildUpon().setMediaMetadata(updatedMetadata).build()
                     player.replaceMediaItem(player.currentMediaItemIndex, newItem)
                 }
@@ -146,4 +166,39 @@ class MainPlayerModule : Module() {
             context.stopService(intent)
         }
     }
+
+    private fun buildMediaItem(uri: String, metadata: Map<String, String>, mediaId: String): MediaItem =
+        MediaItem.Builder()
+            .setUri(uri)
+            .setMediaId(mediaId)
+            .setMediaMetadata(mediaMetadataOf(metadata))
+            .build()
+
+    private fun mediaMetadataOf(metadata: Map<String, String>): MediaMetadata =
+        MediaMetadata.Builder()
+            .setTitle(clip(metadata["title"]))
+            .setArtist(clip(metadata["artist"]))
+            .setAlbumTitle(clip(metadata["album"]))
+            .apply {
+                metadata["artworkUri"]?.let {
+                    if (it.isNotEmpty() && isAllowedUri(it)) setArtworkUri(Uri.parse(it))
+                }
+            }
+            .build()
+
+    private fun clip(value: String?): String =
+        (value ?: "").take(META_MAX)
+
+    /**
+     * Trust boundary for anything that becomes a MediaItem URI.
+     * Local library + downloads use file/content; streaming covers use https.
+     */
+    private fun isAllowedUri(uri: String): Boolean {
+        if (uri.isBlank() || uri.length > 4096) return false
+        val scheme = Uri.parse(uri).scheme?.lowercase() ?: return false
+        return scheme == "file" || scheme == "content" || scheme == "https"
+    }
+
+    private fun Player.getMediaItemAtOrNull(index: Int): MediaItem? =
+        if (index in 0 until mediaItemCount) getMediaItemAt(index) else null
 }

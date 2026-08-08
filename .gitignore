@@ -71,3 +71,11 @@ android/app/release.keystore
 # Built release artifacts — too large for git, rebuild with gradle instead
 *.apk
 *.aab
+.gstack/
+
+# Ad-hoc ADB screenshots from device verification sessions
+/c*.png
+/coverflow*.png
+
+# Agent session notes / handoffs — local working material, not project docs
+.planning/

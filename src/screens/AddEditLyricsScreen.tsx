@@ -38,6 +38,7 @@ import { generateId } from '../utils/formatters';
 import { formatTime } from '../utils/formatters';
 import { Song } from '../types/song';
 import { LrcSearchModal } from '../components/LrcSearchModal';
+import { safeGoBack } from '../utils/navigationService';
 import { SearchResult } from '../services/LyricsRepository';
 import { GeniusService } from '../services/GeniusService';
 import { TransliterationService } from '../services/TransliterationService';
@@ -129,11 +130,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
   }, [songId, isEditing, getSong]);
 
   const handleCancel = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Main' as never);
-    }
+    safeGoBack(navigation);
   };
 
   const handlePaste = async () => {
@@ -404,11 +401,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
       setToastType('success');
       setShowToast(true);
       setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else {
-          navigation.navigate('Main' as never);
-        }
+        safeGoBack(navigation);
       }, 500);
     } catch (error) {
       console.error('Save failed:', error);
@@ -622,7 +615,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                             setShowToast(true);
                         }
                  }}>
-                  <Text style={[styles.aiButton, { color: isShowingTransliteration ? '#2F8CFF' : '#7ED957' }]}>
+                  <Text style={[styles.aiButton, { color: isShowingTransliteration ? '#EDEDED' : '#7ED957' }]}>
                       {isShowingTransliteration ? 'Show Original' : 'Transliterate'}
                   </Text>
                 </Pressable>
@@ -758,7 +751,7 @@ const floatingStyles = StyleSheet.create({
     paddingVertical: 8,
   },
   inputFocused: {
-    borderBottomColor: '#2F8CFF',
+    borderBottomColor: 'rgba(255,255,255,0.14)',
   },
 });
 
@@ -778,7 +771,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   cancelButton: {
-    backgroundColor: '#0B1F3A',
+    backgroundColor: '#1A1A1A',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -841,7 +834,7 @@ const styles = StyleSheet.create({
   pasteButton: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#2F8CFF',
+    color: '#EDEDED',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -853,7 +846,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   lyricsInput: {
-    backgroundColor: '#06152B',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     padding: 20,
     fontSize: 16,
@@ -865,9 +858,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#06152B',
+    backgroundColor: '#0A0A0A',
     borderTopWidth: 1,
-    borderTopColor: '#112A4A',
+    borderTopColor: '#262626',
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
@@ -920,14 +913,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    backgroundColor: '#06152B',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   alignButtonActive: {
-    backgroundColor: '#0B1F3A',
-    borderColor: '#2F8CFF',
+    backgroundColor: '#1A1A1A',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   alignButtonText: {
     fontSize: 14,
@@ -956,7 +949,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#2F8CFF',
+    backgroundColor: '#1A1A1A',
     borderRadius: 8,
   },
   magicButtonText: {
@@ -998,7 +991,7 @@ const styles = StyleSheet.create({
   },
   audioHint: {
     fontSize: 13,
-    color: '#2F8CFF',
+    color: '#EDEDED',
     marginTop: 8,
     fontStyle: 'italic',
   },

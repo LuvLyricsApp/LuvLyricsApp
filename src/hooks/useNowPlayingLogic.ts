@@ -4,7 +4,7 @@ import { Alert, Dimensions } from 'react-native';
 import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withRepeat, Easing, withSequence } from 'react-native-reanimated';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, beginAudioLoad, endAudioLoad } from '../store/playerStore';
+import { usePlayerStore, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { useSongsStore } from '../store/songsStore';
 import { useArtHistoryStore } from '../store/artHistoryStore';
@@ -186,6 +186,7 @@ export function useNowPlayingLogic(songId: string) {
           await player?.replace(songToPlay.audioUri);
           if (cancelled) { endAudioLoad(targetSongId); return; }
           setLoadedAudioId(targetSongId);
+          prepareNextInQueue();
           didAutoPlayRef.current = true;
           requestPlayback(true);
           endAudioLoad(targetSongId);
@@ -260,7 +261,8 @@ export function useNowPlayingLogic(songId: string) {
   const isUserScrolling = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { lyricsDelay } = useSettingsStore();
+  // Selector only — this hook re-renders on position ticks during playback.
+  const lyricsDelay = useSettingsStore(s => s.lyricsDelay);
 
   const linearScrollDataRef = useRef({ isLinear, processedLyrics, lyricsDelay });
   linearScrollDataRef.current = { isLinear, processedLyrics, lyricsDelay };

@@ -29,7 +29,7 @@ import { UnifiedSong } from '../types/song';
 import { analyzeImageBrightness } from '../utils/imageAnalyzer';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
 import TimelineScrubber from './TimelineScrubber';
-import { luvsRecommendationEngine } from '../services/LuvsRecommendationEngine';
+import { luvsEngine } from '../services/luvsEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ART_SIZE = SCREEN_WIDTH * 0.72;
@@ -172,8 +172,13 @@ const ActionBtn = ({
 
 // ─── Progress controller ──────────────────────────────────────────────────────
 const LuvsProgressController = ({
-  isActive, insetTop, insetBottom,
-}: { isActive: boolean; insetTop: number; insetBottom: number }) => {
+  isActive, insetTop, insetBottom, onScrubStateChange,
+}: {
+  isActive: boolean;
+  insetTop: number;
+  insetBottom: number;
+  onScrubStateChange?: (scrubbing: boolean) => void;
+}) => {
   const position = useSharedValue(0);
   const duration = useSharedValue(0);
   const progress = useSharedValue(0);
@@ -207,8 +212,8 @@ const LuvsProgressController = ({
           currentTime={position}
           duration={duration}
           onSeek={(t) => luvsBufferManager.seekTo(t)}
-          onScrubStart={() => luvsBufferManager.pause()}
-          onScrubEnd={() => luvsBufferManager.resume()}
+          onScrubStart={() => { onScrubStateChange?.(true); luvsBufferManager.pause(); }}
+          onScrubEnd={() => { onScrubStateChange?.(false); luvsBufferManager.resume(); }}
           variant="island"
         />
       </View>
@@ -222,19 +227,36 @@ interface LuvCardProps {
   isActive: boolean;
   isLiked: boolean;
   isPlaying: boolean;
-  onLike: () => void;
-  onShare: () => void;
-  onDownload: () => void;
+  // Take the song so LuvsScreen can pass stable handlers — inline arrows here
+  // defeated React.memo and re-rendered every mounted card on every swipe.
+  onLike: (song: UnifiedSong) => void;
+  onShare: (song: UnifiedSong) => void;
+  onDownload: (song: UnifiedSong) => void;
   onPlayPause: () => void;
+  /** Lets the feed suspend ViewPager2 paging while the timeline is being dragged. */
+  onScrubStateChange?: (scrubbing: boolean) => void;
   luvHeight: number;
   index: number;
   currentIndex: SharedValue<number>;
   isNearActive: boolean;
+  /**
+   * False for cards far from the viewport. The native pager keeps every card in the
+   * feed mounted as a page, so distant ones collapse to a bare black view rather
+   * than holding a full-screen bitmap each. Defaults to true for the iOS FlatList,
+   * which already virtualises.
+   */
+  isMounted?: boolean;
+  /**
+   * True when LuvsPagerView's PageTransformer is doing the scale/fade. The JS
+   * interpolation is skipped so the two don't compound into a double transform.
+   */
+  nativeDepth?: boolean;
 }
 
 export const LuvCard = React.memo<LuvCardProps>(
   ({ song, isActive, isLiked, isPlaying, onLike, onShare, onDownload,
-     onPlayPause, luvHeight, index, currentIndex, isNearActive }) => {
+     onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
+     isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
     const [burstTrigger, setBurstTrigger] = useState(0);
     const [isMagicActive, setIsMagicActive] = useState(false);
@@ -302,18 +324,23 @@ export const LuvCard = React.memo<LuvCardProps>(
   }, [onPlayPause]);
 
     const handleLike = useCallback(() => {
-      onLike();
+      onLike(song);
       if (!isLiked) setBurstTrigger((n) => n + 1);
-    }, [onLike, isLiked]);
+    }, [onLike, isLiked, song]);
+
+    const handleShare = useCallback(() => onShare(song), [onShare, song]);
+    const handleDownload = useCallback(() => onDownload(song), [onDownload, song]);
 
     const handleMagic = useCallback(() => {
       setIsMagicActive(true);
-      luvsRecommendationEngine.discoverSimilar(song.id);
+      luvsEngine.discoverSimilar(song.id);
       magicRef.current = setTimeout(() => setIsMagicActive(false), 3000);
     }, [song.id]);
 
     const cardAnimStyle = useAnimatedStyle(() => {
       'worklet';
+      // LuvsPagerView already applies scale/alpha/translate per page.
+      if (nativeDepth) return {} as ViewStyle;
       const dist = Math.abs(currentIndex.value - index);
       if (dist > 1.1) {
         return { opacity: 0, transform: [{ scale: 0.93 }, { translateY: 0 }] } as ViewStyle;
@@ -337,6 +364,12 @@ export const LuvCard = React.memo<LuvCardProps>(
       opacity: ppOp.value,
       transform: [{ scale: ppSc.value }],
     }));
+
+    // Placed after every hook so the hook order never changes as cards scroll in
+    // and out of range.
+    if (!isMounted) {
+      return <View style={[styles.card, { height: luvHeight }]} />;
+    }
 
     return (
       <Animated.View
@@ -389,6 +422,7 @@ export const LuvCard = React.memo<LuvCardProps>(
               isActive={isActive}
               insetTop={insets.top}
               insetBottom={insets.bottom}
+              onScrubStateChange={onScrubStateChange}
             />
 
             {/* Right buttons */}
@@ -416,8 +450,8 @@ export const LuvCard = React.memo<LuvCardProps>(
                 disabled={isMagicActive}
               />
 
-              <ActionBtn icon="share-outline" label="Share" onPress={onShare} />
-              <ActionBtn icon="bookmark-outline" label="Save" onPress={onDownload} />
+              <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
+              <ActionBtn icon="bookmark-outline" label="Save" onPress={handleDownload} />
             </View>
 
             {/* Bottom song info */}
@@ -453,6 +487,9 @@ export const LuvCard = React.memo<LuvCardProps>(
   (prev, next) =>
     prev.isActive === next.isActive &&
     prev.isNearActive === next.isNearActive &&
+    // Without this the card would stay a black placeholder after scrolling back
+    // into range — the other flags can all be unchanged across that transition.
+    prev.isMounted === next.isMounted &&
     prev.isLiked === next.isLiked &&
     prev.isPlaying === next.isPlaying &&
     prev.song.id === next.song.id

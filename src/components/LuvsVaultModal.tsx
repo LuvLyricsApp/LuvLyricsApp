@@ -31,7 +31,9 @@ export const LuvsVaultModal: React.FC<LuvsVaultModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { vault, removeFromVault, clearVault } = useLuvsFeedStore();
+  const vault = useLuvsFeedStore(s => s.vault);
+  const removeFromVault = useLuvsFeedStore(s => s.removeFromVault);
+  const clearVault = useLuvsFeedStore(s => s.clearVault);
   const addToQueue = useDownloadQueueStore((state) => state.addToQueue);
   
   const [downloadAlertVisible, setDownloadAlertVisible] = React.useState(false);
@@ -225,7 +227,7 @@ const styles = StyleSheet.create({
     aspectRatio: 0.8,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#06152B',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
   },
@@ -290,14 +292,14 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
   downloadButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2E2E2E',
     borderRadius: 18,
     paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
-    shadowColor: '#007AFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 10,

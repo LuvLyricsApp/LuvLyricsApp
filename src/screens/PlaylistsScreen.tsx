@@ -21,12 +21,16 @@ import { useSongsStore } from '../store/songsStore';
 import { getGradientColors } from '../constants/gradients';
 import { AuroraHeader } from '../components/AuroraHeader';
 import { DarkColors } from '../constants/colors';
-import { RootStackParamList } from '../types/navigation';
+import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
 import { Playlist, Song } from '../types/song';
 
 export const PlaylistsScreen: React.FC = () => {
   const colors = useThemeColors();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // This screen sits in the Library tab's nested stack: PlaylistDetail resolves
+  // locally, everything else bubbles up to the root stack.
+  const navigation = useNavigation<
+    NativeStackNavigationProp<LibraryStackParamList & RootStackParamList>
+  >();
   const isLoading = usePlaylistStore(state => state.isLoading);
   const deletePlaylist = usePlaylistStore(state => state.deletePlaylist);
   const playlists = usePlaylistStore(state => state.playlists);
@@ -47,7 +51,8 @@ export const PlaylistsScreen: React.FC = () => {
   const currentSongId = usePlayerStore(state => state.currentSongId);
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
   const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-  const { songs: allSongsStore, getSong } = useSongsStore();
+  const allSongsStore = useSongsStore(s => s.songs);
+  const getSong = useSongsStore(s => s.getSong);
 
   const [activeThemeColors, setActiveThemeColors] = React.useState<string[] | undefined>(undefined);
   const [activeImageUri, setActiveImageUri] = React.useState<string | null>(null);
@@ -89,7 +94,7 @@ export const PlaylistsScreen: React.FC = () => {
         themeColors = ['#121212', '#212121', '#121212'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0E1722', '#1E2A3A', '#0E1722'];
+        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
         image = null;
       } else if (libraryBackgroundMode === 'theme-blue') {
         themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];

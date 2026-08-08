@@ -20,9 +20,11 @@ const KeepAwakeController = () => {
 };
 
 export const BackgroundDownloader = () => {
-    const { queue, updateItem } = useDownloadQueueStore();
+    // This component is mounted for the whole app lifetime, so it must not
+    // re-render on unrelated queue-store fields.
+    const queue = useDownloadQueueStore(s => s.queue);
+    const updateItem = useDownloadQueueStore(s => s.updateItem);
     const addSong = useSongsStore(state => state.addSong);
-    const fetchSongs = useSongsStore(state => state.fetchSongs);
     const activeDownloads = useRef<Set<string>>(new Set());
     const MAX_CONCURRENT = 2; // 2-at-a-time is a good speed/reliability balance
 
@@ -206,9 +208,8 @@ export const BackgroundDownloader = () => {
                     .catch(() => {});
                 }
 
-                // 🎵 Enqueue lyrics scan BEFORE fetchSongs to avoid race condition
-                // (fetchSongs triggers re-render cascade; scan must be queued first)
-                const hasSyncedLyrics = Array.isArray(newSong.lyrics) && 
+                // Enqueue lyrics scan after the row is in the store (addSong patches in place).
+                const hasSyncedLyrics = Array.isArray(newSong.lyrics) &&
                   newSong.lyrics.some((line: { timestamp?: number }) => line.timestamp !== undefined && line.timestamp > 0);
                 if (!hasSyncedLyrics) {
                     try {
@@ -219,9 +220,6 @@ export const BackgroundDownloader = () => {
                         if (__DEV__) console.warn(`[BackgroundDownloader] Failed to enqueue for lyrics retry`);
                     }
                 }
-
-                if (__DEV__) console.log(`[BackgroundDownloader] addSong completed, calling fetchSongs...`);
-                await fetchSongs();
 
                 // 5. Add to Playlist if requested (Respect sortOrder)
                 if (item.targetPlaylistId) {
@@ -274,7 +272,7 @@ export const BackgroundDownloader = () => {
         return () => {
             isActive = false;
         };
-    }, [queue, updateItem, addSong, fetchSongs]);
+    }, [queue, updateItem, addSong]);
 
     return (
         <>

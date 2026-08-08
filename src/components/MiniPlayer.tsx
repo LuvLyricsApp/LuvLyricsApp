@@ -10,6 +10,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
+import InstrumentalWaveform, { isInstrumentalLyric } from './InstrumentalWaveform';
 import TimelineScrubber from './TimelineScrubber';
 const { Gesture, GestureDetector } = GestureHandler;
 import Animated, {
@@ -27,16 +28,45 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad } from '../store/playerStore';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
+import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
+import { Fonts } from '../constants/fonts';
 
 const { width } = Dimensions.get('window');
+
+// Tallest the classic bar's blurred artwork ever needs to be — the full-expand
+// stage is 0.915 of the screen, with headroom so the image is never the thing
+// that runs out. Held constant so the Android blur bitmap is computed once.
+const CLASSIC_BG_HEIGHT = Dimensions.get('window').height * 0.95;
+
+// Transport / song row height inside the classic shell (scrubber sits on its top edge).
+const CLASSIC_TRANSPORT_H = CLASSIC_MINI_PLAYER_HEIGHT;
+
+// Touch height of the classic scrubber wrapper. The wrapper is bottom-anchored at
+// (CLASSIC_TRANSPORT_H - this), so its TOP edge lands at exactly CLASSIC_TRANSPORT_H
+// above the shell bottom — i.e. on the shell's top edge when collapsed, and on the
+// transport row's top seam at every other stage. Keep the two in this relationship;
+// the extra height below the track exists only because Android clips touch dispatch
+// to the parent's bounds, which would otherwise throw away the scrubber's hitSlop.
+const CLASSIC_SCRUBBER_HIT_H = 32;
+
+// Classic shell height at the two open stages, as a fraction of screen height.
+// Shared by the animated shell height and the lyrics container so the two can
+// never drift apart.
+const CLASSIC_HALF_RATIO = 0.54;
+const CLASSIC_FULL_RATIO = 0.915;
+
+// Soft enough to hide hard crop edges, light enough that cover colour still reads.
+const CLASSIC_COVER_BLUR = Platform.OS === 'android' ? 28 : 32;
+const ISLAND_COVER_BLUR = Platform.OS === 'android' ? 30 : 36;
+const COVER_BLEED = 20; // px the blurred image overshoots the clip on each side
 
 // Create Animated Pressable
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -262,7 +292,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const isIsland = miniPlayerStyle === 'island' && isHomeTab;
   
   const screenHeight = Dimensions.get('window').height;
-  
+
   const gradientColors = currentSong?.gradientId 
     ? getGradientColors(currentSong.gradientId) 
     : ['#222', '#111'];
@@ -297,9 +327,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, expanded, isIsland]);
     
-  // Create a "vignette" theme for island: Black -> Color -> Black
-  const mainColor = gradientColors[1] || gradientColors[0];
-
   // Per-style background mode (island vs classic bar each have their own setting)
   const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
   const useThemeBg = activeBgMode !== 'album-art';
@@ -310,7 +337,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       case 'purest-black': return ['#000000', '#000000', '#000000'];
       case 'grey':         return ['#121212', '#212121', '#121212'];
       case 'theme-blue':   return ['#0A1628', '#1A3A6B', '#2F8CFF'];
-      case 'theme-subtle': return ['#0E1722', '#1E2A3A', '#0E1722'];
+      case 'theme-subtle': return ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
       case 'aurora':       return ['#000000', '#EA7980', '#1D728F'];
       default:             return ['#080808', '#0A0A0A', '#080808'];
     }
@@ -347,6 +374,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           if (__DEV__) console.log('[MiniPlayer] Syncing audio for:', currentSong.title);
           await player.replace(currentSong.audioUri);
           setLoadedAudioId(songId);
+          // Stage the following queue item in Media3 (Android) for gapless advance.
+          prepareNextInQueue();
 
           // On app startup (first load), don't auto-play
           // On user-initiated song change, auto-play
@@ -446,24 +475,87 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
 
-  // Classic Height Animation ΓÇö three stages: collapsed ΓåÆ half ΓåÆ full (95%)
-  const animatedClassicStyle = useAnimatedStyle(() => {
+  // Classic Height Animation — three stages: collapsed → half → full (95%).
+  // Height lives on the SHELL (not only content) so overflow clips cleanly and
+  // the box never spills into the tab-bar strip when collapsed.
+  const classicHeightForProgress = () => {
+    'worklet';
+    const halfHeight = screenHeight * CLASSIC_HALF_RATIO;
+    const fullHeight = screenHeight * CLASSIC_FULL_RATIO;
+    const baseHeight = interpolate(
+      expansionProgress.value,
+      [0, 1],
+      [CLASSIC_TRANSPORT_H, halfHeight],
+      Extrapolation.CLAMP,
+    );
+    const fullExtension = interpolate(
+      classicFullProgress.value,
+      [0, 1],
+      [0, fullHeight - halfHeight],
+      Extrapolation.CLAMP,
+    );
+    return baseHeight + fullExtension;
+  };
+
+  // Content fills the shell (styles.classicContent has flex:1); shell owns the
+  // animated height. Rounded top corners on half/full; always clip to it.
+  const animatedClassicShellStyle = useAnimatedStyle(() => {
     if (isIsland) return {};
-    const halfHeight = screenHeight * 0.54;   // slightly taller so it fully clears "All Songs"
-    const fullHeight = screenHeight * 0.915;
-    const baseHeight = interpolate(expansionProgress.value, [0, 1], [70, halfHeight], Extrapolation.CLAMP);
-    const fullExtension = interpolate(classicFullProgress.value, [0, 1], [0, fullHeight - halfHeight], Extrapolation.CLAMP);
-    return { height: baseHeight + fullExtension };
+    const halfR = interpolate(expansionProgress.value, [0, 0.35, 1], [0, 16, 28], Extrapolation.CLAMP);
+    const fullR = interpolate(classicFullProgress.value, [0, 1], [0, 6], Extrapolation.CLAMP);
+    // Whole pixels only: a rounded corner + overflow:hidden makes Android rebuild
+    // the clip path whenever the radius changes. Reanimated diffs the style object
+    // per prop, so quantising means most frames don't touch it at all. Sub-pixel
+    // radius is not visible either way.
+    const r = Math.round(halfR + fullR);
+    return {
+      height: classicHeightForProgress(),
+      borderTopLeftRadius: r,
+      borderTopRightRadius: r,
+      overflow: 'hidden' as const,
+    };
   });
   
-  // Classic Lyrics Opacity ΓÇö fade in early so they appear smoothly as the bar grows
+  // Classic lyrics height + opacity.
+  //
+  // The height follows ONLY classicFullProgress — never expansionProgress. That
+  // split is the whole point:
+  //   · collapse (expansionProgress 1→0, classicFullProgress stays 0): height is
+  //     CONSTANT, so the ~60-row lyric subtree is never re-measured while the bar
+  //     closes. Yoga keeps its cached layout, the ScrollView's onLayout never
+  //     fires into JS, and the shell simply clips the block. This is the jank fix.
+  //   · half↔full (classicFullProgress 0→1): height grows in lockstep with the
+  //     shell, so the lyric area always fills the bar. Pinning this to the settled
+  //     React state instead was wrong — setClassicFullExpanded only fires at
+  //     gesture end, so the whole drag ran with the half height and left a dead
+  //     band above the lyrics that popped shut on release.
   const animatedClassicLyricsStyle = useAnimatedStyle(() => {
+    const halfLyricsH = screenHeight * CLASSIC_HALF_RATIO - CLASSIC_TRANSPORT_H;
+    const fullExtension = interpolate(
+      classicFullProgress.value,
+      [0, 1],
+      [0, screenHeight * (CLASSIC_FULL_RATIO - CLASSIC_HALF_RATIO)],
+      Extrapolation.CLAMP,
+    );
     const expandOp = interpolate(expansionProgress.value, [0.25, 0.75], [0, 1], Extrapolation.CLAMP);
     return {
+      height: halfLyricsH + fullExtension,
       opacity: expandOp * transitionOpacity.value,
     };
   });
   
+  // Classic artwork scrim — collapsed is near-solid black (readable mini bar).
+  // Half/full open dissolve almost all of it so cover colour stays vivid;
+  // a thin residual keeps white lyric text readable.
+  const animatedClassicScrimStyle = useAnimatedStyle(() => {
+    const expand = expansionProgress.value;
+    const full = classicFullProgress.value;
+    // half: ~0.07 · full: ~0.04
+    const opacity = interpolate(expand, [0, 1], [1, 0.07], Extrapolation.CLAMP)
+      - interpolate(full, [0, 1], [0, 0.03], Extrapolation.CLAMP);
+    return { opacity };
+  });
+
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -474,9 +566,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
   const lyricsDelay = useSettingsStore(state => state.lyricsDelay);
 
-  // Lyric index computed on UI thread ΓÇö re-renders only when the active line changes
+  // Lyric index computed on UI thread ΓÇö re-renders only when the active line changes.
+  // Island-only: the classic bar renders SynchronizedLyrics, which derives its own
+  // active index on the UI thread. Computing it here too cost a scan per position
+  // frame plus a setState that re-rendered the whole MiniPlayer every lyric line ΓÇö
+  // including mid-collapse, right when frames are scarce.
   const currentLyricIndexDV = useDerivedValue(() => {
-    if (!lyricsToUse || lyricsToUse.length === 0) return -1;
+    if (!isIsland || !lyricsToUse || lyricsToUse.length === 0) return -1;
     return getCurrentLineIndex(lyricsToUse, positionSV.value + lyricsDelay);
   });
 
@@ -552,7 +648,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     hasLyricsSV.value = !!(currentSong?.lyrics && currentSong.lyrics.length > 0);
   }, [currentSong?.lyrics, hasLyricsSV]);
 
-  const panGesture = Gesture.Pan()
+  // Built by a factory, not shared: one Gesture instance cannot be attached to
+  // more than one GestureDetector (each carries its own handler tag). The classic
+  // bar needs the same stage-drag behaviour at three mount points — the transport
+  // row and the two edge rails — so each gets its own instance.
+  const buildStageGesture = () => Gesture.Pan()
     .activeOffsetY([-5, 5])
     .activeOffsetX([-80, 80])
     .simultaneousWithExternalGesture()
@@ -655,8 +755,16 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         const vel = event.velocityY;
         const trans = event.translationY;
 
+        // The shell height is the SUM of both progress values, and onUpdate moves
+        // whichever one the drag direction implicates — so a drag that dips down
+        // before pushing up leaves expansionProgress below 1. Every settle branch
+        // must therefore pin BOTH values to that stage's canonical pair, not just
+        // the one it was moving; otherwise the bar lands short of the stage by
+        // (1 - expansionProgress) * (halfHeight - CLASSIC_TRANSPORT_H).
+        // collapsed = (0, 0) · half = (1, 0) · full = (1, 1).
         if (!classicFullExpandedSV.value) {
           if (trans < -50 || vel < -500) {
+            expansionProgress.value = withSpring(1);
             classicFullProgress.value = withSpring(1);
             runOnJS(setClassicFullExpanded)(true);
           } else if (trans > 50 || vel > 500) {
@@ -670,9 +778,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           }
         } else {
           if (trans > 50 || vel > 500) {
+            expansionProgress.value = withSpring(1);
             classicFullProgress.value = withSpring(0);
             runOnJS(setClassicFullExpanded)(false);
           } else {
+            expansionProgress.value = withSpring(1);
             classicFullProgress.value = withSpring(1);
           }
         }
@@ -710,6 +820,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       }
     });
 
+  // Transport row (and the whole island tree, which still shares this instance).
+  const panGesture = buildStageGesture();
+  // Classic only: narrow rails down the left/right screen edges over the lyrics,
+  // so the middle of the bar belongs to the lyric ScrollView and can scroll.
+  const stageRailLeftGesture = buildStageGesture();
+  const stageRailRightGesture = buildStageGesture();
+
   const toggleExpand = useCallback(() => {
     if (expanded) {
       expansionProgress.value = withSpring(0);
@@ -723,7 +840,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       return;
     }
     
+    // Canonical HALF pair — pin both, never assume classicFullProgress is already 0.
     expansionProgress.value = withSpring(1);
+    classicFullProgress.value = withSpring(0);
     setExpanded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
@@ -758,19 +877,47 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       if (wasPlaying) playerControls.play();
   }, [fullLyricExpanded, fullExpansionProgress]);
 
+  // Classic bar: tapping a lyric seeks straight to it. Stable identity matters —
+  // an inline arrow here invalidated SynchronizedLyrics' renderItem callback, so
+  // every MiniPlayer re-render re-rendered all ~60 memoized lyric rows.
+  // Tapping a lyric line jumps the song to it. The optimistic position write is
+  // load-bearing, not polish: without it the position bus keeps reporting the
+  // OLD time until the native player catches up, so the lyric list follows the
+  // stale position and scrolls back down to where it was playing — which reads
+  // as "tapping the line did nothing".
+  const handleClassicLyricSeek = useCallback(async (time: number) => {
+    if (!player) return;
+    isSeeking.value = true;
+    positionSV.value = time;
+
+    const wasPlaying = usePlayerStore.getState().isPlaying;
+    try {
+      await player.seekTo(time);
+      if (wasPlaying) player.play();
+    } finally {
+      if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
+      seekLockTimeout.current = setTimeout(() => {
+        isSeeking.value = false;
+      }, 280);
+    }
+  }, [player]);
+
+  // Optimistic position first so the fill/labels feel instant; shorter settle
+  // so playback ticks resume quickly after a scrub.
   const handleIslandSeek = useCallback(async (time: number) => {
-    if (player) {
-        isSeeking.value = true;
-        positionSV.value = time; // Optimistic update
+    if (!player) return;
+    isSeeking.value = true;
+    positionSV.value = time;
 
-        const wasPlaying = usePlayerStore.getState().isPlaying;
-        await player.seekTo(time);
-        if (wasPlaying) player.play();
-
-        if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
-        seekLockTimeout.current = setTimeout(() => {
-            isSeeking.value = false;
-        }, 1000);
+    const wasPlaying = usePlayerStore.getState().isPlaying;
+    try {
+      await player.seekTo(time);
+      if (wasPlaying) player.play();
+    } finally {
+      if (seekLockTimeout.current) clearTimeout(seekLockTimeout.current);
+      seekLockTimeout.current = setTimeout(() => {
+        isSeeking.value = false;
+      }, 280);
     }
   }, [player]);
 
@@ -783,23 +930,33 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   
   if (!isActuallyVisible) return <View style={{ height: 0, opacity: 0 }} />;
   
+  // Classic bar is a root-level sibling of the stack (after it in tree), so it
+  // can paint over the tab bar if its frame intersects. Anchor with `bottom`
+  // equal to the full tab chrome — never bottom:0 + margin that can collapse.
+  const tabChromeH = TAB_BAR_HEIGHT + insets.bottom;
+
+  const classicShellStyle = [
+    styles.container,
+    isIsland ? styles.islandContainer : styles.barContainer,
+    !isIsland && {
+      bottom: tabChromeH,
+      // No elevation — Android elevates above the in-navigator tab bar otherwise.
+      elevation: 0,
+      zIndex: 10,
+    },
+    isIsland && expanded && { alignItems: 'center' as const, marginHorizontal: 12, marginRight: 12 },
+  ];
+
   return (
-    <View style={[
-      styles.container, 
-      isIsland ? styles.islandContainer : styles.barContainer,
-      // The tab bar is 64 tall plus the system inset, so a hardcoded offset
-      // leaves the pill either floating away from it or colliding with it.
-      !isIsland && { marginBottom: 64 + insets.bottom },
-      isIsland && expanded && { alignItems: 'center', marginHorizontal: 12, marginRight: 12 } // Expanded: Force Center & Symmetry. Override container margins.
-    ]}>
-      {/* Classic background lives OUT here, not inside styles.content — that
-          container sets overflow:'hidden' to clip expanded lyrics, which also
-          clipped this and stopped the artwork ever reaching the tab bar. One
-          image spans the player and the nav bar area, so there is no seam. */}
+    <Animated.View style={[classicShellStyle, !isIsland && animatedClassicShellStyle]}>
+      {/* Classic background — clipped to the player shell only (no bleed into nav). */}
       {!isIsland && (
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
+          style={[
+            StyleSheet.absoluteFill,
+            { overflow: 'hidden' },
+          ]}
         >
           {useThemeBg ? (
             <LinearGradient
@@ -809,38 +966,54 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             />
           ) : currentSong.coverImageUri ? (
             <>
+              {/* Fixed to the tallest size the bar ever reaches, anchored to the
+                  bottom, rather than absoluteFill. blurRadius on Android is a CPU
+                  bitmap blur that re-runs whenever the view resizes, so an image
+                  that grows with the container shows the previous bitmap's hard
+                  edge for a frame or two mid-expand. At a constant size the
+                  bitmap is blurred once and the container just reveals more.
+                  Oversized + scaled so album-art rectangle edges and blur
+                  kernel roll-off sit outside the visible clip. */}
               <Image
                 source={{ uri: currentSong.coverImageUri }}
-                style={StyleSheet.absoluteFill}
+                style={{
+                  position: 'absolute',
+                  left: -COVER_BLEED,
+                  right: -COVER_BLEED,
+                  bottom: -COVER_BLEED,
+                  height: CLASSIC_BG_HEIGHT + COVER_BLEED * 2,
+                  // Slight scale keeps blur kernel roll-off outside the clip.
+                  transform: [{ scale: 1.04 }],
+                }}
                 resizeMode="cover"
-                blurRadius={30}
+                blurRadius={CLASSIC_COVER_BLUR}
               />
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
+              <Animated.View style={[StyleSheet.absoluteFill, animatedClassicScrimStyle]}>
+                {/* Soft tint only — expanded opacity is tiny so colour stays vivid. */}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.4)']}
+                  locations={[0, 0.5, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
             </>
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
-          {/* Short, light fade that lands on the same alpha the tab bar's
-              gradient starts at (0.10), so the pill and the bar meet at matching
-              values instead of a dark band butting against a lighter one.
-              The nav icons get their legibility from the tab bar's own gradient. */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.10)']}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 24 }}
-          />
         </View>
       )}
 
-      {/* Classic Scrubber (Gapless & Animated) */}
+      {/* Scrubber on the top edge of the transport row — same collapsed/half/full. */}
       {!isIsland && (
-         <TimelineScrubber
-            currentTime={positionSV}
-            duration={durationSV}
-            onSeek={handleIslandSeek}
-            variant="classic"
-            showTimeLabels={false}
-            style={styles.classicScrubberOverride}
-         />
+         <View pointerEvents="box-none" style={styles.classicScrubberOverride}>
+           <TimelineScrubber
+              currentTime={positionSV}
+              duration={durationSV}
+              onSeek={handleIslandSeek}
+              variant="classic"
+              showTimeLabels={false}
+           />
+         </View>
       )}
       
       <AnimatedPressable 
@@ -849,13 +1022,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         style={[
           styles.content, 
           isIsland && styles.islandContent,
-          isIsland && animatedIslandStyle, // Apply Reanimated style
-          !isIsland && animatedClassicStyle, // Apply Classic Height animation
-          // Remove static conditional styles that conflict
-          // isIsland && { maxWidth: expanded ? width - 20 : width * 0.5 },
-          // isIsland && expanded && styles.islandExpanded,
-          isIsland && expanded && { alignItems: 'flex-start', justifyContent: 'flex-start' }, // Pin content to top immediately
-          !isIsland && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 0 } // Override row layout for Classic
+          isIsland && animatedIslandStyle,
+          isIsland && expanded && { alignItems: 'flex-start', justifyContent: 'flex-start' },
+          !isIsland && styles.classicContent,
         ]}
       >
         {/* Dynamic Background for Classic Mode */}
@@ -874,20 +1043,32 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                    />
                  </View>
                ) : !libraryFocusMode && currentSong.coverImageUri ? (
+                  /* Oversized + stronger blur so half-open lyric stage doesn't
+                     show a hard album-art rectangle through the glass. */
                   <Image
                     source={{ uri: currentSong.coverImageUri }}
-                    style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
+                    style={{
+                      position: 'absolute',
+                      top: -COVER_BLEED,
+                      left: -COVER_BLEED,
+                      right: -COVER_BLEED,
+                      bottom: -COVER_BLEED,
+                      opacity: 0.5,
+                      transform: [{ scale: 1.2 }],
+                    }}
                     resizeMode="cover"
-                    blurRadius={22}
+                    blurRadius={ISLAND_COVER_BLUR}
                   />
                ) : (
                   /* Solid fallback when no cover art — prevents transparent look */
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
                )}
 
-              {/* Vignette for text readability */}
+              {/* Vignette — stronger top/bottom so half & full lyric expand don't
+                  leave a sharp cover-art edge at the pill rim. */}
               <LinearGradient
-                colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.65)']}
+                colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.72)']}
+                locations={[0, 0.25, 0.65, 1]}
                 start={{x: 0, y: 0}}
                 end={{x: 0, y: 1}}
                 style={StyleSheet.absoluteFill}
@@ -957,14 +1138,18 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                     >
                         <View style={styles.flexFullWidth}>
                         {(!lyricExpanded && !fullLyricExpanded) ? (
-                            /* 1. TRAY MODE (Collapsed) - Single Line */
-                            <View style={styles.flexFullWidth}>
-                                <Text 
-                                    style={styles.trayLyricText}
-                                    numberOfLines={2}
-                                >
-                                    {currentLyricText || ''}
-                                </Text>
+                            /* 1. TRAY MODE (Collapsed) — EQ for instrumental, else single line */
+                            <View style={[styles.flexFullWidth, { alignItems: 'center' }]}>
+                                {isInstrumentalLyric(currentLyricText) ? (
+                                    <InstrumentalWaveform active={storePlaying} size="md" />
+                                ) : (
+                                  <Text
+                                      style={styles.trayLyricText}
+                                      numberOfLines={2}
+                                  >
+                                      {currentLyricText || ''}
+                                  </Text>
+                                )}
                             </View>
                         ) : (
                             /* 2. EXPANDED MODE (Half & Full) - Unified FlatList */
@@ -979,7 +1164,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                                     textStyle={styles.expandedLyricText}
                                     activeLinePosition={0.3} 
                                     songTitle={currentSong?.title}
-                                    highlightColor={mainColor}
                                     topSpacerHeight={fullLyricExpanded ? 300 : 150} 
                                     bottomSpacerHeight={fullLyricExpanded ? 300 : 150}
                                 />
@@ -1033,18 +1217,18 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             </GestureDetector>
         ) : (
             // CLASSIC UNIFIED ΓÇö always column layout; height + opacity animation controls visibility
-            <GestureDetector gesture={panGesture}>
-                {/* column-reverse keeps the track info + transport row pinned to the
+            /* No detector around the whole column: that stole every vertical drag
+               over the lyrics for the stage change, so the lyric list could never
+               scroll. The stage drag now lives on the transport row (which is the
+               entire bar when collapsed, so swipe-to-skip still works anywhere on
+               it) plus the two edge rails below. */
+            (
+                /* column-reverse keeps the track info + transport row pinned to the
                     bottom next to the nav bar at every expansion stage; the lyrics
-                    grow upward above it instead of pushing it to the top. */}
+                    grow upward above it instead of pushing it to the top. */
                 <View style={{ width: '100%', height: '100%', flexDirection: 'column-reverse' }}>
-                    <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        height: 70,
-                        paddingHorizontal: 16,
-                        width: '100%'
-                    }}>
+                  <GestureDetector gesture={panGesture}>
+                    <View style={styles.classicTransportRow}>
                         <TrackInfo
                             title={currentSong.title}
                             artist={currentSong.artist || ''}
@@ -1078,28 +1262,39 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             showSkipButtons={expanded}
                         />
                     </View>
+                  </GestureDetector>
 
                     <Animated.View style={[styles.classicLyricsContainer, animatedClassicLyricsStyle]}>
+                        {/* edgeFade uses native ScrollView fadingEdgeLength (no
+                            MaskedView rebuild) so lyric text soft-dissolves at
+                            the top/bottom instead of a black scrim. */}
                         <SynchronizedLyrics
                             lyrics={lyricsToUse || []}
                             currentTime={positionSV}
-                            onLyricPress={async (time) => {
-                                if (player) {
-                                    const wasPlaying = usePlayerStore.getState().isPlaying;
-                                    await player.seekTo(time);
-                                    if (wasPlaying) player.play();
-                                }
-                            }}
+                            onLyricPress={handleClassicLyricSeek}
                             isUserScrolling={false}
-                            scrollEnabled={false}
+                            scrollEnabled={expanded}
                             textStyle={styles.expandedLyricText}
                             activeLinePosition={0.4}
                             songTitle={currentSong?.title}
-                            highlightColor={gradientColors[0]}
                             topSpacerHeight={50}
                             bottomSpacerHeight={50}
                             expandedAt={lyricExpandedAt}
+                            edgeFade={48}
                         />
+
+                        {/* Stage-drag rails. Transparent strips down the far left and
+                            right of the lyric area — collapsed/half/full drags start
+                            here, so the lyric list owns everything between them and
+                            scrolls normally. Clipped away with the rest of the block
+                            when the bar is collapsed, so they cost nothing there. */}
+                        <GestureDetector gesture={stageRailLeftGesture}>
+                            <View style={[styles.classicStageRail, styles.classicStageRailLeft]} />
+                        </GestureDetector>
+                        <GestureDetector gesture={stageRailRightGesture}>
+                            <View style={[styles.classicStageRail, styles.classicStageRailRight]} />
+                        </GestureDetector>
+
                         <View style={styles.dragHandle} />
                     </Animated.View>
 
@@ -1132,7 +1327,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                           </Animated.View>
                         )}
                 </View>
-            </GestureDetector>
+            )
         )}
       </AnimatedPressable>
       {showYtMini && currentSong?.youtubeVideoId && (
@@ -1149,7 +1344,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           onClose={() => setShowYtMini(false)}
         />
       )}
-    </View>
+    </Animated.View>
   );
 };
 
@@ -1158,13 +1353,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 100,
+    zIndex: 10,
+    elevation: 0,
   },
   barContainer: {
-    bottom: 0, 
-    marginBottom: 69, // Overlap by 1px to ensure NO GAP between player and translucent nav bar
-    // backgroundColor: '#111', // REMOVED for transparency
-    borderTopWidth: 0, 
+    // `bottom` set inline to tabChromeH — never sit on y=0 over the nav.
+    borderTopWidth: 0,
+  },
+  classicContent: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingHorizontal: 0,
+    overflow: 'hidden',
+    // Fill shell height from animatedClassicShellStyle
+    flex: 1,
+  },
+  classicTransportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: CLASSIC_TRANSPORT_H,
+    paddingHorizontal: 16,
+    // Room for the top-edge scrubber track
+    paddingTop: 12,
+    width: '100%',
   },
   islandContainer: {
     top: Platform.OS === 'ios' ? 58 : 40, // 58 = iOS Dynamic Island clearance, 40 = Android status bar height
@@ -1196,17 +1407,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 15,
   },
+  // Top seam of the transport row (= top of shell when collapsed). `bottom + height`
+  // must equal CLASSIC_TRANSPORT_H so the wrapper's top edge is flush with the seam;
+  // the track paints from the wrapper's y=0 downward. left/right 0 makes it span the
+  // real screen width at runtime — the scrubber measures itself via onLayout, so no
+  // width is hardcoded anywhere.
   classicScrubberOverride: {
     position: 'absolute',
-    top: -14,
-    // Edge-to-edge: seek mapping comes from the measured hit-area width,
-    // so widening the track rescales the gesture automatically.
+    bottom: CLASSIC_TRANSPORT_H - CLASSIC_SCRUBBER_HIT_H,
     left: 0,
     right: 0,
     width: 'auto',
-    zIndex: 200,
-    paddingVertical: 0, 
-    paddingHorizontal: 0,
+    height: CLASSIC_SCRUBBER_HIT_H,
+    zIndex: 20,
+    elevation: 0,
   },
   progressBarTrackBase: {
     width: '100%',
@@ -1238,9 +1452,10 @@ const styles = StyleSheet.create({
       elevation: 3,
   },
   trayLyricText: {
+    fontFamily: Fonts.lyricsTray,
+    fontWeight: Fonts.lyricsTrayWeight,
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
     textAlign: 'center',
   },
   expandedLyricsContainer: {
@@ -1249,9 +1464,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20
   },
   expandedLyricText: {
+    // fontFamily intentionally omitted — SynchronizedLyrics owns the
+    // SF Pro / Inter face + bold-active weight swap.
     color: '#fff',
     fontSize: 23,
-    fontWeight: '800',
     textAlign: 'center',
   },
   expandedContent: {
@@ -1324,12 +1540,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    height: 70, // Base height
-    overflow: 'hidden', // Clip expanded content
-    // width: '100%', // ensure full width
+    overflow: 'hidden',
+  },
+  // Wide enough to hit reliably with a thumb, narrow enough that the lyric text
+  // (which carries 32px of its own horizontal padding) stays fully scrollable.
+  classicStageRail: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 36,
+    zIndex: 5,
+  },
+  classicStageRailLeft: {
+    left: 0,
+  },
+  classicStageRailRight: {
+    right: 0,
   },
   classicLyricsContainer: {
-    flex: 1,
+    // Height comes from `classicLyricsHeight` (stage-pinned, not shell-driven).
+    // flexShrink must stay 0 so the shell clipping the block never resizes it.
+    flexShrink: 0,
     width: '100%',
     backgroundColor: 'transparent', // Transparent to show blurred background
     paddingTop: 10,

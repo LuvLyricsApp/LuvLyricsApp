@@ -1,5 +1,4 @@
-import { Platform } from 'react-native';
-import { requireNativeModule } from 'expo-modules-core';
+import { getNativeModule } from './nativeModule';
 
 interface Swatch {
   color: string;
@@ -16,9 +15,7 @@ export interface AlbumPalette {
   lightVibrant?: Swatch;
 }
 
-const mod = Platform.OS === 'android'
-  ? (() => { try { return requireNativeModule('Palette'); } catch { return null; } })()
-  : null;
+const mod = getNativeModule<{ extractColors: (uri: string) => Promise<string | null> }>('Palette');
 
 export async function extractAlbumColors(imageUri: string | null | undefined): Promise<AlbumPalette | null> {
   if (!mod || !imageUri) return null;

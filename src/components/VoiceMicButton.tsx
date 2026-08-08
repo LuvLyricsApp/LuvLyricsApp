@@ -16,7 +16,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { Ionicons } from '@expo/vector-icons';
 
 const BUTTON_SIZE = 56;
-const PRIMARY = '#2F8CFF';
+const PRIMARY = '#EDEDED';
 const PULSE_SIZE = BUTTON_SIZE + 28;
 
 interface Props {

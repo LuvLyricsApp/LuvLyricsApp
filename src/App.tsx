@@ -21,6 +21,7 @@ import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { getPreloadedData } from './services/NativeStartup';
 import { ensureSearchIndex } from './services/NativeSearch';
+import { INTER_FONT_MAP, SF_FONT_MAP } from './constants/fonts';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ const LOADER_BARS = [
 const BAR_COLORS = [
   'rgba(255,255,255,0.35)',
   'rgba(255,255,255,0.6)',
-  '#2F8CFF',
+  '#EDEDED',
   'rgba(255,255,255,0.6)',
   'rgba(255,255,255,0.35)',
 ];
@@ -100,7 +101,11 @@ const App: React.FC = () => {
               playsInSilentMode: true,
               interruptionMode: 'doNotMix',
             }),
-            Font.loadAsync(Ionicons.font),
+            Font.loadAsync({
+              ...Ionicons.font,
+              ...INTER_FONT_MAP,
+              ...SF_FONT_MAP,
+            }),
           ]);
 
           // Open the write connection (fast — Kotlin already opened read-only above)
@@ -147,7 +152,7 @@ const App: React.FC = () => {
           import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()).catch(console.error);
 
           // Pre-fetch Luvs for instant playback
-          import('./services/LuvsRecommendationEngine').then(m => m.luvsRecommendationEngine.prefetch()).catch(console.error);
+          import('./services/luvsEngine').then(m => m.luvsEngine.prefetch()).catch(console.error);
 
           // Build/verify FTS5 search index in background (Android only; no-op on iOS)
           ensureSearchIndex().catch(() => {});
@@ -189,7 +194,7 @@ const App: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" backgroundColor="#000" />
-        <Ionicons name="musical-notes" size={48} color="#2F8CFF" style={{ marginBottom: 20 }} />
+        <Ionicons name="musical-notes" size={48} color="#EDEDED" style={{ marginBottom: 20 }} />
         <Text style={styles.loadingTitle}>{AppStrings.appTitle}</Text>
         <Text style={styles.loadingSubtitle}>{AppStrings.loadingSubtitle}</Text>
         <View style={{ height: 48 }} />

@@ -1,315 +1,505 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, Image, Dimensions } from 'react-native';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, Platform, ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  interpolate,
+  Extrapolation,
   runOnJS,
   SharedValue,
+  cancelAnimation,
+  useAnimatedReaction,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Song } from '../types/song';
 import { getGradientForSong } from '../constants/gradients';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COVER_SIZE = 220;
+const COVER_SIZE = 200;
+const PEEK = 34;
+/**
+ * Virtualisation radius — only this many virtual indices either side of the
+ * playhead are mounted. All mounted slots always bind their bitmap.
+ */
+const WINDOW_RADIUS = 2;
+/** Prefetch neighbours so fling never shows empty gradients. */
+const PREFETCH_RADIUS = 6;
+const TOUCH_W = COVER_SIZE + PEEK * WINDOW_RADIUS * 2 + 48;
+const TOUCH_H = COVER_SIZE + 28;
+const CARD_LEFT = (TOUCH_W - COVER_SIZE) / 2;
+const CARD_TOP = 14;
 
-interface CoverFlowProps {
-  currentSong: Song | null;
-  prevSong: Song | null;
-  nextSong: Song | null;
-  onNext: () => void;
-  onPrev: () => void;
-  defaultGradientColors: string[];
-  isEditMode: boolean;
-  onPress: (e: any) => void;
-  onSwipeConfirmed: () => void;
-}
-
-interface CoverCardProps {
-  song: Song | null;
-  indexOffset: number;
-  translateX: SharedValue<number>;
-  isEditMode: boolean;
-  defaultGradientColors: string[];
-  prevSong: Song | null;
-  nextSong: Song | null;
-  onPress: (e: any) => void;
-  onSwipeConfirmed: () => void;
-  onNext: () => void;
-  onPrev: () => void;
-}
-
-const CoverCard: React.FC<CoverCardProps> = ({
-  song,
-  indexOffset,
-  translateX,
-  isEditMode,
-  defaultGradientColors,
-  prevSong,
-  nextSong,
-}) => {
-    // indexOffset: -1 (Prev), 0 (Current), 1 (Next)
-    
-    const animatedStyle = useAnimatedStyle(() => {
-       // Calculate transform based on swipe
-       // We assume all cards are centered initially.
-       
-       // Spacing multiplier
-       const SWIPE_SPACING = SCREEN_WIDTH * 0.8; 
-       const cardTranslateX = translateX.value + (indexOffset * SWIPE_SPACING);
-       
-       // Removed Scale Effect as requested ("dont want getting big")
-       // Kept logic simple 1:1 size
-       const scale = 1;
-
-       return {
-           transform: [
-               { translateX: cardTranslateX }, 
-               { scale: scale } 
-           ] as any, 
-       };
-    });
-
-    // We simply stack them absolutely. Center is relative.
-    if (!song && indexOffset !== 0) return null; 
-
-    const imageUri = song?.coverImageUri;
-    // Use Helper designed to guarantee colors even if missing ID
-    const gradient = song ? getGradientForSong(song) : defaultGradientColors;
-
-    return (
-        <Animated.View 
-            key={indexOffset}
-            style={[
-                styles.cardContainer,
-                // Apply absolute positioning to ALL cards to ensure consistent behavior
-                // but use left/right calc to center them.
-                styles.centeredCard, 
-                animatedStyle,
-            ]}
-        >
-             <View style={styles.shadowContainer}>
-                {imageUri ? (
-                    <Image source={{ uri: imageUri }} style={styles.coverArt} />
-                ) : (
-                    <LinearGradient colors={gradient as [string, string]} style={styles.coverArt}>
-                        <Ionicons name="musical-notes" size={80} color="rgba(255,255,255,0.4)" />
-                    </LinearGradient>
-                )}
-                
-                {/* Hints for Center Card */}
-                {indexOffset === 0 && !isEditMode && (
-                    <Animated.View style={styles.swipeHintContainer}>
-                        {prevSong && <Ionicons name="chevron-back" size={24} color="rgba(255,255,255,0.5)" />}
-                        <View style={{ flex: 1 }} />
-                        {nextSong && <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />}
-                    </Animated.View>
-                )}
-
-                {/* Edit Overlay for Center Card */}
-                {indexOffset === 0 && isEditMode && (
-                    <View style={styles.editOverlay}>
-                        <Ionicons name="camera" size={32} color="#fff" />
-                    </View>
-                )}
-             </View>
-        </Animated.View>
-    );
+const SNAP_SPRING = {
+  mass: 0.4,
+  damping: 28,
+  stiffness: 320,
+  overshootClamping: false as const,
 };
 
-export const CoverFlow: React.FC<CoverFlowProps> = ({
-  currentSong,
-  prevSong,
-  nextSong,
-  onNext,
-  onPrev,
-  defaultGradientColors,
-  isEditMode,
-  onPress,
-  onSwipeConfirmed,
-}) => {
-  const translateX = useSharedValue(0);
-  const isInteracting = useSharedValue(false);
+export interface CoverFlowProps {
+  songs: Song[];
+  playingIndex?: number;
+  defaultGradientColors: string[];
+  isEditMode?: boolean;
+  onFocusedIndexChange?: (index: number) => void;
+  onSelectSong?: (index: number, song: Song) => void;
+  onEditPress?: (e: { absoluteX: number; absoluteY: number }) => void;
+}
 
-  // Reset position when song changes
+function modJS(i: number, n: number): number {
+  if (n <= 0) return 0;
+  return ((i % n) + n) % n;
+}
+
+function urisAround(songs: Song[], center: number, radius: number): string[] {
+  const uris: string[] = [];
+  const seen = new Set<string>();
+  const n = songs.length;
+  if (n === 0) return uris;
+  for (let o = -radius; o <= radius; o++) {
+    const uri = songs[modJS(center + o, n)]?.coverImageUri;
+    if (uri && !seen.has(uri)) {
+      seen.add(uri);
+      uris.push(uri);
+    }
+  }
+  return uris;
+}
+
+// ─── Virtualised card ────────────────────────────────────────────────────────
+
+interface CoverCardProps {
+  song: Song;
+  virtualIndex: number;
+  progress: SharedValue<number>;
+  isEditMode: boolean;
+  isPlaying: boolean;
+  defaultGradientColors: string[];
+}
+
+const CoverCard = memo(function CoverCard({
+    song,
+    virtualIndex,
+    progress,
+    isEditMode,
+    isPlaying,
+    defaultGradientColors,
+  }: CoverCardProps) {
+    const animatedStyle = useAnimatedStyle(() => {
+      const slot = virtualIndex - progress.value;
+      const abs = Math.abs(slot);
+      return {
+        opacity: interpolate(abs, [0, 0.9, 1.8, 2.4], [1, 0.94, 0.68, 0], Extrapolation.CLAMP),
+        zIndex: Math.round(40 - abs * 8),
+        transform: [
+          { translateX: slot * PEEK },
+          { translateY: interpolate(abs, [0, 1, 2], [0, 4, 8], Extrapolation.CLAMP) },
+          { scale: interpolate(abs, [0, 1, 2], [1, 0.92, 0.86], Extrapolation.CLAMP) },
+          {
+            rotateZ: `${interpolate(slot, [-2, -1, 0, 1, 2], [-7, -3.5, 0, 3.5, 7], Extrapolation.CLAMP)}deg`,
+          },
+        ],
+      } as ViewStyle;
+    }, [virtualIndex]);
+
+    const dimStyle = useAnimatedStyle(() => {
+      const abs = Math.abs(virtualIndex - progress.value);
+      return {
+        opacity: interpolate(abs, [0, 0.45, 1.3, 2], [0, 0.14, 0.38, 0.52], Extrapolation.CLAMP),
+      };
+    }, [virtualIndex]);
+
+    const imageUri = song.coverImageUri;
+    const gradient = useMemo(() => {
+      const g = getGradientForSong(song);
+      return (g.length >= 2 ? g : defaultGradientColors) as [string, string];
+    }, [song, defaultGradientColors]);
+
+    return (
+      <Animated.View collapsable={false} style={[styles.card, animatedStyle]} pointerEvents="none">
+        <View style={[styles.shadow, isPlaying && styles.playingRing]}>
+          {/* Fallback only when song has no art — never as a scroll placeholder */}
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.coverArt}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={song.id}
+            />
+          ) : (
+            <LinearGradient colors={gradient} style={StyleSheet.absoluteFill}>
+              <View style={styles.fallbackIcon}>
+                <Ionicons name="musical-notes" size={44} color="rgba(255,255,255,0.3)" />
+              </View>
+            </LinearGradient>
+          )}
+
+          <Animated.View style={[styles.backDim, dimStyle]} pointerEvents="none" />
+
+          {isEditMode && (
+            <View style={styles.editOverlay}>
+              <Ionicons name="camera" size={28} color="#fff" />
+            </View>
+          )}
+
+          {isPlaying && (
+            <View style={styles.playingDot}>
+              <Ionicons name="musical-note" size={12} color="#000" />
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    );
+});
+
+// ─── CoverFlow ───────────────────────────────────────────────────────────────
+
+export const CoverFlow: React.FC<CoverFlowProps> = ({
+  songs,
+  playingIndex = -1,
+  defaultGradientColors,
+  isEditMode = false,
+  onFocusedIndexChange,
+  onSelectSong,
+  onEditPress,
+}) => {
+  const n = songs.length;
+  const loopEnabled = n > 1;
+
+  const progress = useSharedValue(loopEnabled && n > 0 ? n : 0);
+  const dragStart = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+
+  const userScrollingRef = useRef(false);
+  const lastPlayingSync = useRef<number | null>(null);
+  const lastReportedFocus = useRef(-1);
+
+  const [windowBase, setWindowBase] = useState(() => (loopEnabled && n > 0 ? n : 0));
+  const [focusIndex, setFocusIndex] = useState(() => (loopEnabled && n > 0 ? n : 0));
+
+  const setUserScrolling = useCallback((v: boolean) => {
+    userScrollingRef.current = v;
+  }, []);
+
+  /** Warm neighbours so a fling never lands on an unloaded cover. */
+  const prefetchAround = useCallback(
+    (real: number) => {
+      const uris = urisAround(songs, real, PREFETCH_RADIUS);
+      if (uris.length) Image.prefetch(uris, 'memory-disk').catch(() => {});
+    },
+    [songs],
+  );
+
+  const reportFocus = useCallback(
+    (rounded: number) => {
+      if (n <= 0) return;
+      const real = modJS(rounded, n);
+      setFocusIndex(rounded);
+      if (lastReportedFocus.current === real) return;
+      lastReportedFocus.current = real;
+      onFocusedIndexChange?.(real);
+      prefetchAround(real);
+    },
+    [n, onFocusedIndexChange, prefetchAround],
+  );
+
+  // Seed
   useEffect(() => {
-    translateX.value = 0;
-  }, [currentSong?.id, translateX]);
+    if (n === 0) return;
+    cancelAnimation(progress);
+    const real = playingIndex >= 0 ? playingIndex : 0;
+    const seed = loopEnabled ? n + real : real;
+    progress.value = seed;
+    setWindowBase(Math.floor(seed));
+    setFocusIndex(seed);
+    lastReportedFocus.current = real;
+    onFocusedIndexChange?.(real);
+    lastPlayingSync.current = playingIndex;
+    prefetchAround(real);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n, songs[0]?.id]);
+
+  // External skip
+  useEffect(() => {
+    if (playingIndex < 0 || n === 0) return;
+    if (lastPlayingSync.current === playingIndex) return;
+    lastPlayingSync.current = playingIndex;
+    if (userScrollingRef.current) {
+      reportFocus(Math.round(progress.value));
+      return;
+    }
+    cancelAnimation(progress);
+    const current = progress.value;
+    const currentReal = modJS(Math.round(current), n);
+    let delta = playingIndex - currentReal;
+    if (loopEnabled) {
+      if (delta > n / 2) delta -= n;
+      if (delta < -n / 2) delta += n;
+    }
+    const target = current + delta;
+    progress.value = withSpring(target, SNAP_SPRING);
+    setWindowBase(Math.floor(target));
+    reportFocus(playingIndex);
+  }, [playingIndex, n, loopEnabled, reportFocus, progress]);
+
+  // Virtual window slides with floor(progress) — only edge mount/unmount.
+  useAnimatedReaction(
+    () => Math.floor(progress.value),
+    (next, prev) => {
+      if (next !== prev) runOnJS(setWindowBase)(next);
+    },
+    [],
+  );
+
+  useAnimatedReaction(
+    () => Math.round(progress.value),
+    (next, prev) => {
+      if (next !== prev) runOnJS(reportFocus)(next);
+    },
+    [reportFocus],
+  );
+
+  const onSettleDone = useCallback(
+    (rounded: number) => {
+      userScrollingRef.current = false;
+      reportFocus(rounded);
+    },
+    [reportFocus],
+  );
+
+  const snapToNearest = useCallback(() => {
+    'worklet';
+    const target = Math.round(progress.value);
+    progress.value = withSpring(target, SNAP_SPRING, (finished) => {
+      if (finished) runOnJS(onSettleDone)(Math.round(progress.value));
+      else runOnJS(setUserScrolling)(false);
+    });
+  }, [progress, onSettleDone, setUserScrolling]);
+
+  const flingToTarget = useCallback(
+    (velocityX: number) => {
+      'worklet';
+      const vSteps = -velocityX / PEEK;
+      const projected = progress.value + vSteps * 0.18;
+      let target = Math.round(projected);
+      if (!loopEnabled) {
+        target = Math.max(0, Math.min(n - 1, target));
+      }
+      const current = Math.round(progress.value);
+      if (Math.abs(vSteps) > 2.5 && target === current) {
+        target = current + (vSteps > 0 ? 1 : -1);
+        if (!loopEnabled) target = Math.max(0, Math.min(n - 1, target));
+      }
+      progress.value = withSpring(target, SNAP_SPRING, (finished) => {
+        if (finished) runOnJS(onSettleDone)(Math.round(progress.value));
+        else runOnJS(setUserScrolling)(false);
+      });
+    },
+    [loopEnabled, n, progress, onSettleDone, setUserScrolling],
+  );
+
+  const handleTapAtX = useCallback(
+    (x: number) => {
+      if (n <= 0) return;
+      const local = x - TOUCH_W / 2;
+      // The front cover owns the whole ±COVER_SIZE/2 band; neighbours are only
+      // reachable in the peeking strips beyond it. Rounding local/PEEK meant a
+      // tap on the middle of the front cover selected the next song.
+      const dist = Math.abs(local);
+      const slot =
+        dist <= COVER_SIZE / 2
+          ? 0
+          : Math.sign(local) *
+            Math.min(WINDOW_RADIUS, 1 + Math.floor((dist - COVER_SIZE / 2) / PEEK));
+      const virtual = Math.round(progress.value) + slot;
+      const real = modJS(virtual, n);
+      const song = songs[real];
+      if (!song) return;
+      if (isEditMode) {
+        onEditPress?.({ absoluteX: x, absoluteY: 160 });
+        return;
+      }
+      cancelAnimation(progress);
+      const currentReal = modJS(Math.round(progress.value), n);
+      let delta = real - currentReal;
+      if (loopEnabled) {
+        if (delta > n / 2) delta -= n;
+        if (delta < -n / 2) delta += n;
+      }
+      progress.value = withSpring(progress.value + delta, SNAP_SPRING, (finished) => {
+        if (finished) runOnJS(onSettleDone)(Math.round(progress.value));
+      });
+      lastReportedFocus.current = real;
+      onFocusedIndexChange?.(real);
+      onSelectSong?.(real, song);
+    },
+    [n, songs, isEditMode, onEditPress, onSelectSong, onFocusedIndexChange, progress, loopEnabled, onSettleDone],
+  );
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-10, 10])
-    .onBegin(() => {
-      isInteracting.value = true;
+    .onStart(() => {
+      cancelAnimation(progress);
+      dragStart.value = progress.value;
+      isDragging.value = true;
+      runOnJS(setUserScrolling)(true);
     })
     .onUpdate((e) => {
-      // Resistance at edges if no next/prev song
-      let friction = 1;
-      if (!prevSong && e.translationX > 0) friction = 0.3;
-      if (!nextSong && e.translationX < 0) friction = 0.3;
-      
-      translateX.value = e.translationX * friction;
+      progress.value = dragStart.value - e.translationX / PEEK;
     })
     .onEnd((e) => {
-      isInteracting.value = false;
-      const velocity = e.velocityX;
-      const translation = e.translationX;
-
-      // Threshold to trigger change
-      const SWIPE_THRESHOLD = COVER_SIZE * 0.25; // Lower threshold feels snappier
-      const TARGET_TRANSLATION = SCREEN_WIDTH * 0.8; // Match the SPACING used in render
-
-      if (translation < -SWIPE_THRESHOLD && nextSong) {
-        // Swiped Left -> Next
-        runOnJS(onSwipeConfirmed)(); // STOP AUDIO INSTANTLY
-        
-        // "Alive" Spring: Fast snap, slight overshoot, quick settle.
-        translateX.value = withSpring(-TARGET_TRANSLATION, { 
-            velocity: velocity,
-            mass: 0.6,        // Lighter feel
-            damping: 15,      // Less resistance = more fluidity
-            stiffness: 180,   // Responsive but not rigid
-            overshootClamping: false // Allow it to breathe (bounce slightly)
-        }, () => {
-             runOnJS(onNext)();
-        });
-      } else if (translation > SWIPE_THRESHOLD && prevSong) {
-        // Swiped Right -> Prev
-        runOnJS(onSwipeConfirmed)(); // STOP AUDIO INSTANTLY
-
-        translateX.value = withSpring(TARGET_TRANSLATION, {
-            velocity: velocity,
-            mass: 0.6,
-            damping: 15,
-            stiffness: 180,
-            overshootClamping: false
-        }, () => {
-             runOnJS(onPrev)();
-        });
-      } else {
-        // Snap back (Empty space or canceled swipe)
-        translateX.value = withSpring(0, { mass: 0.5, damping: 15, stiffness: 150 });
+      isDragging.value = false;
+      if (Math.abs(e.velocityX) > 400) flingToTarget(e.velocityX);
+      else snapToNearest();
+    })
+    .onFinalize((_e, success) => {
+      if (!success && isDragging.value) {
+        isDragging.value = false;
+        snapToNearest();
       }
     });
 
   const tapGesture = Gesture.Tap().onEnd((e) => {
-      runOnJS(onPress)(e);
+    runOnJS(handleTapAtX)(e.x);
   });
 
-  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture);
+  const composed = Gesture.Race(panGesture, tapGesture);
+
+  /** Virtual window (~5 cards). Every mounted card always loads real cover art. */
+  const virtualCards = useMemo(() => {
+    type Card = { virtualIndex: number; song: Song; realIndex: number; isEditFront: boolean };
+    if (n === 0) return [] as Card[];
+
+    // Without looping there is nothing either side to fan out — clamping stops
+    // a single-song playlist rendering the same cover six times in the deck.
+    const lo = loopEnabled ? windowBase - WINDOW_RADIUS : Math.max(0, windowBase - WINDOW_RADIUS);
+    const hi = loopEnabled
+      ? windowBase + WINDOW_RADIUS + 1
+      : Math.min(n - 1, windowBase + WINDOW_RADIUS + 1);
+    const cards: Card[] = [];
+
+    for (let vi = lo; vi <= hi; vi++) {
+      const realIndex = modJS(vi, n);
+      cards.push({
+        virtualIndex: vi,
+        song: songs[realIndex],
+        realIndex,
+        isEditFront: isEditMode && vi === focusIndex,
+      });
+    }
+
+    const mid = windowBase + 0.5;
+    cards.sort((a, b) => Math.abs(b.virtualIndex - mid) - Math.abs(a.virtualIndex - mid));
+    return cards;
+  }, [songs, n, windowBase, focusIndex, isEditMode, loopEnabled]);
+
+  if (n === 0) {
+    return <View style={styles.container} />;
+  }
 
   return (
-    <View style={styles.container}>
-        <GestureDetector gesture={composedGesture}>
-            <Animated.View style={styles.touchArea}>
-                {/* Render Neighbors First (Below) */}
-                <CoverCard 
-                    song={prevSong} 
-                    indexOffset={-1} 
-                    translateX={translateX}
-                    isEditMode={isEditMode}
-                    defaultGradientColors={defaultGradientColors}
-                    prevSong={prevSong}
-                    nextSong={nextSong}
-                    onPress={onPress}
-                    onSwipeConfirmed={onSwipeConfirmed}
-                    onNext={onNext}
-                    onPrev={onPrev}
-                />
-                <CoverCard 
-                    song={nextSong} 
-                    indexOffset={1} 
-                    translateX={translateX}
-                    isEditMode={isEditMode}
-                    defaultGradientColors={defaultGradientColors}
-                    prevSong={prevSong}
-                    nextSong={nextSong}
-                    onPress={onPress}
-                    onSwipeConfirmed={onSwipeConfirmed}
-                    onNext={onNext}
-                    onPrev={onPrev}
-                />
-                {/* Render Current (Top) */}
-                <CoverCard 
-                    song={currentSong} 
-                    indexOffset={0} 
-                    translateX={translateX}
-                    isEditMode={isEditMode}
-                    defaultGradientColors={defaultGradientColors}
-                    prevSong={prevSong}
-                    nextSong={nextSong}
-                    onPress={onPress}
-                    onSwipeConfirmed={onSwipeConfirmed}
-                    onNext={onNext}
-                    onPrev={onPrev}
-                />
-            </Animated.View>
-        </GestureDetector>
+    <View style={styles.container} collapsable={false}>
+      <GestureDetector gesture={composed}>
+        <Animated.View style={styles.touchArea} collapsable={false}>
+          {virtualCards.map(({ virtualIndex, song, realIndex, isEditFront }) => (
+            <CoverCard
+              key={virtualIndex}
+              song={song}
+              virtualIndex={virtualIndex}
+              progress={progress}
+              isEditMode={isEditFront}
+              isPlaying={realIndex === playingIndex}
+              defaultGradientColors={defaultGradientColors}
+            />
+          ))}
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    height: 240, 
+    height: TOUCH_H,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    marginTop: 10,
-    // overflow: 'visible' does not work on Android if parent clips. 
-    // Usually OK in simple Views.
+    marginBottom: 8,
+    marginTop: 4,
+    overflow: 'visible',
   },
   touchArea: {
-      width: '100%',
-      height: '100%',
-      // We need a specific container area.
-      alignItems: 'center',
-      justifyContent: 'center',
+    width: TOUCH_W,
+    height: TOUCH_H,
+    alignSelf: 'center',
+    overflow: 'visible',
   },
-  cardContainer: {
-     width: COVER_SIZE,
-     height: COVER_SIZE,
-     justifyContent: 'center',
-     alignItems: 'center',
-     zIndex: 1,
-  },
-  centeredCard: {
-      position: 'absolute',
-      // Center horizontally: (Screen Width - Card Width) / 2
-      left: (SCREEN_WIDTH - COVER_SIZE) / 2, 
-      // Center vertically if needed, but height is fixed in container
-  },
-  shadowContainer: {
+  card: {
+    position: 'absolute',
+    left: CARD_LEFT,
+    top: CARD_TOP,
     width: COVER_SIZE,
     height: COVER_SIZE,
-    borderRadius: 20, // MORE CURVED EDGES
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 12,
-    backgroundColor: '#222',
+  },
+  shadow: {
+    width: COVER_SIZE,
+    height: COVER_SIZE,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  playingRing: {
+    borderWidth: 2,
+    borderColor: 'rgba(29,185,84,0.9)',
   },
   coverArt: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20, // MODE CURVED EDGES
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
   },
-  swipeHintContainer: {
-      ...StyleSheet.absoluteFillObject,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 8,
+  fallbackIcon: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    borderRadius: 16,
   },
   editOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: 16,
+  },
+  playingDot: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#1DB954',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
+
+export default CoverFlow;
