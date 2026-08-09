@@ -71,6 +71,26 @@ interface SongDao {
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun countAll(): Int
 
+    @Query("SELECT id FROM songs")
+    suspend fun allIds(): List<String>
+
+    /**
+     * The columns Compose is allowed to write. A `fullCopy` re-migration must
+     * carry these forward instead of taking legacy's values, or every like and
+     * play count made natively is silently reverted on the next payload bump.
+     */
+    @Query("SELECT id, is_liked, play_count, last_played FROM songs")
+    suspend fun localState(): List<SongLocalState>
+
+    /**
+     * Chunked by the caller. Deliberately `IN` and not `NOT IN`: the library is
+     * over 1000 rows and `NOT IN` with that many bound variables exceeds
+     * SQLite's per-statement variable limit, while chunking a `NOT IN` would be
+     * outright wrong — each chunk would delete everything outside itself.
+     */
+    @Query("DELETE FROM songs WHERE id IN (:ids)")
+    suspend fun deleteSongs(ids: List<String>)
+
     @Query("SELECT COUNT(*) FROM lyrics")
     suspend fun countLyrics(): Int
 
@@ -108,6 +128,19 @@ interface PlaylistDao {
 
     @Query("SELECT COUNT(*) FROM playlists")
     suspend fun countAll(): Int
+
+    @Query("SELECT id FROM playlists")
+    suspend fun allIds(): List<String>
+
+    @Query("SELECT playlist_id, song_id FROM playlist_songs")
+    suspend fun allLinkKeys(): List<PlaylistLinkKey>
+
+    @Query("DELETE FROM playlists WHERE id IN (:ids)")
+    suspend fun deletePlaylists(ids: List<String>)
+
+    /** Composite key, so a link is addressed by both halves — see the migrator. */
+    @Query("DELETE FROM playlist_songs WHERE playlist_id = :playlistId AND song_id IN (:songIds)")
+    suspend fun deleteLinks(playlistId: String, songIds: List<String>)
 }
 
 @Dao

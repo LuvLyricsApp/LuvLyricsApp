@@ -5,8 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.lyricflow.app.data.SongEntity
@@ -15,8 +13,6 @@ import com.lyricflow.app.services.PlaybackService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 data class PlaybackStatus(
     val songId: String? = null,
@@ -30,22 +26,44 @@ data class PlaybackStatus(
     val isBuffering: Boolean = false,
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
-    val queueSize: Int = 0,
-)
+) {
+    /** Nothing has been loaded yet — the docked player stays hidden. */
+    val isIdle: Boolean get() = songId.isNullOrBlank() && title.isBlank()
+}
 
 /**
  * Compose-facing playback API over the existing PlaybackService / PlayerBridge.
- * Mirrors MainPlayerModule behaviour without the JS bridge.
+ *
+ * **Who owns `isPlaying`** (see CLAUDE.md — this was broken once, don't regress
+ * it): on Android, Media3 owns it. Commands here only *send*; they never write
+ * an optimistic value into the status. `PlayerBridge` emits `playWhenReady`,
+ * which flips the instant a command is applied — unlike `isPlaying`, which
+ * stays false while buffering — and the UI adopts that verbatim. Because there
+ * is no optimistic update, there is nothing for a status tick to contradict and
+ * no echo guard is needed. This is why `playbackIntent.ts` has no counterpart
+ * here.
+ *
+ * Seeking needs no play/pause dance either: Media3's `seekTo` preserves
+ * `playWhenReady`. The RN "resume if it was playing" pattern exists to work
+ * around expo-audio pausing on seek, and porting it would double-trigger play.
  */
 object NativePlaybackController {
-    private const val TAG = "NativePlayback"
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
     private val _status = MutableStateFlow(PlaybackStatus())
     val status: StateFlow<PlaybackStatus> = _status.asStateFlow()
 
-    private var queue: List<SongEntity> = emptyList()
-    private var queueIndex: Int = 0
+    /**
+     * The queue as the UI knows it. Kept alongside Media3's own timeline so the
+     * queue sheet can render titles without reaching back into Room per item.
+     */
+    private val _queue = MutableStateFlow<List<SongEntity>>(emptyList())
+    val queue: StateFlow<List<SongEntity>> = _queue.asStateFlow()
+
+    /** Full row for the loaded track — the lyric stage reads its payload columns. */
+    private val _currentSong = MutableStateFlow<SongEntity?>(null)
+    val currentSong: StateFlow<SongEntity?> = _currentSong.asStateFlow()
 
     @Volatile
     private var bridgeAttached = false
@@ -55,172 +73,152 @@ object NativePlaybackController {
         synchronized(this) {
             if (bridgeAttached) return
             PlayerBridge.onStatusUpdate = { position, duration, isPlaying, playWhenReady, isBuffering, _ ->
-                syncFromPlayer(position, duration, isPlaying, playWhenReady, isBuffering)
+                val player = PlayerBridge.getPlayer()
+                val item = player?.currentMediaItem
+                val mediaId = item?.mediaId
+                _status.value = PlaybackStatus(
+                    songId = mediaId,
+                    title = item?.mediaMetadata?.title?.toString() ?: "",
+                    artist = item?.mediaMetadata?.artist?.toString() ?: "",
+                    artworkUri = item?.mediaMetadata?.artworkUri?.toString(),
+                    positionSec = position,
+                    durationSec = duration,
+                    isPlaying = isPlaying,
+                    playWhenReady = playWhenReady,
+                    isBuffering = isBuffering,
+                    hasNext = player?.hasNextMediaItem() ?: false,
+                    hasPrevious = player?.hasPreviousMediaItem() ?: false,
+                )
+                // Keep the current row in step with Media3's own auto-advance.
+                if (mediaId != null && mediaId != _currentSong.value?.id) {
+                    _queue.value.firstOrNull { it.id == mediaId }?.let { _currentSong.value = it }
+                }
             }
             bridgeAttached = true
         }
     }
 
-    /** Play [startSong] with [visibleSongs] as the Media3 queue (next/prev). */
-    fun playFromLibrary(context: Context, visibleSongs: List<SongEntity>, startSong: SongEntity) {
-        val playable = visibleSongs.filter { song ->
-            val uri = song.audioUri
-            !uri.isNullOrBlank() && isAllowedUri(uri)
-        }
-        if (playable.isEmpty()) {
-            Log.w(TAG, "playFromLibrary: no playable songs in list")
-            return
-        }
-        val startIndex = playable.indexOfFirst { it.id == startSong.id }.let {
-            if (it >= 0) it else 0
-        }
-        queue = playable
-        queueIndex = startIndex
-        loadQueueAt(context, startIndex)
+    /** Plays one song with no surrounding queue. */
+    fun playSong(context: Context, song: SongEntity) = playQueue(context, listOf(song), 0)
+
+    /**
+     * Plays [song] in the context of the list it was tapped in, so next/previous
+     * follow what the user is actually looking at.
+     */
+    fun playFromLibrary(context: Context, songs: List<SongEntity>, song: SongEntity) {
+        val index = songs.indexOfFirst { it.id == song.id }
+        if (index < 0) playQueue(context, listOf(song), 0) else playQueue(context, songs, index)
     }
 
-    fun playSong(context: Context, song: SongEntity) {
-        playFromLibrary(context, listOf(song), song)
+    /**
+     * Loads [songs] and starts at [startIndex]. Songs without a playable audio
+     * URI are dropped rather than left in the queue as dead entries, and the
+     * start index is corrected to still land on the requested track.
+     */
+    fun playQueue(context: Context, songs: List<SongEntity>, startIndex: Int) {
+        val requested = songs.getOrNull(startIndex)
+        val playable = songs.filter { isPlayable(it.audioUri) }
+        if (playable.isEmpty()) return
+
+        val index = requested
+            ?.let { target -> playable.indexOfFirst { it.id == target.id }.takeIf { it >= 0 } }
+            ?: 0
+
+        ensureBridge()
+        context.startService(Intent(context, PlaybackService::class.java))
+        _queue.value = playable
+        _currentSong.value = playable[index]
+
+        withPlayer { player ->
+            player.setMediaItems(playable.map(::toMediaItem), index, 0L)
+            player.prepare()
+            player.play()
+        }
     }
 
     fun togglePlayPause(context: Context) {
         ensureBridge()
         context.startService(Intent(context, PlaybackService::class.java))
-        val player = PlayerBridge.getPlayer() ?: return
-        mainHandler.post {
+        withPlayer { player ->
             if (player.playWhenReady) player.pause() else player.play()
         }
     }
 
-    fun skipNext(context: Context) {
-        val player = PlayerBridge.getPlayer() ?: return
-        if (!player.hasNextMediaItem()) return
-        context.startService(Intent(context, PlaybackService::class.java))
-        mainHandler.post { player.seekToNextMediaItem() }
+    fun seekTo(seconds: Double) = withPlayer { player ->
+        player.seekTo((seconds * 1000).toLong().coerceAtLeast(0L))
     }
 
-    fun skipPrevious(context: Context) {
-        val player = PlayerBridge.getPlayer() ?: return
-        context.startService(Intent(context, PlaybackService::class.java))
+    fun skipNext() = withPlayer { player ->
+        if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+    }
+
+    /**
+     * Mirrors the RN transport: a press part-way into a track restarts it, and
+     * only a press near the start goes to the previous track.
+     */
+    fun skipPrevious() = withPlayer { player ->
+        if (player.currentPosition > RESTART_THRESHOLD_MS || !player.hasPreviousMediaItem()) {
+            player.seekTo(0)
+        } else {
+            player.seekToPreviousMediaItem()
+        }
+    }
+
+    fun playQueueIndex(index: Int) = withPlayer { player ->
+        if (index in 0 until player.mediaItemCount) {
+            player.seekTo(index, 0L)
+            player.play()
+            _queue.value.getOrNull(index)?.let { _currentSong.value = it }
+        }
+    }
+
+    private fun toMediaItem(song: SongEntity): MediaItem = MediaItem.Builder()
+        .setUri(song.audioUri)
+        .setMediaId(song.id)
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(song.title)
+                .setArtist(song.artist ?: "")
+                .setAlbumTitle(song.album ?: "")
+                .apply {
+                    song.coverImageUri?.takeIf { isPlayable(it) }?.let { setArtworkUri(Uri.parse(it)) }
+                }
+                .build()
+        )
+        .build()
+
+    /**
+     * Runs [block] on the main thread once the service has published its player.
+     *
+     * The service is started asynchronously, so the first command after a cold
+     * start can arrive before `PlayerBridge` has a player. Rather than blocking
+     * a background thread on a latch, this re-posts itself a bounded number of
+     * times — the UI thread is never held and a service that never starts fails
+     * quietly instead of hanging.
+     */
+    private fun withPlayer(attempt: Int = 0, block: (androidx.media3.exoplayer.ExoPlayer) -> Unit) {
         mainHandler.post {
-            if (player.currentPosition > 3000) {
-                player.seekTo(0)
-            } else if (player.hasPreviousMediaItem()) {
-                player.seekToPreviousMediaItem()
-            } else {
-                player.seekTo(0)
-            }
-        }
-    }
-
-    private fun loadQueueAt(context: Context, index: Int) {
-        val song = queue.getOrNull(index) ?: return
-        queueIndex = index
-        ensureBridge()
-        publishOptimistic(song, index)
-
-        context.startService(Intent(context, PlaybackService::class.java))
-        val items = queue.mapNotNull { it.toMediaItemOrNull() }
-        if (items.isEmpty()) return
-
-        Thread {
-            var retries = 0
-            while (PlayerBridge.getPlayer() == null && retries < 100) {
-                Thread.sleep(20)
-                retries++
-            }
             val player = PlayerBridge.getPlayer()
-            if (player == null) {
-                Log.e(TAG, "loadQueueAt: player null after wait")
-                return@Thread
+            if (player != null) {
+                block(player)
+                PlayerBridge.emitStatus()
+            } else if (attempt < PLAYER_WAIT_ATTEMPTS) {
+                mainHandler.postDelayed({ withPlayer(attempt + 1, block) }, PLAYER_WAIT_STEP_MS)
             }
-            val safeIndex = index.coerceIn(0, items.lastIndex)
-            val latch = CountDownLatch(1)
-            mainHandler.post {
-                player.setMediaItems(items, safeIndex, C.TIME_UNSET)
-                player.prepare()
-                player.play()
-                latch.countDown()
-            }
-            latch.await(5, TimeUnit.SECONDS)
-            Log.i(
-                TAG,
-                "playing id=${song.id} title=${song.title} queue=${items.size} index=$safeIndex"
-            )
-        }.start()
-    }
-
-    private fun publishOptimistic(song: SongEntity, index: Int) {
-        _status.value = PlaybackStatus(
-            songId = song.id,
-            title = song.title,
-            artist = song.artist ?: "",
-            artworkUri = song.coverImageUri,
-            isPlaying = false,
-            playWhenReady = true,
-            isBuffering = true,
-            hasNext = index < queue.lastIndex,
-            hasPrevious = index > 0,
-            queueSize = queue.size,
-        )
-    }
-
-    private fun syncFromPlayer(
-        position: Double,
-        duration: Double,
-        isPlaying: Boolean,
-        playWhenReady: Boolean,
-        isBuffering: Boolean,
-    ) {
-        val player = PlayerBridge.getPlayer()
-        val item = player?.currentMediaItem
-        val currentId = item?.mediaId
-        if (!currentId.isNullOrBlank()) {
-            queueIndex = queue.indexOfFirst { it.id == currentId }.let { if (it >= 0) it else queueIndex }
         }
-        val queuedSong = queue.getOrNull(queueIndex)
-        _status.value = PlaybackStatus(
-            songId = currentId ?: queuedSong?.id,
-            title = item?.mediaMetadata?.title?.toString() ?: queuedSong?.title ?: "",
-            artist = item?.mediaMetadata?.artist?.toString() ?: queuedSong?.artist ?: "",
-            artworkUri = item?.mediaMetadata?.artworkUri?.toString() ?: queuedSong?.coverImageUri,
-            positionSec = position,
-            durationSec = duration,
-            isPlaying = isPlaying,
-            playWhenReady = playWhenReady,
-            isBuffering = isBuffering,
-            hasNext = player?.hasNextMediaItem() == true,
-            hasPrevious = player?.hasPreviousMediaItem() == true || position > 3.0,
-            queueSize = queue.size,
-        )
     }
 
-    private fun SongEntity.toMediaItemOrNull(): MediaItem? {
-        val uri = audioUri ?: return null
-        if (!isAllowedUri(uri)) return null
-        return MediaItem.Builder()
-            .setUri(uri)
-            .setMediaId(id)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist ?: "")
-                    .setAlbumTitle(album ?: "")
-                    .apply {
-                        coverImageUri?.takeIf { isAllowedUri(it) }?.let {
-                            setArtworkUri(Uri.parse(it))
-                        }
-                    }
-                    .build()
-            )
-            .build()
-    }
+    private fun withPlayer(block: (androidx.media3.exoplayer.ExoPlayer) -> Unit) = withPlayer(0, block)
 
-    private fun isAllowedUri(uri: String): Boolean {
-        if (uri.isBlank() || uri.length > 4096) return false
+    private fun isPlayable(uri: String?): Boolean {
+        if (uri.isNullOrBlank() || uri.length > 4096) return false
         return when (Uri.parse(uri).scheme?.lowercase()) {
             "file", "content", "https" -> true
             else -> false
         }
     }
+
+    private const val RESTART_THRESHOLD_MS = 3_000L
+    private const val PLAYER_WAIT_ATTEMPTS = 100
+    private const val PLAYER_WAIT_STEP_MS = 20L
 }

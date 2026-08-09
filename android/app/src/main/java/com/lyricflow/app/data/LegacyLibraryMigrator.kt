@@ -70,8 +70,12 @@ class LegacyLibraryMigrator(private val appContext: Context) {
             Log.i(TAG, "Reading legacy DB from ${legacyFile.absolutePath} (${legacyFile.length()} bytes)")
             val backup = writeBackup(legacyFile)
             val staged = stageCopy(legacyFile)
-            // Full row copy whenever Room is empty; song-only REPLACE for payload bumps.
-            val fullCopy = !completed || roomSongs == 0
+            // Full row copy whenever Room is empty *or* the stored payload is a
+            // version behind. A payload bump can change the shape of non-song
+            // rows too — v4 widened lyric timestamps to REAL — so a song-only
+            // REPLACE would leave those stale. Inserts are REPLACE over stable
+            // primary keys, so re-copying is idempotent.
+            val fullCopy = !completed || roomSongs == 0 || !payloadOk
 
             val data: LegacyData = try {
                 openReadonly(staged).use { source ->
@@ -102,11 +106,25 @@ class LegacyLibraryMigrator(private val appContext: Context) {
             )
 
             db.withTransaction {
-                db.songDao().insertAll(data.songs)
+                // Carry forward the three columns Compose owns. insertAll is
+                // REPLACE, so without this a full re-copy silently reverts every
+                // like and play count the native app has written.
+                val localState = db.songDao().localState().associateBy { it.id }
+                val merged = data.songs.map { song ->
+                    val local = localState[song.id] ?: return@map song
+                    song.copy(
+                        isLiked = local.isLiked,
+                        playCount = local.playCount,
+                        lastPlayed = local.lastPlayed,
+                    )
+                }
+                db.songDao().insertAll(merged)
+
                 if (fullCopy) {
                     db.songDao().insertLyrics(data.lyrics)
                     db.playlistDao().insertAll(data.playlists)
                     db.playlistDao().insertAllLinks(data.links)
+                    pruneRowsAbsentFromLegacy(db, data)
                 }
                 db.migrationDao().putAll(metaRows(report))
             }
@@ -257,6 +275,47 @@ class LegacyLibraryMigrator(private val appContext: Context) {
         return out
     }
 
+    /**
+     * Removes Room rows that no longer exist in legacy.
+     *
+     * `fullCopy` only ever REPLACE-inserts, so without this a song, playlist or
+     * playlist membership deleted in the RN app lingers in Room forever and
+     * "legacy is the source of truth" stops being true.
+     *
+     * Deletes are by `IN` over a Kotlin-computed difference, chunked — not
+     * `NOT IN`. The library is over 1000 rows, which exceeds SQLite's
+     * per-statement variable limit, and a chunked `NOT IN` would be actively
+     * wrong: each chunk would delete everything outside itself.
+     *
+     * Must run inside the caller's transaction — a partial prune drops library.
+     */
+    private suspend fun pruneRowsAbsentFromLegacy(db: LibraryDatabase, data: LegacyData) {
+        val legacySongIds = data.songs.mapTo(HashSet()) { it.id }
+        val staleSongs = db.songDao().allIds().filterNot { it in legacySongIds }
+        staleSongs.chunked(CHUNK).forEach { db.songDao().deleteSongs(it) }
+
+        val legacyPlaylistIds = data.playlists.mapTo(HashSet()) { it.id }
+        val stalePlaylists = db.playlistDao().allIds().filterNot { it in legacyPlaylistIds }
+        stalePlaylists.chunked(CHUNK).forEach { db.playlistDao().deletePlaylists(it) }
+
+        // playlist_songs has no single id — its key is (playlist_id, song_id).
+        // A membership can be removed while both parents still exist, so parent
+        // cascades are not sufficient on their own.
+        val legacyLinks = data.links.mapTo(HashSet()) { it.playlistId to it.songId }
+        db.playlistDao().allLinkKeys()
+            .filterNot { (it.playlistId to it.songId) in legacyLinks }
+            .groupBy({ it.playlistId }, { it.songId })
+            .forEach { (playlistId, songIds) ->
+                songIds.chunked(CHUNK).forEach { chunk ->
+                    db.playlistDao().deleteLinks(playlistId, chunk)
+                }
+            }
+
+        if (staleSongs.isNotEmpty() || stalePlaylists.isNotEmpty()) {
+            Log.i(TAG, "Pruned ${staleSongs.size} songs, ${stalePlaylists.size} playlists absent from legacy")
+        }
+    }
+
     private fun readLyrics(db: SQLiteDatabase): List<LyricLineEntity> {
         val out = ArrayList<LyricLineEntity>()
         db.rawQuery("SELECT * FROM lyrics ORDER BY song_id, line_order", null).use { c ->
@@ -265,8 +324,10 @@ class LegacyLibraryMigrator(private val appContext: Context) {
             while (c.moveToNext()) {
                 out += LyricLineEntity(
                     songId = c.string(songId) ?: continue,
-                    // Legacy stores seconds as REAL/INTEGER — keep second precision as int ms-floor via getDouble→round when needed.
-                    timestamp = c.secondsAsInt(timestamp),
+                    // Legacy stores fractional seconds under an INTEGER column
+                    // declaration (SQLite affinity is loose). Read as a double —
+                    // truncating here cost every synced lyric up to a second.
+                    timestamp = c.secondsAsDouble(timestamp),
                     text = c.string(text) ?: "",
                     lineOrder = c.int(lineOrder),
                 )
@@ -389,9 +450,9 @@ class LegacyLibraryMigrator(private val appContext: Context) {
     private fun Cursor.int(col: Int, default: Int = 0): Int =
         if (col >= 0 && !isNull(col)) getInt(col) else default
 
-    /** Legacy timestamps may be REAL seconds; store as whole seconds for Room Int. */
-    private fun Cursor.secondsAsInt(col: Int): Int =
-        if (col >= 0 && !isNull(col)) getDouble(col).toInt() else 0
+    /** Legacy timestamps are REAL seconds under an INTEGER declaration. */
+    private fun Cursor.secondsAsDouble(col: Int): Double =
+        if (col >= 0 && !isNull(col)) getDouble(col) else 0.0
 
     private fun Cursor.double(col: Int): Double =
         if (col >= 0 && !isNull(col)) getDouble(col) else 0.0
@@ -400,13 +461,20 @@ class LegacyLibraryMigrator(private val appContext: Context) {
         if (col >= 0 && !isNull(col)) getInt(col) == 1 else false
 
     companion object {
+        /** Kept well under SQLite's per-statement variable limit. */
+        private const val CHUNK = 500
+
         const val TAG = "LegacyMigrator"
         const val LEGACY_DB_NAME = "lyricflow.db"
         const val KEY_COMPLETED = "migration.completed"
         const val KEY_PAYLOAD_VERSION = "migration.payloadVersion"
         const val KEY_REPORT = "report"
         /** Bump when song-row fields must be re-pulled from legacy. */
-        const val PAYLOAD_VERSION = 3
+        /**
+         * 4 — lyric timestamps widened to REAL seconds. Bumping this forces a
+         * full re-copy so the truncated v3 rows are replaced.
+         */
+        const val PAYLOAD_VERSION = 4
         const val BACKUP_DIR = "db-backups"
         const val STAGE_DIR = "migration-src"
     }

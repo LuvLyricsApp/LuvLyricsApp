@@ -107,23 +107,13 @@ fun LyricFlowComposeApp(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.background,
-                    )
-                )
-            )
-            .safeDrawingPadding()
+            .background(MaterialTheme.colorScheme.background)
     ) {
+        // No blanket safeDrawingPadding() and no global top bar: each screen owns
+        // its own header and top inset, so Local can run its artwork wash to the
+        // top of the display instead of sitting below a second title bar. The tab
+        // bar owns the bottom inset itself.
         Column(modifier = Modifier.fillMaxSize()) {
-            ShellTopBar(
-                title = selectedTab.label,
-                onOpenSettings = { showSettings = true },
-            )
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -139,6 +129,7 @@ fun LyricFlowComposeApp(
                         migrationReport = migrationReport,
                         libraryRepository = libraryRepository,
                         onOpenLegacyNow = onOpenLegacyNow,
+                        onOpenSettings = { showSettings = true },
                         onPlaySong = { song, queueSongs ->
                             NativePlaybackController.playFromLibrary(appContext, queueSongs, song)
                         },
@@ -146,28 +137,16 @@ fun LyricFlowComposeApp(
                 }
             }
 
-            // Phase 2 slice 1: docked classic mini-player above the tab bar.
-            ComposeMiniPlayer()
+            // The docked player: classic bar → half → full lyric sheet. It is
+            // the only player surface, so it stays above the tab bar at every
+            // stage rather than pushing to a separate route.
+            com.lyricflow.app.compose.player.PlayerDock(repository = libraryRepository)
 
-            NavigationBar(
-                modifier = Modifier.navigationBarsPadding(),
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                tonalElevation = 0.dp,
-            ) {
-                shellTabs.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab.destination,
-                        onClick = { selectedTab = tab.destination },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.destination.label,
-                            )
-                        },
-                        label = { Text(tab.destination.label) },
-                    )
-                }
-            }
+            LuvTabBar(
+                tabs = shellTabs.map { it.destination to it.icon },
+                selected = selectedTab,
+                onSelect = { selectedTab = it },
+            )
         }
 
         if (showSettings) {
@@ -236,12 +215,18 @@ private fun ShellTabScene(
     migrationReport: LegacyLibraryMigrator.Report?,
     libraryRepository: LibraryRepository,
     onOpenLegacyNow: () -> Unit,
+    onOpenSettings: () -> Unit,
     onPlaySong: (com.lyricflow.app.data.SongEntity, List<com.lyricflow.app.data.SongEntity>) -> Unit,
 ) {
     when (destination) {
-        ShellDestination.LOCAL -> LocalLibraryScreen(
+        ShellDestination.LOCAL -> LocalHomeScreen(
             repository = libraryRepository,
-            migrationReport = migrationReport,
+            // The download queue and the downloader itself are still RN-only —
+            // there is no native download model yet — so both open the legacy app
+            // rather than shipping two dead buttons.
+            onOpenQueue = onOpenLegacyNow,
+            onOpenDownloader = onOpenLegacyNow,
+            onOpenSettings = onOpenSettings,
         )
         ShellDestination.PLAYLISTS -> PlaylistsScreen(repository = libraryRepository)
         else -> ShellPlaceholderTab(

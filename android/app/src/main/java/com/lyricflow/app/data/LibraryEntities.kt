@@ -69,7 +69,14 @@ data class SongEntity(
 data class LyricLineEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "song_id") val songId: String,
-    val timestamp: Int,
+    /**
+     * Seconds, fractional. The legacy column is declared INTEGER but SQLite's
+     * loose affinity means it actually holds REAL seconds (34.86, 37.72, …) —
+     * 3421 of 3461 rows in the live library are fractional. Storing this as an
+     * Int truncated every one of them and put synced lyrics up to a second out.
+     * Keep it Double.
+     */
+    val timestamp: Double,
     val text: String,
     @ColumnInfo(name = "line_order") val lineOrder: Int,
 )
@@ -132,4 +139,23 @@ data class SongWithLyrics(
 data class PlaylistWithSongCount(
     @Embedded val playlist: PlaylistEntity,
     val songCount: Int,
+)
+
+/**
+ * The subset of song columns Compose is allowed to own. Everything else is
+ * legacy's until the Phase 8 cutover, so a re-migration overwrites it — but
+ * these three must survive, or every like and play count made in the native app
+ * disappears on the next payload bump.
+ */
+data class SongLocalState(
+    val id: String,
+    @ColumnInfo(name = "is_liked") val isLiked: Boolean,
+    @ColumnInfo(name = "play_count") val playCount: Int,
+    @ColumnInfo(name = "last_played") val lastPlayed: String?,
+)
+
+/** Composite identity of a playlist membership, for prune diffing. */
+data class PlaylistLinkKey(
+    @ColumnInfo(name = "playlist_id") val playlistId: String,
+    @ColumnInfo(name = "song_id") val songId: String,
 )

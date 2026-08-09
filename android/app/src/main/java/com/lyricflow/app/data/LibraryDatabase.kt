@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlaylistSongEntity::class,
         MigrationMetaEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -44,10 +44,37 @@ abstract class LibraryDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * `lyrics.timestamp` INTEGER → REAL.
+         *
+         * The legacy column is declared INTEGER but holds fractional seconds,
+         * so reading it into an Int truncated 3421 of 3461 rows and left synced
+         * lyrics up to a second late. SQLite cannot change a column's type in
+         * place, so the table is rebuilt; the rows are refilled by the migrator
+         * on the same launch because PAYLOAD_VERSION is bumped alongside this.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `lyrics`")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `lyrics` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`song_id` TEXT NOT NULL, " +
+                        "`timestamp` REAL NOT NULL, " +
+                        "`text` TEXT NOT NULL, " +
+                        "`line_order` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`song_id`) REFERENCES `songs`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_lyrics_song_id` ON `lyrics` (`song_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_lyrics_timestamp` ON `lyrics` (`timestamp`)")
+            }
+        }
+
         fun build(context: Context): LibraryDatabase =
             Room.databaseBuilder(context, LibraryDatabase::class.java, DB_NAME)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }
