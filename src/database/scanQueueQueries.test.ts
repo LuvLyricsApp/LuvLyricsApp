@@ -1,4 +1,4 @@
-import { withDbWrite, withDbRead, esc } from './db';
+import { withDbWrite, withDbRead } from './db';
 import { upsertScanJob, updateScanJobStatus, deleteScanJob, loadPendingScanJobs, pruneOldFailedJobs } from './scanQueueQueries';
 import type { ScanJob } from '../store/lyricsScanQueueStore';
 

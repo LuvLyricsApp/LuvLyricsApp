@@ -292,7 +292,9 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
                   isIsland ? styles.islandFill : styles.classicFill,
                   fillStyle,
                 ]}
-              />
+              >
+                <View style={styles.fillSheen} pointerEvents="none" />
+              </Animated.View>
             </Animated.View>
 
             {/* No floating round thumb: the line itself is the seek affordance. */}
@@ -364,22 +366,34 @@ const styles = StyleSheet.create({
   },
   fillBase: {
     height: '100%',
+    overflow: 'hidden',
   },
-  // Unplayed remainder: low enough that the blurred cover art reads through it and
-  // it feels part of the artwork, high enough to still register as a line. The
-  // affordance is carried by the contrast against the solid white played portion,
-  // not by this being bright in its own right.
+  // Single bright hairline along the top edge. This is what reads as a glass
+  // lip and makes the translucent fill legible without filling it in solid.
+  fillSheen: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  // Both halves are frosted glass, not paint: no colour of their own, just
+  // different amounts of translucency so the artwork flow shows through and
+  // stays the thing you actually see. Played vs unplayed is carried purely by
+  // the gap between these two alphas plus the sheen hairline — a solid fill
+  // read as a hard white stripe cutting across the lyrics.
   classicTrackBg: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   classicFill: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.34)',
   },
   islandTrackBg: {
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   islandFill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: 'rgba(255,255,255,0.38)',
   },
   timeContainer: {
     flexDirection: 'row',

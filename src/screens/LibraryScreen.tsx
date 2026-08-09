@@ -221,6 +221,12 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('AddEditLyrics', { songId: selectedSongForArt.id });
   }, [navigation, selectedSongForArt]);
 
+  const handleSyncLyrics = useCallback(() => {
+    if (!selectedSongForArt) return;
+    setShowBottomSheet(false);
+    navigation.navigate('SyncLyrics', { songId: selectedSongForArt.id });
+  }, [navigation, selectedSongForArt]);
+
   const handleAddPress = useCallback(() => navigation.navigate('AddEditLyrics', {}), [navigation]);
 
   useEffect(() => {
@@ -456,6 +462,14 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
           renderItem={renderItem}
           estimatedItemSize={80}
           drawDistance={1200}
+          // Songs sort newest-first, so a finished download inserts at index 0.
+          // FlashList v2 enables maintainVisibleContentPosition by default, which
+          // then pushes the viewport down to keep the same rows on screen — that
+          // is what dragged the recently-played header out of view on every
+          // completed download. The threshold snaps back to the top instead
+          // whenever the user is already near it, while someone scrolled deep
+          // into the list still keeps their place.
+          maintainVisibleContentPosition={{ autoscrollToTopThreshold: 600 }}
           overrideItemLayout={(layout: any) => { setSongItemLayout(layout); }}
           getItemType={(_item: any) => 'song'}
           contentContainerStyle={{
@@ -509,6 +523,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
         onHideSong={handleHideSong}
         onEditInfo={handleEditInfo}
         onEditLyrics={handleEditLyrics}
+        onSyncLyrics={handleSyncLyrics}
         onDelete={() => { setShowBottomSheet(false); setTimeout(() => setShowDeleteConfirm(true), 300); }}
         colors={colors}
       />

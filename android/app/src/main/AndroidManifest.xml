@@ -6,6 +6,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
@@ -27,17 +28,31 @@
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
+    <activity android:name=".LauncherActivity" android:exported="true" android:launchMode="singleTask" android:theme="@style/AppTheme" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+    </activity>
+    <activity android:name=".ComposeShellActivity" android:exported="false" android:launchMode="singleTask" android:theme="@style/AppTheme" android:screenOrientation="portrait"/>
+    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="lyricflow"/>
         <data android:scheme="exp+lyricflow"/>
+      </intent-filter>
+      <!-- Spotify OAuth callback. Separate filter so the host is constrained:
+           this scheme is the app's package name, and an unhosted filter would
+           claim every com.lyricflow.app:// link. Must match SpotifyConfig
+           .REDIRECT_URI and the Redirect URI registered on the user's Spotify
+           app: com.lyricflow.app://spotify-callback -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="com.lyricflow.app" android:host="spotify-callback"/>
       </intent-filter>
     </activity>
 
@@ -46,7 +61,8 @@
          for Media3 to discover the session. -->
     <service android:name=".services.PlaybackService"
         android:foregroundServiceType="mediaPlayback"
-        android:exported="true">
+        android:exported="true"
+        tools:ignore="ExportedService">
       <intent-filter>
         <action android:name="androidx.media3.session.MediaSessionService"/>
       </intent-filter>

@@ -18,8 +18,8 @@ const KEYS = {
 };
 
 export const useDesktopBridgeSettingsStore = create<DesktopBridgeSettings>((set) => ({
-  desktopConnectEnabled: true,
-  allowDesktopDownloads: true,
+  desktopConnectEnabled: false,
+  allowDesktopDownloads: false,
   controlPort: 8765,
 
   setDesktopConnectEnabled: async (v) => {
@@ -56,8 +56,8 @@ export const useDesktopBridgeSettingsStore = create<DesktopBridgeSettings>((set)
         KEYS.allowDesktopDownloads,
         KEYS.controlPort,
       ]);
-      const desktopConnectEnabled = enabled[1] !== null ? JSON.parse(enabled[1]) : true;
-      const allowDesktopDownloads = downloads[1] !== null ? JSON.parse(downloads[1]) : true;
+      const desktopConnectEnabled = enabled[1] !== null ? JSON.parse(enabled[1]) : false;
+      const allowDesktopDownloads = downloads[1] !== null ? JSON.parse(downloads[1]) : false;
       const controlPortRaw = controlPortEntry?.[1];
       const controlPort = controlPortRaw !== null && controlPortRaw !== undefined ? JSON.parse(controlPortRaw) : 8765;
       set({ desktopConnectEnabled, allowDesktopDownloads, controlPort });

@@ -30,6 +30,7 @@ interface SongsState {
   setSortBy: (sort: SortOption) => void;
   searchSongs: (query: string) => Promise<Song[]>;
   toggleLike: (songId: string) => Promise<void>;
+  setLyricsOffset: (songId: string, offset: number) => Promise<void>;
   clearError: () => void;
 }
 
@@ -241,6 +242,30 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
          }
       },
       
+      /**
+       * Persist the per-song lyric sync correction and push it into every live
+       * consumer. Patching playerStore matters most: the sync screen calibrates
+       * against the song that is currently playing, so the highlight has to move
+       * the instant the offset changes rather than on the next load.
+       */
+      setLyricsOffset: async (songId: string, offset: number) => {
+         try {
+             await queries.patchLyricsOffset(songId, offset);
+
+             set((state) => ({
+                songs: state.songs.map(s => s.id === songId ? { ...s, lyricsOffset: offset } : s),
+             }));
+
+             const { usePlayerStore } = await import('./playerStore');
+             const playerState = usePlayerStore.getState();
+             if (playerState.currentSong?.id === songId) {
+                playerState.updateCurrentSong({ lyricsOffset: offset });
+             }
+         } catch (error) {
+             set({ error: error instanceof Error ? error.message : 'Failed to save lyric offset' });
+         }
+      },
+
       clearError: () => set({ error: null }),
 }));
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
 import { View, Text, Pressable, StyleSheet, Dimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +33,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
-import { getGradientColors } from '../constants/gradients';
+import { getGradientForSong } from '../constants/gradients';
 import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
 import { RotatingVinyl } from './VinylRecord';
 import ArtworkFlowBackground from './ArtworkFlowBackground';
@@ -58,8 +58,15 @@ const CLASSIC_SCRUBBER_HIT_H = 32;
 // Classic shell height at the two open stages, as a fraction of screen height.
 // Shared by the animated shell height and the lyrics container so the two can
 // never drift apart.
-const CLASSIC_HALF_RATIO = 0.54;
+// Tuned against the Home screen: the half-open bar should swallow the whole song
+// list while leaving the recently-played cards above it readable — title and
+// artist included. 0.54 let the first list row peek out; 0.60 rode up over the
+// card captions. 0.565 sits between the two.
+const CLASSIC_HALF_RATIO = 0.565;
 const CLASSIC_FULL_RATIO = 0.915;
+
+/** Lowest opacity the lyric stage dips to while swapping songs. Never 0. */
+const LYRIC_SWAP_DIP = 0.3;
 
 
 // Create Animated Pressable
@@ -277,7 +284,7 @@ PlaybackControls.displayName = 'PlaybackControls';
 
 // UIManager.setLayoutAnimationEnabledExperimental removed to avoid New Architecture warning
 
-export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true }) => {
+export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = () => {
   const player = usePlayer();
   const currentSong = usePlayerStore(state => state.currentSong);
   const showTransliteration = usePlayerStore(state => state.showTransliteration);
@@ -339,9 +346,14 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   
   const screenHeight = Dimensions.get('window').height;
 
-  const gradientColors = currentSong?.gradientId 
-    ? getGradientColors(currentSong.gradientId) 
-    : ['#222', '#111'];
+  // getGradientForSong skips the 'dynamic' placeholder (['#333','#000']) and hashes
+  // the song id to a real preset instead. Passing the placeholder straight through
+  // gave ArtworkFlowBackground nothing usable, so the flow sat on its flat near-black
+  // fallback whenever artwork extraction was still pending or unavailable.
+  const gradientColors = useMemo(
+    () => (currentSong ? getGradientForSong(currentSong) : ['#222222', '#111111']),
+    [currentSong],
+  );
     
   // Local state for persistent lyrics (Cross-fade support)
   const [displayedSong, setDisplayedSong] = useState(currentSong);
@@ -353,8 +365,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // 1. Song Changed (ID mismatch)
     if (currentSong?.id !== displayedSong?.id) {
         if (!isIsland && expanded) {
-            // Fade Out -> Update Data -> Fade In
-            transitionOpacity.value = withTiming(0, { duration: 300 }, (finished) => {
+            // Dip -> swap -> lift. Deliberately never reaches 0: a full blank
+            // read as the open bar vanishing and popping back on every skip.
+            // Dipping to a low-but-visible opacity still hides the text swap,
+            // while the stage itself stays continuously on screen.
+            transitionOpacity.value = withTiming(LYRIC_SWAP_DIP, { duration: 190 }, (finished) => {
                 if (finished) {
                     runOnJS(setDisplayedSong)(currentSong);
                     transitionOpacity.value = withTiming(1, { duration: 300 });
@@ -562,6 +577,17 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
   });
   
+  // Collapsed-bar scrim. The artwork flow is capped for readability, but the
+  // title/artist/controls strip sits on whatever blob happens to drift under it,
+  // so the closed bar gets a guaranteed dark footing. Fades out as soon as the
+  // bar opens — half/full show the lyric sheet and must stay unobstructed.
+  const animatedClassicScrimStyle = useAnimatedStyle(() => {
+    if (isIsland) return { opacity: 0 };
+    return {
+      opacity: interpolate(expansionProgress.value, [0, 0.4], [1, 0], Extrapolation.CLAMP),
+    };
+  });
+
   // Get Current Lyric (Use displayedSong for persistent view)
   // Use displayedSong if expanded/classic to prevent instant jump, else currentSong
   const songForLyrics = (!isIsland && expanded) ? displayedSong : currentSong;
@@ -571,6 +597,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     : songForLyrics?.lyrics;
 
   const lyricsDelay = useSettingsStore(state => state.lyricsDelay);
+  // Per-song sync correction stacks on the global delay. Sourced from the same
+  // song the lyrics come from, so it stays consistent through the cross-fade.
+  const songLyricsOffset = songForLyrics?.lyricsOffset ?? 0;
 
   // Lyric index computed on UI thread ΓÇö re-renders only when the active line changes.
   // Island-only: the classic bar renders SynchronizedLyrics, which derives its own
@@ -579,7 +608,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // including mid-collapse, right when frames are scarce.
   const currentLyricIndexDV = useDerivedValue(() => {
     if (!isIsland || !lyricsToUse || lyricsToUse.length === 0) return -1;
-    return getCurrentLineIndex(lyricsToUse, positionSV.value + lyricsDelay);
+    return getCurrentLineIndex(lyricsToUse, positionSV.value + lyricsDelay + songLyricsOffset);
   });
 
   const [currentLyricIndex, setCurrentLyricIndex] = useState(-1);
@@ -938,20 +967,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, isIsland]);
 
-  const handleLyricPress = useCallback((timestamp: number) => {
-      if (!fullLyricExpanded) {
-          // In Half-Screen mode, tapping lyrics expands to Full Screen
-          runOnJS(setFullLyricExpanded)(true);
-          fullExpansionProgress.value = withSpring(1);
-          return; // Do NOT seek in half mode
-      } 
-      // Only seek in Full Screen mode.
-      // seekTo pauses on iOS, so resume if the user was playing.
-      const wasPlaying = usePlayerStore.getState().isPlaying;
-      playerControls.seekTo(timestamp);
-      if (wasPlaying) playerControls.play();
-  }, [fullLyricExpanded, fullExpansionProgress]);
-
   // Classic bar: tapping a lyric seeks straight to it. Stable identity matters —
   // an inline arrow here invalidated SynchronizedLyrics' renderItem callback, so
   // every MiniPlayer re-render re-rendered all ~60 memoized lyric rows.
@@ -1042,6 +1057,24 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
         </View>
+      )}
+
+      {/* Guaranteed dark footing under the collapsed transport row. Sits after the
+          artwork block and before the content in document order — no zIndex, so
+          the controls still paint on top of it. */}
+      {!isIsland && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.classicBottomScrim, animatedClassicScrimStyle]}
+        >
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.88)']}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
       )}
 
       {/* Scrubber on the top edge of the transport row — same collapsed/half/full. */}
@@ -1306,6 +1339,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             bottomSpacerHeight={50}
                             expandedAt={lyricExpandedAt}
                             edgeFade={48}
+                            lyricsOffset={songLyricsOffset}
                         />
 
                         {/* Stage-drag rails. Transparent strips down the far left and
@@ -1397,10 +1431,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: CLASSIC_TRANSPORT_H,
     paddingLeft: 12,
-    paddingRight: 2,
+    // The play button used to sit ~2px off the screen edge. Its own 4px padding
+    // plus this keeps the icon a comfortable 18px in, matching the artwork inset
+    // on the left so the row reads as balanced.
+    paddingRight: 14,
     // Room for the top-edge scrubber track
     paddingTop: 12,
     width: '100%',
+  },
+  // Anchored to the bottom of the shell and exactly one transport row tall, so on
+  // the collapsed bar it reads as "bottom half is black" while the top edge stays
+  // open to the artwork flow.
+  classicBottomScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: CLASSIC_TRANSPORT_H,
   },
   classicTrackInfoSwipeTarget: {
     flex: 1,

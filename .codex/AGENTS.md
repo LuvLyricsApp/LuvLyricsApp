@@ -2,6 +2,15 @@
 
 This supplements the root `AGENTS.md` with a repo-local ECC baseline.
 
+## Migration context (LuvLyrics 2.0)
+
+The repo is actively migrating from React Native/Expo to Kotlin + Jetpack Compose.
+
+- Read `.planning/STATE.md` first for current phase and verified facts.
+- **Never run `expo prebuild`.** Do not delete `src/` until Phase 8.
+- Native verification: `cd android && .\gradlew.bat :app:assembleDebug` then `adb install`.
+- Compose shell launches via `LauncherActivity`; legacy RN via `MainActivity` (lazy Expo init in debug).
+
 ## Repo Skill
 
 - Repo-generated Codex skill: `.agents/skills/LuvLyricsApp/SKILL.md`

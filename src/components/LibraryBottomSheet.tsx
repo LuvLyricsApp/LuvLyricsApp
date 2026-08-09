@@ -17,6 +17,7 @@ interface LibraryBottomSheetProps {
   onHideSong: () => void;
   onEditInfo: () => void;
   onEditLyrics: () => void;
+  onSyncLyrics: () => void;
   onDelete: () => void;
   colors: {
     primary: string;
@@ -37,6 +38,7 @@ const LibraryBottomSheet: React.FC<LibraryBottomSheetProps> = ({
   onHideSong,
   onEditInfo,
   onEditLyrics,
+  onSyncLyrics,
   onDelete,
   colors,
 }) => {
@@ -99,6 +101,11 @@ const LibraryBottomSheet: React.FC<LibraryBottomSheetProps> = ({
           <Pressable style={styles.option} onPress={onEditLyrics}>
             <Ionicons name="musical-notes-outline" size={24} color={colors.primary} />
             <Text style={styles.optionText}>Edit Lyrics</Text>
+          </Pressable>
+
+          <Pressable style={styles.option} onPress={onSyncLyrics}>
+            <Ionicons name="timer-outline" size={24} color={colors.primary} />
+            <Text style={styles.optionText}>Sync Lyrics</Text>
           </Pressable>
 
           <Pressable style={[styles.option, styles.cancelOption, { borderBottomWidth: 0, marginTop: 12, backgroundColor: '#2A2A2A' }]} onPress={onDelete}>

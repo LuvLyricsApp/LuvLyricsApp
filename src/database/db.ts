@@ -125,6 +125,11 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
       last_played TEXT,
       scroll_speed INTEGER DEFAULT 50,
       cover_image_uri TEXT,
+      lyric_source TEXT,
+      lyrics_raw TEXT,
+      lyrics_format TEXT,
+      lyrics_sync_type TEXT,
+      lyrics_precision TEXT,
       lyrics_align TEXT DEFAULT 'left',
       audio_uri TEXT,
       is_hidden INTEGER DEFAULT 0
@@ -203,6 +208,31 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
       await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_align TEXT DEFAULT "left"');
       log('Migration complete');
     }
+    if (!columns.some(c => c.name === 'lyric_source')) {
+      log('Adding lyric_source column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyric_source TEXT');
+      log('Migration complete');
+    }
+    if (!columns.some(c => c.name === 'lyrics_raw')) {
+      log('Adding lyrics_raw column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_raw TEXT');
+      log('Migration complete');
+    }
+    if (!columns.some(c => c.name === 'lyrics_format')) {
+      log('Adding lyrics_format column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_format TEXT');
+      log('Migration complete');
+    }
+    if (!columns.some(c => c.name === 'lyrics_sync_type')) {
+      log('Adding lyrics_sync_type column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_sync_type TEXT');
+      log('Migration complete');
+    }
+    if (!columns.some(c => c.name === 'lyrics_precision')) {
+      log('Adding lyrics_precision column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_precision TEXT');
+      log('Migration complete');
+    }
     if (!columns.some(c => c.name === 'text_case')) {
       log('Adding text_case column...');
       await database.execAsync('ALTER TABLE songs ADD COLUMN text_case TEXT DEFAULT "normal"');
@@ -259,6 +289,11 @@ const initializeTables = async (database: SQLite.SQLiteDatabase): Promise<void> 
     if (!columns.some(c => c.name === 'youtube_video_id')) {
       log('Adding youtube_video_id column...');
       await database.execAsync('ALTER TABLE songs ADD COLUMN youtube_video_id TEXT');
+      log('Migration complete');
+    }
+    if (!columns.some(c => c.name === 'lyrics_offset')) {
+      log('Adding lyrics_offset column...');
+      await database.execAsync('ALTER TABLE songs ADD COLUMN lyrics_offset REAL DEFAULT 0');
       log('Migration complete');
     }
   } catch (e) {

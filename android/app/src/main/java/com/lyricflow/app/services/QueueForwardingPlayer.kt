@@ -2,12 +2,14 @@ package com.lyricflow.app.services
 
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import com.lyricflow.app.modules.PlayerBridge
 
 /**
  * ExoPlayer holds current (+ optional prepared next). When a next item is present,
  * notification skip uses native seekToNext. Otherwise it falls through to the JS queue.
  */
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class QueueForwardingPlayer(private val player: Player) : ForwardingPlayer(player) {
 
     override fun getAvailableCommands(): Player.Commands =

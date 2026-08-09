@@ -2,12 +2,21 @@
  * LyricFlow - Song & Lyrics Type Definitions
  */
 
+/** Per-word timing for rich-sync / TTML karaoke highlight. */
+export interface LyricWord {
+  text: string;
+  startTime: number; // seconds
+  endTime: number;   // seconds
+}
+
 export interface LyricLine {
   id?: number;
   timestamp: number; // in seconds
   text: string;
   lineOrder: number;
   align?: 'left' | 'center' | 'right';
+  /** Present when source was word-timed (Unison TTML richsync, Better Lyrics, etc.). */
+  words?: LyricWord[];
 }
 
 export interface Song {
@@ -27,11 +36,23 @@ export interface Song {
   lyricsAlign?: 'left' | 'center' | 'right'; // Default alignment for all lyrics
   textCase?: 'normal' | 'uppercase' | 'titlecase' | 'sentencecase'; // Text case transformation
   lyricSource?: string; // Where lyrics came from (e.g. 'LRCLIB', 'Genius', 'Lyrica', 'JioSaavn', 'Manual')
+  lyricsRaw?: string; // Provider payload preserved for re-rendering richer sync later
+  lyricsFormat?: string; // e.g. lrc, ttml, plain
+  lyricsSyncType?: string; // e.g. richsync, linesync, plain
+  lyricsPrecision?: 'word' | 'synced' | 'plain';
   audioUri?: string; // URI to local audio file
   isLiked?: boolean; // Whether song is liked
   isHidden?: boolean; // Whether song is hidden
   transliteratedLyrics?: LyricLine[]; // Romanized/Colloquial lyrics
   youtubeVideoId?: string; // YouTube video ID for beta video preview feature
+  /**
+   * Per-song correction, in seconds, added to the global `lyricsDelay` when
+   * picking the active line. Negative delays the lyrics (the common case: the
+   * source file timestamps the first line at 0s but the vocal only enters after
+   * an instrumental intro). Non-destructive — the stored timestamps are never
+   * rewritten, so re-fetching lyrics does not lose the correction.
+   */
+  lyricsOffset?: number;
 
   // AI Karaoke fields removed
 }

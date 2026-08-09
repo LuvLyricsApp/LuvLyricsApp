@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -67,7 +68,14 @@ class PlaybackService : MediaSessionService() {
         Log.d(TAG, "PlaybackService.onCreate() done — media session ready")
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        if (!controllerInfo.isTrusted) {
+            Log.w(TAG, "Rejected untrusted media controller: ${controllerInfo.packageName}")
+            return null
+        }
+        return mediaSession
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Swiping the app away while paused should tear the service down rather

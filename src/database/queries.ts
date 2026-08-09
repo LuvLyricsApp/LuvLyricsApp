@@ -11,6 +11,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { Song } from '../types/song';
 import { normalizeLyrics } from '../utils/timestampParser';
+import { hydrateLyricsWithWordTimings } from '../services/LyricaService';
 
 const LOG_PREFIX = '[QUERIES]';
 
@@ -34,11 +35,17 @@ export const getAllSongs = async (): Promise<Song[]> => {
       last_played: string | null;
       scroll_speed: number;
       cover_image_uri: string | null;
+      lyric_source: string | null;
+      lyrics_raw: string | null;
+      lyrics_format: string | null;
+      lyrics_sync_type: string | null;
+      lyrics_precision: 'word' | 'synced' | 'plain' | null;
       lyrics_align: string | null;
       text_case: string | null;
       audio_uri: string | null;
       is_liked: number | null;
       is_hidden: number | null;
+      lyrics_offset: number | null;
     }>('SELECT * FROM songs WHERE is_hidden = 0 ORDER BY date_created DESC');
     
     return songsRows.map((row) => ({
@@ -55,11 +62,17 @@ export const getAllSongs = async (): Promise<Song[]> => {
       lyrics: [],
       scrollSpeed: row.scroll_speed ?? 50,
       coverImageUri: row.cover_image_uri ?? undefined,
+      lyricSource: row.lyric_source ?? undefined,
+      lyricsRaw: row.lyrics_raw ?? undefined,
+      lyricsFormat: row.lyrics_format ?? undefined,
+      lyricsSyncType: row.lyrics_sync_type ?? undefined,
+      lyricsPrecision: row.lyrics_precision ?? undefined,
       lyricsAlign: (row.lyrics_align as 'left' | 'center' | 'right') ?? 'left',
       textCase: (row.text_case as 'normal' | 'uppercase' | 'titlecase' | 'sentencecase') ?? 'titlecase',
       audioUri: row.audio_uri ?? undefined,
       isLiked: row.is_liked === 1,
       isHidden: row.is_hidden === 1,
+      lyricsOffset: row.lyrics_offset ?? 0,
     }));
   });
 };
@@ -79,11 +92,17 @@ export const getHiddenSongs = async (): Promise<Song[]> => {
       last_played: string | null;
       scroll_speed: number;
       cover_image_uri: string | null;
+      lyric_source: string | null;
+      lyrics_raw: string | null;
+      lyrics_format: string | null;
+      lyrics_sync_type: string | null;
+      lyrics_precision: 'word' | 'synced' | 'plain' | null;
       lyrics_align: string | null;
       text_case: string | null;
       audio_uri: string | null;
       is_liked: number | null;
       is_hidden: number | null;
+      lyrics_offset: number | null;
     }>('SELECT * FROM songs WHERE is_hidden = 1 ORDER BY date_created DESC');
     
     return songsRows.map((row) => ({
@@ -100,11 +119,17 @@ export const getHiddenSongs = async (): Promise<Song[]> => {
       lyrics: [],
       scrollSpeed: row.scroll_speed ?? 50,
       coverImageUri: row.cover_image_uri ?? undefined,
+      lyricSource: row.lyric_source ?? undefined,
+      lyricsRaw: row.lyrics_raw ?? undefined,
+      lyricsFormat: row.lyrics_format ?? undefined,
+      lyricsSyncType: row.lyrics_sync_type ?? undefined,
+      lyricsPrecision: row.lyrics_precision ?? undefined,
       lyricsAlign: (row.lyrics_align as 'left' | 'center' | 'right') ?? 'left',
       textCase: (row.text_case as 'normal' | 'uppercase' | 'titlecase' | 'sentencecase') ?? 'titlecase',
       audioUri: row.audio_uri ?? undefined,
       isLiked: row.is_liked === 1,
       isHidden: row.is_hidden === 1,
+      lyricsOffset: row.lyrics_offset ?? 0,
     }));
   });
 };
@@ -125,12 +150,18 @@ export const getSongById = async (id: string): Promise<Song | null> => {
     last_played: string | null;
     scroll_speed: number;
     cover_image_uri: string | null;
+    lyric_source: string | null;
+    lyrics_raw: string | null;
+    lyrics_format: string | null;
+    lyrics_sync_type: string | null;
+    lyrics_precision: 'word' | 'synced' | 'plain' | null;
     lyrics_align: string | null;
     text_case: string | null;
     audio_uri: string | null;
     is_liked: number | null;
     is_hidden: number | null;
     youtube_video_id: string | null;
+    lyrics_offset: number | null;
   }>('SELECT * FROM songs WHERE id = ?', [id]);
   
   if (!songRow) return null;
@@ -155,18 +186,33 @@ export const getSongById = async (id: string): Promise<Song | null> => {
     lastPlayed: songRow.last_played ?? undefined,
     scrollSpeed: songRow.scroll_speed ?? 50,
     coverImageUri: songRow.cover_image_uri ?? undefined,
+    lyricSource: songRow.lyric_source ?? undefined,
+    lyricsRaw: songRow.lyrics_raw ?? undefined,
+    lyricsFormat: songRow.lyrics_format ?? undefined,
+    lyricsSyncType: songRow.lyrics_sync_type ?? undefined,
+    lyricsPrecision: songRow.lyrics_precision ?? undefined,
     lyricsAlign: (songRow.lyrics_align as 'left' | 'center' | 'right') ?? 'left',
     textCase: (songRow.text_case as 'normal' | 'uppercase' | 'titlecase' | 'sentencecase') ?? 'titlecase',
     audioUri: songRow.audio_uri ?? undefined,
     isLiked: songRow.is_liked === 1,
     isHidden: songRow.is_hidden === 1,
     youtubeVideoId: songRow.youtube_video_id ?? undefined,
-    lyrics: normalizeLyrics(lyricsRows.map((row) => ({
-      id: row.id,
-      timestamp: row.timestamp,
-      text: row.text,
-      lineOrder: row.line_order,
-    }))),
+    lyricsOffset: songRow.lyrics_offset ?? 0,
+    lyrics: hydrateLyricsWithWordTimings({
+      lyrics: normalizeLyrics(lyricsRows.map((row) => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        text: row.text,
+        lineOrder: row.line_order,
+      }))),
+      // Re-attach word timings from the stored provider payload so rich-sync
+      // highlights work offline without re-fetching Unison / Better Lyrics.
+      lyricsRaw: songRow.lyrics_raw,
+      lyricsFormat: songRow.lyrics_format,
+      lyricsSyncType: songRow.lyrics_sync_type,
+      lyricsPrecision: songRow.lyrics_precision,
+      duration: songRow.duration,
+    }),
   };
 };
 
@@ -179,8 +225,10 @@ export const insertSong = async (song: Song): Promise<void> => {
     await db.runAsync(
       `INSERT OR REPLACE INTO songs
          (id, title, artist, album, gradient_id, duration, date_created, date_modified,
-          play_count, scroll_speed, lyrics_align, text_case, audio_uri, is_liked, cover_image_uri, youtube_video_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          play_count, scroll_speed, lyric_source, lyrics_raw, lyrics_format, lyrics_sync_type,
+          lyrics_precision, lyrics_align, text_case, audio_uri, is_liked, cover_image_uri, youtube_video_id,
+          lyrics_offset)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         song.id,
         song.title,
@@ -192,12 +240,18 @@ export const insertSong = async (song: Song): Promise<void> => {
         song.dateModified,
         song.playCount,
         song.scrollSpeed ?? 50,
+        song.lyricSource ?? null,
+        song.lyricsRaw ?? null,
+        song.lyricsFormat ?? null,
+        song.lyricsSyncType ?? null,
+        song.lyricsPrecision ?? null,
         song.lyricsAlign ?? 'left',
         song.textCase ?? 'titlecase',
         song.audioUri ?? null,
         song.isLiked ? 1 : 0,
         song.coverImageUri ?? null,
         song.youtubeVideoId ?? null,
+        song.lyricsOffset ?? 0,
       ]
     );
 
@@ -224,8 +278,15 @@ export const updateSong = async (song: Song): Promise<void> => {
     await db.runAsync(
       `UPDATE songs SET
          title = ?, artist = ?, album = ?, gradient_id = ?, duration = ?,
-         date_modified = ?, scroll_speed = ?, lyrics_align = ?, text_case = ?,
-         cover_image_uri = ?, audio_uri = ?, is_liked = ?, youtube_video_id = ?
+         date_modified = ?, scroll_speed = ?, lyric_source = COALESCE(?, lyric_source),
+         lyrics_raw = COALESCE(?, lyrics_raw), lyrics_format = COALESCE(?, lyrics_format),
+         lyrics_sync_type = COALESCE(?, lyrics_sync_type), lyrics_precision = COALESCE(?, lyrics_precision),
+         lyrics_align = ?, text_case = ?,
+         cover_image_uri = ?, audio_uri = ?, is_liked = ?, youtube_video_id = ?,
+         -- COALESCE, not a plain write: most callers build a partial Song without
+         -- lyricsOffset, and overwriting with 0 would silently discard the user's
+         -- sync calibration every time they renamed a song or refetched lyrics.
+         lyrics_offset = COALESCE(?, lyrics_offset)
        WHERE id = ?`,
       [
         song.title,
@@ -235,12 +296,18 @@ export const updateSong = async (song: Song): Promise<void> => {
         song.duration,
         song.dateModified,
         song.scrollSpeed ?? 50,
+        song.lyricSource ?? null,
+        song.lyricsRaw ?? null,
+        song.lyricsFormat ?? null,
+        song.lyricsSyncType ?? null,
+        song.lyricsPrecision ?? null,
         song.lyricsAlign ?? 'left',
         song.textCase ?? 'titlecase',
         song.coverImageUri ?? null,
         song.audioUri ?? null,
         song.isLiked ? 1 : 0,
         song.youtubeVideoId ?? null,
+        song.lyricsOffset ?? null,
         song.id,
       ]
     );
@@ -263,6 +330,16 @@ export const updateSong = async (song: Song): Promise<void> => {
     }
 
     log(`updateSong() completed`);
+  });
+};
+
+/** Persist only the lyric sync correction, leaving every other column untouched. */
+export const patchLyricsOffset = async (songId: string, offset: number): Promise<void> => {
+  await withDbWrite(async (db) => {
+    await db.runAsync(
+      `UPDATE songs SET lyrics_offset = ? WHERE id = ?`,
+      [offset, songId]
+    );
   });
 };
 

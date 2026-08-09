@@ -8,10 +8,11 @@
  */
 
 import React, { useRef } from 'react';
-import { View, StyleSheet, Dimensions, Image as RNImage, Animated } from 'react-native';
+import { View, StyleSheet, Dimensions, Animated } from 'react-native';
 import { Canvas, Rect, Oval, BlurMask, vec, Group } from '@shopify/react-native-skia';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReAnimated, { useSharedValue, withRepeat, withTiming, useDerivedValue, useAnimatedStyle, Easing, type SharedValue } from 'react-native-reanimated';
+import ArtworkFlowBackground from './ArtworkFlowBackground';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -193,12 +194,18 @@ export const AuroraHeader: React.FC<AuroraBackgroundProps> = ({
           )}
 
           {imageUri && (
-            <RNImage
-              source={{ uri: imageUri }}
-              style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT, opacity: 0.6, transform: [{ scale: 1.2 }] }]}
-              blurRadius={90}
-              resizeMode="cover"
-            />
+            // The exact component the player bar uses, not a lookalike. A blurred
+            // copy of the cover averaged toward grey and picked colours by a
+            // different rule, so the header and the bar disagreed on the same
+            // song. Sharing ArtworkFlowBackground makes them identical by
+            // construction — every future palette tweak lands in both at once.
+            <View style={[StyleSheet.absoluteFill, { height: AURORA_HEIGHT }]}>
+              <ArtworkFlowBackground
+                coverImageUri={imageUri}
+                fallbackColors={activeColors}
+                animated
+              />
+            </View>
           )}
         </ReAnimated.View>
 

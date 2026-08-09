@@ -3,18 +3,22 @@
  * Simplified with Lyrica API (aggregates LRCLIB, YouTube Music, Genius, JioSaavn)
  */
 
-import { lyricaService, LyricaResult } from './LyricaService';
+import { lyricaService, LyricaResult, LyricsPrecision, compareLyricsPriority } from './LyricaService';
 import { SmartLyricMatcher } from './SmartLyricMatcher';
 
 export interface SearchResult {
   id: string;
   source: string;
   type: 'synced' | 'plain';
+  precision: LyricsPrecision;
   trackName: string;
   artistName: string;
   albumName?: string;
   plainLyrics: string;
   syncedLyrics?: string;
+  rawLyrics: string;
+  format?: string;
+  syncType?: string;
   matchScore: number;
   matchReason: string;
   duration?: number;
@@ -63,12 +67,16 @@ export const LyricsRepository = {
         results.push({
           id: `result-${i}-${res.source}`,
           source: res.source,
-          type: hasTimestamps ? 'synced' : 'plain',
+          type: res.precision === 'plain' ? 'plain' : 'synced',
+          precision: res.precision,
           trackName: res.metadata?.title || targetMetadata.title,
           artistName: res.metadata?.artist || targetMetadata.artist,
           albumName: res.metadata?.album,
           plainLyrics: res.lyrics,
           syncedLyrics: hasTimestamps ? res.lyrics : undefined,
+          rawLyrics: res.rawLyrics ?? res.lyrics,
+          format: res.format,
+          syncType: res.syncType,
           matchScore: scored.matchScore,
           matchReason: scored.matchReason,
           duration: res.metadata?.duration,
@@ -76,8 +84,17 @@ export const LyricsRepository = {
         });
       }
 
-      // Sort by match score
-      results.sort((a, b) => b.matchScore - a.matchScore);
+      results.sort((a, b) => {
+        const precisionDelta = compareLyricsPriority(
+          { precision: a.precision },
+          { precision: b.precision }
+        );
+        if (precisionDelta !== 0) {
+          return -precisionDelta;
+        }
+
+        return b.matchScore - a.matchScore;
+      });
 
       onProgress?.(`Found ${results.length} lyric options`);
     } catch (error) {

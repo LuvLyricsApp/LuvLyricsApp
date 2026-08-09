@@ -28,6 +28,8 @@ export type RootStackParamList = {
   LuvsVault: undefined; // Luvs liked songs vault
   CreatePlaylist: { playlistId?: string, initialName?: string } | undefined; // Create or Edit playlist modal
   AddToPlaylist: { songId?: string; playlistId?: string }; // NEW: Add song to playlist modal
+  SyncLyrics: { songId: string }; // Per-song lyric offset calibration
+  SpotifyImport: undefined; // Import / re-sync Spotify playlists
 };
 
 // Bottom Tab Navigator

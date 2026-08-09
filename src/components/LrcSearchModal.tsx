@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LyricsRepository, SearchResult } from '../services/LyricsRepository';
+import { getLyricsPrecisionLabel } from '../services/LyricaService';
 import { useThemeColors } from '../contexts/ThemeContext';
 
 interface LrcSearchModalProps {
@@ -42,8 +43,8 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
       );
       setResults(searchResults);
       if (autoPick && searchResults.length > 0) {
-        const bestSynced = searchResults.find(r => r.type === 'synced');
-        if (bestSynced) { onSelect(bestSynced); return; }
+        onSelect(searchResults[0]);
+        return;
       }
     } catch (error) {
       console.error('Search failed:', error);
@@ -83,6 +84,12 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
 
   const handleBack = () => setPreviewItem(null);
 
+  const getPrecisionBadgeStyle = (result: SearchResult) => {
+    if (result.precision === 'word') return styles.badgeWord;
+    if (result.precision === 'synced') return styles.badgeSynced;
+    return styles.badgeLow;
+  };
+
   const renderItem = ({ item }: { item: SearchResult }) => (
     <TouchableOpacity style={styles.resultItem} onPress={() => handleSelect(item)}>
       <View style={styles.resultContent}>
@@ -96,12 +103,10 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
           ]}>
             <Text style={styles.badgeText}>{item.source}</Text>
           </View>
-          {item.type === 'synced' && (
-            <View style={[styles.badge, styles.badgeSynced]}>
-              <Ionicons name="time" size={10} color="#fff" style={{ marginRight: 2 }} />
-              <Text style={styles.badgeText}>Synced</Text>
-            </View>
-          )}
+          <View style={[styles.badge, getPrecisionBadgeStyle(item)]}>
+            <Ionicons name={item.precision === 'plain' ? 'document-text-outline' : 'time'} size={10} color="#fff" style={{ marginRight: 2 }} />
+            <Text style={styles.badgeText}>{getLyricsPrecisionLabel(item.precision)}</Text>
+          </View>
           {item.matchScore > 0 && (
             <View style={[styles.badge, item.matchScore > 80 ? styles.badgeHigh : styles.badgeLow]}>
               <Text style={styles.badgeText}>{Math.round(item.matchScore)}% Match</Text>
@@ -161,8 +166,8 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
                   ]}>
                     <Text style={styles.badgeText}>{previewItem.source}</Text>
                   </View>
-                  <View style={[styles.badge, previewItem.type === 'synced' ? styles.badgeSynced : styles.badgeLow]}>
-                    <Text style={styles.badgeText}>{previewItem.type === 'synced' ? 'Synced Lyrics' : 'Plain Lyrics'}</Text>
+                  <View style={[styles.badge, getPrecisionBadgeStyle(previewItem)]}>
+                    <Text style={styles.badgeText}>{getLyricsPrecisionLabel(previewItem.precision)} Lyrics</Text>
                   </View>
                 </View>
               </View>
@@ -222,6 +227,7 @@ const styles = StyleSheet.create({
   badgeSaavn: { backgroundColor: '#24D366' },
   badgeLyrica: { backgroundColor: '#1A1A1A' },
   badgeGenius: { backgroundColor: '#FFD60A' },
+  badgeWord: { backgroundColor: '#FF9F0A' },
   badgeSynced: { backgroundColor: '#30D158' },
   badgeHigh: { backgroundColor: 'rgba(48,209,88,0.2)', borderWidth: 1, borderColor: '#30D158' },
   badgeLow: { backgroundColor: 'rgba(255,69,58,0.2)', borderWidth: 1, borderColor: '#FF453A' },

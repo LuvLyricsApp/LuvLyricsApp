@@ -31,6 +31,10 @@ import { usePositionStore } from '../store/positionStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useDesktopBridgeSettingsStore } from '../store/desktopBridgeSettingsStore';
 import { trustedPairingService } from './TrustedPairingService';
+import {
+  isTrustedBridgeHttpPeer,
+  shouldSendPrivateBridgeState,
+} from './desktopBridgeSecurity';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -643,7 +647,6 @@ class DesktopBridgeService {
     client.buffer = Buffer.alloc(0);
 
     this.sendPresenceToClient(client);
-    this.markDesktopConnected();
   }
 
   private sendToClient(client: WsClient, msg: string): void {
@@ -659,7 +662,7 @@ class DesktopBridgeService {
     const frame = encodeFrame(msg);
     const legacyFrame = legacyMsg ? encodeFrame(legacyMsg) : null;
     for (const client of this.clients.values()) {
-      if (client.handshaken) {
+      if (shouldSendPrivateBridgeState(client)) {
         try {
           client.socket.write(frame);
           if (legacyFrame && client.protoVersion < PROTO_VERSION) {
@@ -758,6 +761,17 @@ class DesktopBridgeService {
 
         if (method !== 'GET') {
           socket.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+
+        if (
+          (path === '/audio' || path === '/cover') &&
+          !isTrustedBridgeHttpPeer(socket.remoteAddress, this.clients.values())
+        ) {
+          socket.write(
+            'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n\r\n{"error":"trusted desktop connection required"}'
+          );
           socket.destroy();
           return;
         }
@@ -1122,7 +1136,6 @@ class DesktopBridgeService {
     try {
       const msg = JSON.parse(raw);
       const client = _clientId ? this.clients.get(_clientId) : null;
-      this.markDesktopHeartbeat();
       if (msg?.protoVersion && Number.isFinite(msg.protoVersion) && _clientId) {
         if (client) client.protoVersion = Number(msg.protoVersion);
       }
@@ -1135,6 +1148,8 @@ class DesktopBridgeService {
             .then((records) => {
               client.trusted = records.some((r) => r.desktopDeviceId === desktopDeviceId);
               if (client.trusted) {
+                this.markDesktopConnected();
+                this.markDesktopHeartbeat();
                 trustedPairingService.markSeen(desktopDeviceId).catch(() => undefined);
                 this.sendSnapshotToClient(client);
               } else {
@@ -1149,6 +1164,8 @@ class DesktopBridgeService {
         }
         return;
       }
+      if (client && !client.trusted) return;
+      this.markDesktopHeartbeat();
       if (msg.type === 'HEARTBEAT' || msg.action === 'HEARTBEAT') return;
       if (msg.type === 'SYNC_REQUEST' || (msg.type === 'cmd' && msg.action === 'SYNC_REQUEST')) {
         if (client && client.trusted) this.sendSnapshotToClient(client);
@@ -1160,8 +1177,6 @@ class DesktopBridgeService {
 
       const settings = useDesktopBridgeSettingsStore.getState();
       if (!settings.desktopConnectEnabled) return;
-      if (client && !client.trusted) return;
-
       const playerStore = usePlayerStore.getState();
       const action = msg.action;
       const commandId = typeof msg.id === 'string' ? msg.id : '';

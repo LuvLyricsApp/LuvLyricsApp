@@ -23,6 +23,7 @@ import Animated, {
 import { useSettingsStore } from '../store/settingsStore';
 import InstrumentalWaveform, { isInstrumentalLyric, useIsActiveLine } from './InstrumentalWaveform';
 import { Fonts } from '../constants/fonts';
+import type { LyricWord } from '../types/song';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const LYRIC_LINE_HEIGHT = 68;
@@ -42,7 +43,10 @@ const RESUME_SNAP_PX = 72;
 
 interface LyricLineProps {
   text: string;
+  words?: LyricWord[];
   activeIndexSV: SharedValue<number>;
+  /** Effective playback clock (position + global delay + per-song offset). */
+  effectiveTimeSV: SharedValue<number>;
   timestamp: number;
   index: number;
   onLyricPress: (timestamp: number) => void;
@@ -51,9 +55,64 @@ interface LyricLineProps {
   songTitle?: string;
 }
 
+/** Single word — UI-thread opacity based on effectiveTimeSV. */
+const WordToken = React.memo(({
+  word,
+  wordIndex,
+  lineIndex,
+  activeIndexSV,
+  effectiveTimeSV,
+  isLast,
+  textStyle,
+}: {
+  word: LyricWord;
+  wordIndex: number;
+  lineIndex: number;
+  activeIndexSV: SharedValue<number>;
+  effectiveTimeSV: SharedValue<number>;
+  isLast: boolean;
+  textStyle?: any;
+}) => {
+  const start = word.startTime;
+  const end = word.endTime > word.startTime ? word.endTime : word.startTime + 0.35;
+
+  const wordStyle = useAnimatedStyle(() => {
+    const lineActive = activeIndexSV.value === lineIndex;
+    const et = effectiveTimeSV.value;
+
+    if (!lineActive) {
+      const basOpacity = activeIndexSV.value > lineIndex ? 0.45 : 0.28;
+      return {
+        color: 'rgba(255,255,255,0.5)',
+        opacity: basOpacity,
+      };
+    }
+
+    // Active line: past words soft-white, current brightest, upcoming dim.
+    if (et >= end) {
+      return { color: '#FFFFFF', opacity: 0.72 };
+    }
+    if (et >= start) {
+      return { color: '#FFFFFF', opacity: 1 };
+    }
+    if (wordIndex === 0 && et < start) {
+      return { color: 'rgba(255,255,255,0.55)', opacity: 0.55 };
+    }
+    return { color: 'rgba(255,255,255,0.38)', opacity: 0.38 };
+  });
+
+  return (
+    <Animated.Text style={[styles.wordToken, textStyle, wordStyle]}>
+      {word.text}{isLast ? '' : ' '}
+    </Animated.Text>
+  );
+});
+
 const LyricLine = React.memo(({
   text,
+  words,
   activeIndexSV,
+  effectiveTimeSV,
   timestamp,
   index,
   onLyricPress,
@@ -64,6 +123,7 @@ const LyricLine = React.memo(({
   const handlePress = useCallback(() => onLyricPress(timestamp), [onLyricPress, timestamp]);
   const isInstrumental = useMemo(() => isInstrumentalLyric(text), [text]);
   const isActiveLine = useIsActiveLine(activeIndexSV, index);
+  const hasWords = !!(words && words.length > 0);
 
   // Every line renders in one face at one size — the active line is carried by
   // colour and opacity alone. Swapping to a bold face on activation made the
@@ -104,6 +164,13 @@ const LyricLine = React.memo(({
     };
   });
 
+  const wordLineStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(activeValue.value, [0, 1], [6, 0], Extrapolation.CLAMP);
+    return {
+      transform: [{ translateY }] as any,
+    };
+  });
+
   const instrumentWrapStyle = useAnimatedStyle(() => {
     const basOpacity = activeIndexSV.value > index ? 0.4 : 0.25;
     const opacity = interpolate(activeValue.value, [0, 1], [basOpacity, 1.0], Extrapolation.CLAMP);
@@ -139,6 +206,21 @@ const LyricLine = React.memo(({
         <Animated.View style={[styles.instrumentalWrap, instrumentWrapStyle]}>
           <InstrumentalWaveform active={isActiveLine} size={isActiveLine ? 'lg' : 'md'} />
         </Animated.View>
+      ) : hasWords ? (
+        <Animated.View style={[styles.lyricText, styles.wordLine, textStyle, wordLineStyle]}>
+          {words!.map((word, wi) => (
+            <WordToken
+              key={`w_${index}_${wi}`}
+              word={word}
+              wordIndex={wi}
+              lineIndex={index}
+              activeIndexSV={activeIndexSV}
+              effectiveTimeSV={effectiveTimeSV}
+              isLast={wi === words!.length - 1}
+              textStyle={textStyle}
+            />
+          ))}
+        </Animated.View>
       ) : (
         <Animated.Text style={[styles.lyricText, textStyle, animatedStyle]}>
           {renderedText}
@@ -153,7 +235,7 @@ const LyricLine = React.memo(({
 // ------------------------------------------------------------------
 
 interface SynchronizedLyricsProps {
-  lyrics: { timestamp: number; text: string }[];
+  lyrics: { timestamp: number; text: string; words?: LyricWord[] }[];
   currentTime: number | SharedValue<number>;
   onLyricPress: (timestamp: number) => void;
   isUserScrolling?: boolean;
@@ -169,6 +251,12 @@ interface SynchronizedLyricsProps {
   fadeColor?: string;
   /** Android-only: soft-dissolve lyric text at the top/bottom edges (px). */
   edgeFade?: number;
+  /**
+   * Per-song sync correction in seconds (Song.lyricsOffset), stacked on top of
+   * the global `lyricsDelay` setting. Negative pushes the highlight later, which
+   * is what an instrumental intro needs.
+   */
+  lyricsOffset?: number;
 }
 
 export interface SynchronizedLyricsRef {
@@ -189,6 +277,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   topSpacerHeight = SCREEN_HEIGHT * 0.4,
   bottomSpacerHeight = SCREEN_HEIGHT * 0.4,
   edgeFade = 0,
+  lyricsOffset = 0,
 }, ref) => {
   // Animated ref — required for the scrollTo worklet
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -240,6 +329,11 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
 
   // Selector, not the whole store: this component re-renders while lyrics scroll.
   const lyricsDelay = useSettingsStore(s => s.lyricsDelay);
+  // Lyric alignment was previously hardcoded to 'center' in the stylesheet, so
+  // the stored preference never reached the screen. Memoised because it feeds a
+  // style array on every rendered line.
+  const lyricsAlign = useSettingsStore(s => s.lyricsAlign);
+  const alignStyle = useMemo(() => ({ textAlign: lyricsAlign }), [lyricsAlign]);
 
   // Normalise currentTime — accept both raw number and SharedValue<number>
   const currentTimeNumberSV = useSharedValue(typeof currentTime === 'number' ? currentTime : 0);
@@ -250,9 +344,14 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     if (typeof currentTime === 'number') currentTimeNumberSV.value = currentTime;
   }, [currentTime, currentTimeNumberSV]);
 
+  // Single clock shared by line pick + word highlight (UI thread only).
+  const effectiveTimeSV = useDerivedValue(
+    () => currentTimeSV.value + lyricsDelay + lyricsOffset,
+  );
+
   // Binary search for active line — pure UI-thread worklet, no JS bridge
   const activeIndexDV = useDerivedValue(() => {
-    const et = currentTimeSV.value + lyricsDelay;
+    const et = effectiveTimeSV.value;
     if (lyrics.length === 0) return -1;
     let left = 0, right = lyrics.length - 1, result = -1;
     while (left <= right) {
@@ -398,19 +497,21 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   }));
 
   // Stable renderItem callback — avoids re-rendering all lines when unrelated state changes
-  const renderLyricLine = useCallback((item: { timestamp: number; text: string }, index: number) => (
+  const renderLyricLine = useCallback((item: { timestamp: number; text: string; words?: LyricWord[] }, index: number) => (
     <LyricLine
       key={`lyric_${index}`}
       activeIndexSV={activeIndexSV}
+      effectiveTimeSV={effectiveTimeSV}
       text={item.text}
+      words={item.words}
       timestamp={item.timestamp}
       index={index}
       onLyricPress={onLyricPress}
       onMeasured={handleItemMeasured}
-      textStyle={textStyle}
+      textStyle={[textStyle, alignStyle]}
       songTitle={songTitle}
     />
-  ), [activeIndexSV, onLyricPress, handleItemMeasured, textStyle, songTitle]);
+  ), [activeIndexSV, effectiveTimeSV, onLyricPress, handleItemMeasured, textStyle, alignStyle, songTitle]);
 
   return (
     <View style={styles.container}>
@@ -505,9 +606,26 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.lyrics,
     fontSize: 28,
     alignSelf: 'stretch',
+    // Overridden per-render by the lyricsAlign setting; kept as the fallback.
     textAlign: 'center',
-    marginVertical: 8,
+    // Gap between adjacent lyric lines is twice this. An explicit lineHeight
+    // also tightens lines that wrap, which the platform default (~1.4x) left
+    // looking airier than the gap between separate lines.
+    marginVertical: 5,
+    lineHeight: 34,
     paddingHorizontal: 32,
+  },
+  wordLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wordToken: {
+    fontFamily: Fonts.lyrics,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: Fonts.lyricsWeight,
   },
   // Title words inside a lyric: no background block, just a white glow.
   // Always bold — a glow on a regular-weight line reads as a stale highlight.

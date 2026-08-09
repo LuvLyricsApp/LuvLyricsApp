@@ -1,7 +1,10 @@
 package com.lyricflow.app
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+
+import com.lyricflow.app.spotify.SpotifyRedirectHolder
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -12,11 +15,27 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    (application as MainApplication).initializeExpoLifecycle()
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    // Cold start straight from the Spotify redirect — the browser evicted us
+    // while the user was consenting, so the callback arrives as the launch intent.
+    intent?.data?.let { SpotifyRedirectHolder.offer(it) }
+  }
+
+  /**
+   * Warm path: the app was still alive behind the browser. singleTask delivers
+   * the callback here instead of onCreate. Parked for the Spotify module to
+   * exchange once JS asks — doing the exchange here would race the React
+   * context on a cold start.
+   */
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    intent.data?.let { SpotifyRedirectHolder.offer(it) }
+    setIntent(intent)
   }
 
   /**

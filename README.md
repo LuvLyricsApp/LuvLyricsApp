@@ -40,13 +40,15 @@
 
 ## 🎧 About
 
-LuvLyrics is an open-source, **local-first** music library and lyrics app built with Expo, React Native, TypeScript, SQLite, and Zustand.
+LuvLyrics is an open-source, **local-first** music library and lyrics app. The product is being **migrated to a native Kotlin + Jetpack Compose Android app** (LuvLyrics 2.0) while the existing React Native/Expo app remains functional until full parity is verified.
 
 The app is built around one core obsession: a **premium lyrics-reading experience** — perfectly timed synced lyrics, plain lyric auto-scroll, multi-source lyric fetching, local playlist management, cover art tools, and a native Android player that just works.
 
 Recent highlights:
 
-- **Hybrid Kotlin native architecture** — four Expo Modules API Kotlin modules replace JS-thread bottlenecks:
+- **Kotlin + Compose migration underway** — `LauncherActivity` opens a native shell (Home · Local · Playlists · Luvs · Search) with launch-mode and startup-page preferences; legacy RN stays one tap away
+- **Phase 1 data layer** — Room (`lyricflow-room.db`) + `LegacyLibraryMigrator` copies the live expo-sqlite library read-only with backup; Local and Playlists tabs browse migrated songs
+- **Hybrid Kotlin native architecture** — 20+ Expo Modules API Kotlin modules replace JS-thread bottlenecks:
   - `StartupModule` preloads songs/playlists in `Application.onCreate()`, cutting cold-start from ~1.5 s to ~500 ms
   - `MainPlayerModule` uses Media3 ExoPlayer + MediaSessionService — fixes notification buttons (⏮ ⏸/▶ ⏭), lock-screen controls, and Bluetooth headphone skip
   - `LuvsPlayerModule` manages a 6-slot ExoPlayer pool for instant swipe-to-next on the Luvs reel (zero JS bridge round-trips during gesture)
@@ -56,7 +58,8 @@ Recent highlights:
 - **Dynamically themed docked player** — choose Classic Bar or a bottom-centred Dynamic Island; both keep controls available while lyrics expand upward
 - **Artwork flow background** — cover-art colours are extracted locally and transition directly from the outgoing track into the incoming track
 - **UI-thread lyric follow** — timestamp lookup, centred scrolling, and focus styling stay smooth without changing the active line's size
-- Desktop bridge is temporarily disabled (code preserved for future re-enablement)
+- **Word-by-word lyrics (RN)** — Unison TTML rich-sync stored locally and rendered per-word from `lyricsRaw`
+- Desktop bridge is live when enabled in Settings (1300+ lines; treat removal as a product decision)
 
 ---
 
@@ -121,15 +124,16 @@ _Contribute to a real production app. Earn GSSoC leaderboard points. Build your 
 
 | Layer | Technology |
 | --- | --- |
-| **Framework** | Expo SDK 54 + React Native 0.81 |
-| **Language** | TypeScript 5.9 (strict) |
-| **UI** | React 19 + Reanimated 3 + Gesture Handler |
-| **State** | Zustand |
-| **Database** | SQLite via `expo-sqlite` |
+| **Framework (current)** | Expo SDK 54 + React Native 0.81 |
+| **Framework (target)** | Kotlin + Jetpack Compose + Room |
+| **Language** | TypeScript 5.9 (RN) · Kotlin (native) |
+| **UI** | React 19 + Reanimated 3 (RN) · Compose Material3 (native shell) |
+| **State** | Zustand (RN) |
+| **Database** | expo-sqlite (`lyricflow.db`, RN) · Room (`lyricflow-room.db`, native) |
 | **Lists** | `@shopify/flash-list` |
-| **Audio** | Media3 ExoPlayer + MediaSessionService (Kotlin native module) |
-| **Downloads** | WorkManager `CoroutineWorker` (Kotlin native module) |
-| **Native modules** | Expo Modules API (Kotlin) — StartupModule, MainPlayerModule, LuvsPlayerModule, DownloaderModule |
+| **Audio** | Media3 ExoPlayer + MediaSessionService (Kotlin) |
+| **Downloads** | WorkManager `CoroutineWorker` (Kotlin) |
+| **Native modules** | Expo Modules API (Kotlin) — Startup, MainPlayer, Luvs, Downloader, Spotify, Search, Palette, YouTube, … |
 | **Networking** | `react-native-tcp-socket`, `react-native-zeroconf` |
 | **Tests** | Jest + ts-jest |
 | **CI** | GitHub Actions |
@@ -137,6 +141,16 @@ _Contribute to a real production app. Earn GSSoC leaderboard points. Build your 
 ---
 
 ## 🧠 Architecture
+
+### Migration status
+
+See `.planning/ROADMAP.md` for the full phase list. Current work:
+
+- **Phase 0** — Compose shell (launch-safe, legacy RN bridge)
+- **Phase 1** — Room migration + Local/Playlists browse UI (in progress)
+- **Phases 2–8** — Player, lyrics, transliteration, streaming, download, parity, RN removal
+
+**Hard rules:** never run `expo prebuild`; do not delete `src/` until Phase 8; verify on device with `adb install`.
 
 ### Player
 
@@ -318,6 +332,10 @@ Please do not report secrets or vulnerabilities in public issues. Read [SECURITY
 
 | Document | Purpose |
 | --- | --- |
+| [.planning/PROJECT.md](./.planning/PROJECT.md) | Migration decision and architecture |
+| [.planning/ROADMAP.md](./.planning/ROADMAP.md) | Phases 0–9 with exit criteria |
+| [.planning/STATE.md](./.planning/STATE.md) | Living progress + verification log |
+| [.planning/REQUIREMENTS.md](./.planning/REQUIREMENTS.md) | Feature triage |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contributor workflow |
 | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | Community standards |
 | [SECURITY.md](./SECURITY.md) | Security policy |

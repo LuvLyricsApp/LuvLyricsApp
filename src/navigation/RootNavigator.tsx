@@ -14,6 +14,8 @@ import { navigationRef } from '../utils/navigationService';
 import TabNavigator from './TabNavigator';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
+import { SyncLyricsScreen } from '../screens/SyncLyricsScreen';
+import { SpotifyImportScreen } from '../screens/SpotifyImportScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
@@ -64,6 +66,16 @@ export const RootNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
+          />
+          {/* Keeps the mini player docked underneath so the song stays audible
+              while its offset is being calibrated. */}
+          <Stack.Screen
+            name="SyncLyrics"
+            component={SyncLyricsScreen}
+          />
+          <Stack.Screen
+            name="SpotifyImport"
+            component={SpotifyImportScreen}
           />
           <Stack.Screen
             name="YoutubeBrowser"

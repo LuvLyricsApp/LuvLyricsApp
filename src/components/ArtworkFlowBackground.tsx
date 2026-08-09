@@ -36,14 +36,31 @@ type PaletteCandidate = {
   role?: string;
 };
 
-const TRACK_CHANGE_MS = 950;
+// Both layers run the same shader geometry, so a track change reads as the
+// colour of each blob migrating rather than shapes leaving and arriving. A long
+// dissolve is what sells that — at under a second it still registered as a cut.
+const TRACK_CHANGE_MS = 1500;
 const FLOW_BLUR = 30;
 const easeInOutSine = Easing.bezier(0.445, 0.05, 0.55, 0.95);
 
+/**
+ * Returns a bare uppercase RRGGBB string, or null when the input is not a hex
+ * colour. Shorthand (#333) is expanded rather than rejected — the gradient
+ * presets use it, and silently dropping those left the flow with no candidates
+ * at all, collapsing every field onto the flat near-black fallback.
+ */
+const normaliseHex = (color: string | undefined): string | null => {
+  if (!color) return null;
+  const hex = color.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+    return hex.split('').map((channel) => channel + channel).join('').toUpperCase();
+  }
+  return /^[0-9a-fA-F]{6}$/.test(hex) ? hex.toUpperCase() : null;
+};
+
 const hexToVector = (color: string | undefined, fallback: ColorVector): ColorVector => {
-  if (!color) return fallback;
-  const hex = color.replace('#', '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return fallback;
+  const hex = normaliseHex(color);
+  if (!hex) return fallback;
 
   return [
     parseInt(hex.slice(0, 2), 16) / 255,
@@ -59,6 +76,31 @@ const darken = ([red, green, blue]: ColorVector, amount: number): ColorVector =>
   blue * amount,
   1,
 ];
+
+/**
+ * Brightness ceilings, measured against the same weighted-sRGB luminance the
+ * rest of this file uses. Scaling all three channels by one factor keeps the
+ * artwork's hue and saturation and removes only brightness.
+ *
+ * The base and the moving fields are capped *differently* on purpose. Clamping
+ * them to one value makes the surface uniformly dim and the blobs stop reading
+ * as separate shapes at all. Holding the base well below the fields is what
+ * gives the blobs their edge.
+ *
+ * BASE 0.14  — a dark foundation the fields can sit proud of.
+ * FIELD 0.48 — ~0.20 true relative luminance, about 3.6:1 against white. Lyrics
+ *              render large and bold, where WCAG AA asks 3:1, so this stays
+ *              legible while letting the colour actually show.
+ */
+const BASE_MAX_LUMINANCE = 0.14;
+const FIELD_MAX_LUMINANCE = 0.48;
+
+const capLuminance = ([red, green, blue]: ColorVector, maximum: number): ColorVector => {
+  const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+  if (luminance <= maximum || luminance === 0) return [red, green, blue, 1];
+  const scale = maximum / luminance;
+  return [red * scale, green * scale, blue * scale, 1];
+};
 
 const boostChroma = ([red, green, blue]: ColorVector, amount: number): ColorVector => {
   const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
@@ -93,10 +135,10 @@ const normaliseCandidates = (colors: readonly (string | PaletteCandidate)[]): Pa
 
   colors.forEach((item) => {
     const candidate = typeof item === 'string' ? { color: item } : item;
-    const color = candidate.color.trim();
-    if (!/^#?[0-9a-fA-F]{6}$/.test(color)) return;
+    const hex = normaliseHex(candidate.color);
+    if (!hex) return;
 
-    const key = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`;
+    const key = `#${hex}`;
     const existing = unique.get(key);
     if (!existing || (candidate.population ?? 0) > (existing.population ?? 0)) {
       unique.set(key, { ...candidate, color: key });
@@ -147,11 +189,18 @@ const createFlowPalette = (colors: readonly (string | PaletteCandidate)[]): Flow
   // Keep every moving field visually tied to the winning main colour. The
   // surface reads as one artwork-led atmosphere, rather than four competing
   // palette swatches.
+  // Cap last, after every boost, so no cover can outrun the ceiling. Luminance
+  // is linear in RGB, so a blend of capped fields is still capped and the
+  // shader's mix() output inherits the guarantee.
+  //
+  // Chroma is boosted harder than before while brightness is held down: that is
+  // what "vibrant but readable" actually means. Saturation carries the colour,
+  // the cap keeps white text on top of it legible.
   return [
-    darken(vividBase, 0.82),
-    darken(boostChroma(blend(vividBase, accentA, 0.80), 1.48), 1.12),
-    darken(boostChroma(blend(vividBase, accentB, 0.70), 1.36), 1.06),
-    darken(boostChroma(blend(vividBase, accentC, 0.62), 1.28), 1.08),
+    capLuminance(darken(vividBase, 0.82), BASE_MAX_LUMINANCE),
+    capLuminance(darken(boostChroma(blend(vividBase, accentA, 0.80), 1.68), 1.12), FIELD_MAX_LUMINANCE),
+    capLuminance(darken(boostChroma(blend(vividBase, accentB, 0.70), 1.54), 1.06), FIELD_MAX_LUMINANCE),
+    capLuminance(darken(boostChroma(blend(vividBase, accentC, 0.62), 1.44), 1.08), FIELD_MAX_LUMINANCE),
   ];
 };
 
@@ -265,6 +314,8 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
   const paletteKey = useMemo(() => palette.flat().join(','), [palette]);
   const [frontPalette, setFrontPalette] = useState<FlowPalette>(fallbackPalette);
   const [backPalette, setBackPalette] = useState<FlowPalette | null>(null);
+  /** Bumped to schedule a crossfade one render after both layers exist. */
+  const [pendingSwap, setPendingSwap] = useState(0);
   const frontPaletteRef = useRef<FlowPalette>(fallbackPalette);
   const paletteKeyRef = useRef(paletteKey);
 
@@ -307,17 +358,31 @@ const ArtworkFlowBackground: React.FC<ArtworkFlowBackgroundProps> = ({
     }
 
     setBackPalette(previousPalette);
+    // Only *arm* the crossfade here. Driving transition.value to 0 in this same
+    // effect drops the front layer to fully transparent immediately, while
+    // backPalette is still null until React commits — leaving one or two frames
+    // with neither layer drawn. That black flash is what made a track change
+    // look like the background blinking out and snapping back in.
+    setPendingSwap(count => count + 1);
+  }, [palette, paletteKey, reduceMotion, transition]);
+
+  // Runs after the render that actually mounted the outgoing layer, so there is
+  // always something on screen to fade *from*.
+  useEffect(() => {
+    if (pendingSwap === 0) return;
     transition.value = 0;
     transition.value = withTiming(1, { duration: TRACK_CHANGE_MS, easing: easeInOutSine }, (finished) => {
       if (finished) runOnJS(setBackPalette)(null);
     });
-  }, [palette, paletteKey, reduceMotion, transition]);
+  }, [pendingSwap, transition]);
 
   const frontOpacity = useDerivedValue(() => transition.value);
   const backOpacity = useDerivedValue(() => 1 - transition.value);
-  // Slightly quicker than a screen-sized lyric backdrop. In a compact Island
-  // this keeps the colour drift perceptible while remaining calm.
-  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 285 : 0));
+  // Divisor is the master speed control — smaller is faster. At 285 the drift
+  // was too slow to read as motion at all; the blobs looked like a static
+  // gradient. 165 makes the shapes visibly travel while staying calm enough to
+  // sit behind lyrics without pulling the eye.
+  const flowTime = useDerivedValue(() => (animated && !reduceMotion ? clock.value / 165 : 0));
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;

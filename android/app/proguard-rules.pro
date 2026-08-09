@@ -48,4 +48,19 @@
 -dontwarn com.google.android.gms.internal.mlkit_**
 -dontwarn com.google.android.gms.vision.**
 
+# ── NewPipeExtractor ────────────────────────────────────────────────────────
+# The extractor evaluates YouTube's player JS through Rhino, so the whole
+# org.mozilla.javascript tree has to survive minification — it is reached
+# reflectively and R8 cannot see the edges. Rhino also compiles against desktop
+# JDK APIs (java.beans, javax.script, jdk.dynalink) that do not exist on
+# Android; those paths are unreachable here, so the warnings are suppressed
+# rather than satisfied. Mirrors NewPipe's own proguard-rules.pro.
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.mozilla.classfile.ClassFileWriter
+-keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+-dontwarn org.mozilla.javascript.**
+-dontwarn java.beans.**
+-dontwarn javax.script.**
+-dontwarn jdk.dynalink.**
+
 # Add any project specific keep options here:

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 // ... imports
 
-import { lyricaService } from '../services/LyricaService';
+import { getLyricsPrecisionLabel, lyricaService, type LyricsPrecision } from '../services/LyricaService';
 
 // ...
 
@@ -98,6 +98,8 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
   const [magicAttempt, setMagicAttempt] = useState<0 | 1 | 2>(0);
   const [magicLoading, setMagicLoading] = useState(false);
   const [magicStatus, setMagicStatus] = useState<'idle' | 'green' | 'yellow' | 'blue' | 'red'>('idle');
+  const [magicPrecision, setMagicPrecision] = useState<LyricsPrecision | null>(null);
+  const [fetchedLyricsMeta, setFetchedLyricsMeta] = useState<Pick<Song, 'lyricSource' | 'lyricsRaw' | 'lyricsFormat' | 'lyricsSyncType' | 'lyricsPrecision'> | null>(null);
   
   // Audio URI (kept for legacy compatibility or future local playback, but VAD features removed)
   const [audioUri, setAudioUri] = useState<string | null>(null);
@@ -119,6 +121,13 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
           setDurationText(formatTime(song.duration));
           setLyricsAlign(song.lyricsAlign ?? 'left');
           setAudioUri(song.audioUri ?? null);
+          setFetchedLyricsMeta({
+            lyricSource: song.lyricSource,
+            lyricsRaw: song.lyricsRaw,
+            lyricsFormat: song.lyricsFormat,
+            lyricsSyncType: song.lyricsSyncType,
+            lyricsPrecision: song.lyricsPrecision,
+          });
         }
       };
       loadSong();
@@ -196,6 +205,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
     if (magicStatus !== 'idle' && !magicLoading) {
         const timer = setTimeout(() => {
             setMagicStatus('idle');
+            setMagicPrecision(null);
         }, 5000); // 5s timeout to reset color
         return () => clearTimeout(timer);
     }
@@ -237,13 +247,22 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
           if (result && result.lyrics) {
               const hasSynced = lyricaService.hasTimestamps(result.lyrics);
               const parsed = lyricaService.parseLrc(result.lyrics, result.metadata?.duration || 0);
+              const precisionLabel = getLyricsPrecisionLabel(result.precision);
               
               setLyricsText(lyricsToRawText(parsed));
               if (result.metadata?.duration) setDurationText(formatTime(result.metadata.duration));
 
               setMagicStatus(hasSynced ? 'green' : 'blue');
+              setMagicPrecision(result.precision);
+              setFetchedLyricsMeta({
+                lyricSource: result.source,
+                lyricsRaw: result.rawLyrics ?? result.lyrics,
+                lyricsFormat: result.format,
+                lyricsSyncType: result.syncType ?? (result.precision === 'word' ? 'richsync' : hasSynced ? 'linesync' : 'plain'),
+                lyricsPrecision: result.precision,
+              });
               
-              const modeText = hasSynced ? 'Synced lyrics applied!' : 'Plain lyrics applied.';
+              const modeText = `${precisionLabel} lyrics applied!`;
               setToastMessage(`✨ ${modeText} (${result.source})`);
               setToastType('success');
               setShowToast(true);
@@ -251,6 +270,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
 
           } else {
               setMagicStatus(isRetryForSynced ? 'blue' : 'red'); // Keep blue if we were retrying for synced but failed
+              setMagicPrecision(isRetryForSynced ? 'plain' : null);
               setMagicAttempt(0); 
               setToastMessage(isRetryForSynced ? 'No synced lyrics found to upgrade.' : 'No lyrics found via Lyrica.');
               setToastType(isRetryForSynced ? 'info' : 'error');
@@ -302,12 +322,20 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
 
     // ...
     let parsedLines = lyricaService.parseLrc(finalLyrics, result.duration);
-    const hasSyncedTimestamps = result.syncedLyrics && result.syncedLyrics.includes('[');
+    const hasSyncedTimestamps = result.precision !== 'plain';
+    const precisionLabel = getLyricsPrecisionLabel(result.precision);
     
     if (hasSyncedTimestamps) {
       setLyricsText(lyricsToRawText(parsedLines));
+      setFetchedLyricsMeta({
+        lyricSource: result.source,
+        lyricsRaw: result.rawLyrics,
+        lyricsFormat: result.format,
+        lyricsSyncType: result.syncType ?? (result.precision === 'word' ? 'richsync' : 'linesync'),
+        lyricsPrecision: result.precision,
+      });
       
-      setToastMessage(`✨ Synced Lyrics Auto-Applied from ${result.source}`);
+      setToastMessage(`✨ ${precisionLabel} lyrics auto-applied from ${result.source}`);
       setToastType('success');
       setShowToast(true);
     } else {
@@ -318,8 +346,15 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
       }
 
       setLyricsText(lyricsToRawText(parsedLines));
+      setFetchedLyricsMeta({
+        lyricSource: result.source,
+        lyricsRaw: result.rawLyrics,
+        lyricsFormat: result.format,
+        lyricsSyncType: result.syncType ?? 'plain',
+        lyricsPrecision: result.precision,
+      });
       
-      setToastMessage(`Lyrics Loaded from ${result.source}`);
+      setToastMessage(`${precisionLabel} lyrics loaded from ${result.source}`);
       setToastType('success');
       setShowToast(true);
     }
@@ -368,7 +403,11 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
         audioUri: audioUri ?? undefined,
         // PRESERVE VISUALS & METADATA
         coverImageUri: originalSong?.coverImageUri, 
-        lyricSource: originalSong?.lyricSource,
+        lyricSource: fetchedLyricsMeta?.lyricSource ?? originalSong?.lyricSource,
+        lyricsRaw: fetchedLyricsMeta?.lyricsRaw ?? originalSong?.lyricsRaw,
+        lyricsFormat: fetchedLyricsMeta?.lyricsFormat ?? originalSong?.lyricsFormat,
+        lyricsSyncType: fetchedLyricsMeta?.lyricsSyncType ?? originalSong?.lyricsSyncType,
+        lyricsPrecision: fetchedLyricsMeta?.lyricsPrecision ?? originalSong?.lyricsPrecision,
         textCase: originalSong?.textCase,
         isLiked: originalSong?.isLiked
       } as Song;
@@ -454,9 +493,16 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                         onChangeText={setTitle}
                       />
                    </View>
-                   {/* Sync Button */}
-                   <Pressable 
-                     style={[styles.magicButtonSmall, { backgroundColor: '#4ADE80' }]} 
+                   {/* Sync Button — opens the per-song lyric offset calibration.
+                       Only meaningful once the song exists and has saved lyrics
+                       to align against, so it stays disabled while adding. */}
+                   <Pressable
+                     style={[
+                       styles.magicButtonSmall,
+                       { backgroundColor: '#4ADE80', opacity: isEditing ? 1 : 0.4 },
+                     ]}
+                     disabled={!isEditing}
+                     onPress={() => navigation.navigate('SyncLyrics', { songId })}
                    >
                      <Ionicons name="timer-outline" size={16} color="#000" />
                      <Text style={[styles.magicButtonText, { color: '#000' }]}>Sync</Text>
@@ -487,7 +533,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                                 (magicStatus === 'yellow' || magicStatus === 'green') && { color: '#000' }
                             ]}>
                                 {magicStatus === 'idle' ? 'Magic' : 
-                                 magicStatus === 'green' ? 'Synced' :
+                                 magicStatus === 'green' ? (magicPrecision === 'word' ? 'Word' : 'Synced') :
                                  magicStatus === 'blue' ? 'Plain' :
                                  magicStatus === 'yellow' ? 'Retry' :
                                  'Failed'}

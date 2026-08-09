@@ -83,6 +83,8 @@ interface SettingsState {
   // Advanced
   lyricsDelay: number;
   setLyricsDelay: (delay: number) => void;
+  lyricsAlign: 'left' | 'center' | 'right';
+  setLyricsAlign: (align: 'left' | 'center' | 'right') => void;
 
   // Beta
   ytVideoPreview: boolean;
@@ -118,6 +120,7 @@ const DEFAULT_SETTINGS = {
   downloadDirectoryUri: null,
   applyThemeToOtherPages: false,
   lyricsDelay: -1.2,
+  lyricsAlign: 'left' as 'left' | 'center' | 'right',
   quickPins: ['export', 'import', 'scan'] as [string, string, string],
   ytVideoPreview: false,
   youtubeApiKey: '',
@@ -177,6 +180,8 @@ export const useSettingsStore = create<SettingsState>()(
       // Advanced
       lyricsDelay: -1.2,
       setLyricsDelay: (lyricsDelay) => set({ lyricsDelay }),
+      lyricsAlign: 'left',
+      setLyricsAlign: (lyricsAlign) => set({ lyricsAlign }),
 
       // Beta
       ytVideoPreview: false,

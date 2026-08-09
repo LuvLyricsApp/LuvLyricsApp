@@ -21,8 +21,9 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
-import { TabScreenProps } from '../types/navigation';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { TabScreenProps, RootStackParamList } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
@@ -320,6 +321,9 @@ const PINNABLE_ITEMS: Record<PinId, {
 type Props = TabScreenProps<'Settings'>;
 
 const SettingsScreen: React.FC<Props> = () => {
+  // Settings is a tab route, so its own navigation prop cannot reach the root
+  // stack where SpotifyImport lives.
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
   const { fetchSongs, addSong, songs, getSong } = useSongsStore();
@@ -667,7 +671,14 @@ const SettingsScreen: React.FC<Props> = () => {
             <MenuRow icon="play-circle-outline" iconColor="#34C759" label="Playback" onPress={() => setActiveSheet('playback')} />
             <MenuRow icon="radio-outline" iconColor="#FF6B6B" label="Mini Player" onPress={() => setActiveSheet('miniplayer')} />
             <MenuRow icon="folder-open-outline" iconColor="#FF9F0A" label="Library" onPress={() => setActiveSheet('library')} />
-            <MenuRow icon="globe-outline" iconColor="#30D158" label="Discovery" onPress={() => setActiveSheet('discovery')} isLast />
+            <MenuRow icon="globe-outline" iconColor="#30D158" label="Discovery" onPress={() => setActiveSheet('discovery')} />
+            <MenuRow
+              icon="musical-notes-outline"
+              iconColor="#1DB954"
+              label="Spotify Playlists"
+              onPress={() => rootNavigation.navigate('SpotifyImport')}
+              isLast
+            />
           </View>
 
           {/* ── Section: System ── */}
@@ -763,6 +774,18 @@ const SettingsScreen: React.FC<Props> = () => {
             onPress={() => settings.setVoiceMode((settings.voiceMode ?? 'hold') === 'hold' ? 'tap' : 'hold')}
           />
         )}
+        <SettingsRow
+          icon="text-outline" label="Lyrics Alignment"
+          value={
+            settings.lyricsAlign === 'left' ? 'Left' :
+            settings.lyricsAlign === 'right' ? 'Right' : 'Center'
+          }
+          onPress={() => {
+            const modes: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+            const next = modes[(modes.indexOf(settings.lyricsAlign) + 1) % modes.length];
+            settings.setLyricsAlign(next);
+          }}
+        />
         <SettingsRowSwitch icon="sunny-outline" label="Keep Screen On" value={settings.keepScreenOn} onToggle={settings.setKeepScreenOn} />
         <View style={styles.sliderRow}>
           <View style={styles.sliderHeader}>

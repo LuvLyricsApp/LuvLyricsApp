@@ -1,18 +1,49 @@
 # LuvLyrics — Project Reference
 
+## Migration (LuvLyrics 2.0)
+
+**Full rewrite to Kotlin + Jetpack Compose is in progress.** RN/Expo retires at Phase 8 only after native parity is verified.
+
+| Doc | Purpose |
+|-----|---------|
+| `.planning/PROJECT.md` | Decision, architecture, what carries over |
+| `.planning/ROADMAP.md` | Phases 0–9, sizes, exit criteria |
+| `.planning/STATE.md` | **Living progress** — update when milestones are verified on device |
+| `.planning/REQUIREMENTS.md` | Feature triage |
+
+**Current phase:** 0 (shell, launch-safe) + 1 (data migration UI). Next: verify counts against live `lyricflow.db`, then Phase 2 player.
+
+**Hard rules:**
+1. **Never run `expo prebuild`** — wipes 20 custom Kotlin modules.
+2. **Do not delete `src/`** until Phase 8.
+3. **Verify on device** — `adb install` + manual UAT; `tsc`/jest prove nothing about native.
+4. **Lyrics priority unchanged:** rich-sync/word-timed first, then line-sync, then plain.
+5. **Room uses `lyricflow-room.db`** — never write to live `lyricflow.db` from Kotlin until cutover.
+6. **Compose-first debug launch** skips Expo DevLauncher; legacy RN lazy-inits in `MainActivity`.
+
+**Native shell entry:** `LauncherActivity` → `LyricFlowComposeApp` (tabs: Home, Local, Playlists, Luvs, Search).
+
+**Build/install:**
+```
+cd android
+.\gradlew.bat :app:assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb shell am start -n com.lyricflow.app/.LauncherActivity
+```
+
 ## Commit style
 - Never add AI attribution lines (no "Co-Authored-By" footers). Commits look like normal human commits.
 - Use conventional commits: `fix(scope):`, `feat(scope):`, `refactor(scope):`, etc.
 - Keep messages short — one imperative sentence, body only when the why needs explaining.
 
 ## Stack
-- **React Native + Expo** (managed workflow, `expo run:android` / `expo run:ios`)
+- **Target:** Kotlin + Jetpack Compose + Room (migration in progress)
+- **Current UI:** React Native + Expo (managed workflow, `expo run:android` / `expo run:ios`)
 - **expo-audio** for playback (`useAudioPlayer`, `useAudioPlayerStatus`)
 - **Zustand** for all app state (`src/store/`)
 - **React Navigation** (native-stack + bottom-tabs)
 - **Reanimated 3** + **Gesture Handler** for animations and gestures
-- **Reanimated 3** shared values and Gesture Handler own timed lyric follow and player motion; keep playback tracking off the React render path
-- **SQLite** via `expo-sqlite` for the local song library
+- **SQLite** via `expo-sqlite` for the local song library (RN); Room `lyricflow-room.db` for native
 - **TypeScript** strict — run `npm run typecheck` before pushing
 
 ## Key architecture
@@ -79,6 +110,8 @@ There is no standalone Now Playing screen. Keep lyrics in `MiniPlayer` so contro
 | Lyrics | `src/components/SynchronizedLyrics.tsx`, `src/components/LyricsLine.tsx` |
 | Scrubber | `src/components/TimelineScrubber.tsx` |
 | Downloads | `src/services/DownloadManager.ts`, `src/components/BackgroundDownloader.tsx` |
+| Native data (Compose) | `android/.../data/` — `LibraryDatabase`, `LegacyLibraryMigrator`, `LibraryRepository` |
+| Compose shell | `android/.../compose/` — `LyricFlowComposeApp`, `LibraryScreens`, `LaunchPrefs` |
 | Desktop bridge | `src/services/DesktopBridgeService.ts` — **live**, auto-starts at boot via `App.tsx` → `desktopBridgeSettingsStore.load()` |
 | Stores | `src/store/` — songsStore, playlistStore, settingsStore, downloadQueueStore, etc. |
 | Screens | `src/screens/` — Library, NowPlaying, Playlist, Search, Settings, etc. |
