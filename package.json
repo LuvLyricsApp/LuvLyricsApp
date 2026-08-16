@@ -12,6 +12,7 @@
     "security:secrets": "node scripts/ci/check-secrets.js",
     "test": "jest",
     "test:ci": "jest --ci --runInBand --coverage",
+    "test:providers": "node scripts/smoke_test_providers.js",
     "ci": "npm run security:secrets && npm run lint && npm run typecheck && npm run test:ci"
   },
   "dependencies": {
@@ -72,6 +73,7 @@
     "@react-native/eslint-config": "^0.84.0",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
+    "babel-plugin-transform-import-meta": "^2.3.3",
     "babel-preset-expo": "^54.0.10",
     "eslint": "^8.57.1",
     "jest": "^30.2.0",
