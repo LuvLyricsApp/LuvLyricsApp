@@ -48,7 +48,7 @@ export const createPlaylist = async (
   coverUri?: string
 ): Promise<string> => {
   return withDbWrite(async (db) => {
-    const id = `playlist_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
     await db.runAsync(

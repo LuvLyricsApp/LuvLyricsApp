@@ -46,7 +46,7 @@ class ImageSearchServiceImpl {
                     : null;
 
                 return {
-                    id: item.trackId?.toString() || Math.random().toString(),
+                    id: item.trackId?.toString() || crypto.randomUUID(),
                     uri: highResUrl || item.artworkUrl100,
                     title: item.trackName,
                     artist: item.artistName,

@@ -67,11 +67,7 @@ export const truncateText = (text: string, maxLength: number): string => {
 /**
  * Generate unique ID using timestamp + random
  */
-export const generateId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 9);
-  return `${timestamp}-${random}`;
-};
+export const generateId = (): string => crypto.randomUUID();
 
 /**
  * Format song subtitle (artist • album)
