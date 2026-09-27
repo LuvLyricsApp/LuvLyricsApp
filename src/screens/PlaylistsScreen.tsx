@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   gridList: {
     paddingHorizontal: 12,
-    paddingBottom: 100,
+    paddingBottom: 220,
   },
   playlistCard: {
     flex: 1,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 100,
+    paddingBottom: 220,
     paddingHorizontal: 32,
   },
   emptyTitle: {

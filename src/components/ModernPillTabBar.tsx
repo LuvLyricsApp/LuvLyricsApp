@@ -16,7 +16,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
 import { Glass, Motion, Radius } from '../constants/allegraTheme';
-import { VISIBLE_TABS } from '../navigation/tabs';
+import { pillBarBottom, VISIBLE_TABS } from '../navigation/tabs';
 import { MoreMenu, useMoreMenu } from './MoreMenu';
 import { MorphIcon } from './allegra/motion';
 
@@ -53,10 +53,8 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const micEnabled = useSettingsStore(s => s.micEnabled);
   const isDark = useIsDark();
   const colors = useThemeColors();
-  // iOS floats the bar into the home-indicator zone, as Apple Music does; on
-  // Android it has to clear the gesture / 3-button bar, which edge-to-edge draws under.
   const insets = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === 'ios' ? 12 : insets.bottom + 8;
+  const bottomOffset = pillBarBottom(insets.bottom);
   const { width: screenWidth } = useWindowDimensions();
   const [pill, setPill] = useState({ width: 0, height: 64 });
   const more = useMoreMenu(state, navigation);

@@ -10,8 +10,8 @@
  *
  * Fixed behind the content, pointer-transparent, never owns layout.
  */
-import React, { useEffect } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -36,7 +36,16 @@ const withAlpha = (hex: string, alpha: number): string => {
 };
 
 export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = false, active = true, mood = 'energy', dim = 0 }) => {
-  const { width, height } = useWindowDimensions();
+  // Sized to the space it actually fills, not the window: on edge-to-edge
+  // Android the window height leaves out the navigation bar, which left an
+  // unpainted strip at the bottom. Start from the full screen until measured.
+  const [{ width, height }, setSize] = useState(() => Dimensions.get('screen'));
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    if (w > 0 && h > 0 && (Math.round(w) !== Math.round(width) || Math.round(h) !== Math.round(height))) {
+      setSize({ width: w, height: h, scale: 1, fontScale: 1 });
+    }
+  };
   const fieldOpacity = useSharedValue(playing ? 0.88 : 0.3);
 
   useEffect(() => {
@@ -46,7 +55,7 @@ export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = fal
   const fieldStyle = useAnimatedStyle(() => ({ opacity: fieldOpacity.value }));
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.base]} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, styles.base]} pointerEvents="none" onLayout={onLayout}>
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="glowA" cx="72%" cy="18%" rx="72%" ry="58%">

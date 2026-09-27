@@ -110,6 +110,8 @@ unmounts mid-load.
 - Fonts in `assets/fonts/` must be real font binaries — the old Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto
 - Motion: springs for anything a finger can interrupt, 200–400ms for state changes, 40ms list staggers, max two moving effects per screen, transform/opacity only. Primitives live in `components/allegra/motion.tsx` (`RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`) — reuse them instead of hand-rolling
 - UI copy is sentence case ("Good morning", "Now playing"), never all caps. No `textTransform: 'uppercase'`, no positive `letterSpacing` on labels, no monospace as decoration, no emoji in UI strings, no sparkle icons or "magic" wording — these read as generated UI. Shelves use `SectionHeading` title + optional plain `subtitle`, not an eyebrow over every heading
+- Mini player: always the bottom player — no Dynamic Island (retired; saved `island` settings migrate to `bar`). With the pill nav it is a matching pill floating `PILL_STACK_GAP` above the tab bar (geometry from `pillBarTop` / `pillBarInset` in `src/navigation/tabs.ts`) and widens into the sheet as it expands. Scrolling lists must clear both pills (~220pt)
+- Luvs follows streaming taste: `services/luvsTaste.ts` seeds from stream history (plays × recency, one seed per artist) + most-played library songs, runs Echo-style YouTube Music radio via `recommendFor`, and `luvsEngine` hands the result to Kotlin (`setTasteCandidates`), which weaves it into every page alternately with its artist discovery. Language filters don't apply to taste songs
 - Bottom bar: three everyday tabs (Home, Stream, Luvs) + mic + ••• (`components/MoreMenu.tsx`: Search, Library, Downloads, Get songs, Settings). It shows on every screen except the full-screen player — menu destinations are hidden routes in the tab navigator (`VISIBLE_TABS` in `src/navigation/tabs.ts`), not root-stack screens. Add a destination to `MORE_ITEMS`, not a new tab icon. Full-bleed screens pad by `TAB_BAR_CLEARANCE + insets.bottom`
 - Voice: hold the mic, say a song, let go → `VoiceSearchCard` (mounted once in RootNavigator) shows the best match with Play. `useVoiceCommands` feeds `voiceSearchStore`; library matches rank instantly (`rankSongs`), the catalog search starts from the partial transcript. Transport words (next/stop/…) only act when they are the whole utterance. The mic (`VoiceMicButton`) shows every stage — press sink, listening bloom + live halo, a spinning arc while searching, a shake on error — and the card never covers the tab bar while listening or searching. Speech comes from the native Android `VoiceInput` module — iOS has none yet (`expo-speech-recognition` would add it)
 - Floating glass (menus, sheets, cards) uses `allegra/Frosted` — expo-blur is a flat tint on Android unless `experimentalBlurMethod` is set, which `Frosted` does. Don't put it on always-visible chrome (the tab bar): the Android blur re-renders with every scroll frame
@@ -133,7 +135,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 26 suites / 298 tests passing
+node_modules\.bin\jest.cmd                  # expect 27 suites / 304 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

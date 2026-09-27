@@ -47,7 +47,7 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({ results, onSongPr
 
 const styles = StyleSheet.create({
   resultsContent: {
-    paddingBottom: 100,
+    paddingBottom: 220,
   },
   emptyResults: {
     padding: 48,

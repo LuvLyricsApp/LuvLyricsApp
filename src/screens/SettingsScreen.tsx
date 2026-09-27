@@ -786,20 +786,12 @@ const SettingsScreen: React.FC<Props> = () => {
         <SettingsRowSwitch icon="play-outline" label="Auto-Scroll Lyrics" value={true} onToggle={() => {}} />
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
         <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
-        {settings.navBarStyle === 'classic' && (
-          <SettingsRow
-            icon="layers-outline" label="Mini Player Style"
-            value={settings.miniPlayerStyle === 'island' ? 'Dynamic Island' : 'Classic Bar'}
-            onPress={() => settings.setMiniPlayerStyle(settings.miniPlayerStyle === 'island' ? 'bar' : 'island')}
-          />
-        )}
         <SettingsRow
           icon="navigate-outline" label="Navigation Bar Style"
           value={settings.navBarStyle === 'modern-pill' ? 'Modern Pill' : 'Classic'}
           onPress={() => {
             const next = settings.navBarStyle === 'modern-pill' ? 'classic' : 'modern-pill';
             settings.setNavBarStyle(next);
-            if (next === 'modern-pill') settings.setMiniPlayerStyle('island');
           }}
         />
         <SettingsRowSwitch

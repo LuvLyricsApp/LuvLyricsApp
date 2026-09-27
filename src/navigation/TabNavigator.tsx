@@ -75,11 +75,11 @@ export const TabNavigator: React.FC = () => {
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   const setMiniPlayerStyle = useSettingsStore(state => state.setMiniPlayerStyle);
 
+  // The Dynamic Island mini player is retired: the player is a pill above the
+  // tab bar (or the classic bar). Move anyone still on the old saved setting.
   React.useEffect(() => {
-    if (navBarStyle === 'modern-pill' && miniPlayerStyle === 'bar') {
-      setMiniPlayerStyle('island');
-    }
-  }, [navBarStyle, miniPlayerStyle, setMiniPlayerStyle]);
+    if (miniPlayerStyle === 'island') setMiniPlayerStyle('bar');
+  }, [miniPlayerStyle, setMiniPlayerStyle]);
 
   const activeTint = isDark ? '#fff' : colors.primary;
   const inactiveTint = isDark ? 'rgba(255,255,255,0.5)' : colors.textMuted;

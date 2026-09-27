@@ -211,7 +211,7 @@ const DownloadsScreen: React.FC = () => {
             </Text>
           </View>
         }
-        contentContainerStyle={{ paddingBottom: 180 }}
+        contentContainerStyle={{ paddingBottom: 220 }}
       />
     </View>
   );

@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * The everyday tabs — the only routes with an icon in the bottom bar. Search,
  * Library, Downloads, the downloader and Settings are tab routes too (so the
@@ -12,3 +14,23 @@ export const VISIBLE_TABS: ReadonlySet<string> = new Set(['Home', 'Stream', 'Luv
  * this plus `insets.bottom` so nothing ends up under the bar.
  */
 export const TAB_BAR_CLEARANCE = 92;
+
+/** The floating pill tab bar's own height (ModernPillTabBar). */
+export const PILL_BAR_HEIGHT = 64;
+/** Gap between the pill tab bar and the mini player pill floating above it. */
+export const PILL_STACK_GAP = 8;
+
+/**
+ * Distance from the screen bottom to the pill tab bar's bottom edge. iOS floats
+ * it into the home-indicator zone, as Apple Music does; Android has to clear the
+ * gesture / 3-button bar, which edge-to-edge draws under.
+ */
+export const pillBarBottom = (insetBottom: number): number =>
+  (Platform.OS === 'ios' ? 12 : insetBottom + 8);
+
+/** Distance from the screen bottom to the pill tab bar's top edge. */
+export const pillBarTop = (insetBottom: number): number => pillBarBottom(insetBottom) + PILL_BAR_HEIGHT;
+
+/** Side inset of the pill (92% wide, at most 440pt, centred). */
+export const pillBarInset = (screenWidth: number): number =>
+  Math.max(8, (screenWidth - Math.min(screenWidth * 0.92, 440)) / 2);

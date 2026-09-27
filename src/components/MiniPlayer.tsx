@@ -37,6 +37,9 @@ import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
+import { pillBarInset, pillBarTop, PILL_STACK_GAP } from '../navigation/tabs';
+
+const PILL_RADIUS = 22;
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
@@ -238,6 +241,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const navBarStyle = useSettingsStore(state => state.navBarStyle);
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
   const isLiked = useIsSongLiked(currentSong?.id);
@@ -292,6 +296,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const isIsland = miniPlayerStyle === 'island' && isHomeTab;
   
   const screenHeight = Dimensions.get('window').height;
+  // With the floating pill tab bar, the collapsed player is a matching pill
+  // just above it (Apple Music style) and widens into the sheet as it expands.
+  const pillMode = navBarStyle === 'modern-pill';
+  const pillInset = pillBarInset(Dimensions.get('window').width);
 
   const gradientColors = currentSong?.gradientId 
     ? getGradientColors(currentSong.gradientId) 
@@ -505,17 +513,34 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // animated height. Rounded top corners on half/full; always clip to it.
   const animatedClassicShellStyle = useAnimatedStyle(() => {
     if (isIsland) return {};
-    const halfR = interpolate(expansionProgress.value, [0, 0.35, 1], [0, 16, 28], Extrapolation.CLAMP);
+    const e = expansionProgress.value;
+    const halfR = interpolate(e, [0, 0.35, 1], [pillMode ? PILL_RADIUS : 0, 16, 28], Extrapolation.CLAMP);
     const fullR = interpolate(classicFullProgress.value, [0, 1], [0, 6], Extrapolation.CLAMP);
     // Whole pixels only: a rounded corner + overflow:hidden makes Android rebuild
     // the clip path whenever the radius changes. Reanimated diffs the style object
     // per prop, so quantising means most frames don't touch it at all. Sub-pixel
     // radius is not visible either way.
     const r = Math.round(halfR + fullR);
+    if (!pillMode) {
+      return {
+        height: classicHeightForProgress(),
+        borderTopLeftRadius: r,
+        borderTopRightRadius: r,
+        overflow: 'hidden' as const,
+      };
+    }
+    // Pill: inset like the tab bar and rounded all round while collapsed; the
+    // sides and bottom corners open out as it grows into the sheet.
+    const side = Math.round(pillInset * (1 - Math.min(1, e * 2)));
+    const bottomR = Math.round(PILL_RADIUS * (1 - Math.min(1, e * 2)));
     return {
       height: classicHeightForProgress(),
+      left: side,
+      right: side,
       borderTopLeftRadius: r,
       borderTopRightRadius: r,
+      borderBottomLeftRadius: bottomR,
+      borderBottomRightRadius: bottomR,
       overflow: 'hidden' as const,
     };
   });
@@ -937,7 +962,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // Classic bar is a root-level sibling of the stack (after it in tree), so it
   // can paint over the tab bar if its frame intersects. Anchor with `bottom`
   // equal to the full tab chrome — never bottom:0 + margin that can collapse.
-  const tabChromeH = TAB_BAR_HEIGHT + insets.bottom;
+  const tabChromeH = pillMode
+    ? pillBarTop(insets.bottom) + PILL_STACK_GAP
+    : TAB_BAR_HEIGHT + insets.bottom;
 
   const classicShellStyle = [
     styles.container,
@@ -1010,7 +1037,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
       {/* Scrubber on the top edge of the transport row — same collapsed/half/full. */}
       {!isIsland && (
-         <View pointerEvents="box-none" style={styles.classicScrubberOverride}>
+         <View pointerEvents="box-none" style={[styles.classicScrubberOverride, pillMode && styles.pillScrubber]}>
            <TimelineScrubber
               currentTime={positionSV}
               duration={durationSV}
@@ -1419,6 +1446,8 @@ const styles = StyleSheet.create({
   // the track paints from the wrapper's y=0 downward. left/right 0 makes it span the
   // real screen width at runtime — the scrubber measures itself via onLayout, so no
   // width is hardcoded anywhere.
+  // Keeps the track clear of the pill's rounded corners.
+  pillScrubber: { left: 18, right: 18 },
   classicScrubberOverride: {
     position: 'absolute',
     bottom: CLASSIC_TRANSPORT_H - CLASSIC_SCRUBBER_HIT_H,

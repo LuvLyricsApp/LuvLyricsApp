@@ -121,7 +121,7 @@ const DEFAULT_SETTINGS = {
   keepScreenOn: true,
   showTimeRemaining: true,
   playInMiniPlayerOnly: false,
-  miniPlayerStyle: 'island' as const, // Default to island as requested "like it was before"
+  miniPlayerStyle: 'bar' as const, // the island mini player is retired; see TabNavigator
   navBarStyle: 'modern-pill' as const, // Default to modern pill navbar
   voiceMode: 'tap' as const,
   micEnabled: true,

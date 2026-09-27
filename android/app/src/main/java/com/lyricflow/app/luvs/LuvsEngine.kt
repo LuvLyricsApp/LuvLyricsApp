@@ -14,12 +14,46 @@ import kotlinx.coroutines.withContext
  */
 class LuvsEngine(private val prefs: LuvsPrefs) {
 
+    private companion object {
+        /** Streaming-taste songs per page, alternating with artist discovery. */
+        const val TASTE_PER_PAGE = 12
+    }
+
     /** Library snapshot pushed from JS; used for local-file swapping and seeding. */
     private var library: List<LocalSong> = emptyList()
     private var libraryByKey: Map<String, LocalSong> = emptyMap()
 
     private val feed = mutableListOf<LuvSong>()
     private var currentIndex = 0
+
+    /**
+     * Songs recommended from what the listener streams — YouTube Music radio for
+     * their recent plays, resolved to Saavn audio on the JS side (the same path
+     * the Stream tab uses, ported from Echo Music). Woven into every page so the
+     * feed follows real listening, not just Luvs swipes.
+     */
+    private val tastePool = ArrayDeque<LuvSong>()
+
+    @Synchronized
+    fun setTasteCandidates(songs: List<LuvSong>) {
+        val seen = HashSet<String>()
+        tastePool.clear()
+        songs.filter { seen.add(it.matchKey) }.forEach { tastePool.addLast(it) }
+    }
+
+    /** Takes up to [count] usable taste songs off the pool, skipping any in [taken]. */
+    @Synchronized
+    private fun takeTaste(count: Int, taken: MutableSet<String>): List<LuvSong> {
+        val out = mutableListOf<LuvSong>()
+        while (out.size < count && tastePool.isNotEmpty()) {
+            val song = tastePool.removeFirst()
+            if (taken.contains(song.matchKey) || libraryByKey.containsKey(song.matchKey)) continue
+            if (!passesTasteFilter(song)) continue
+            taken.add(song.matchKey)
+            out.add(song)
+        }
+        return out
+    }
 
     @Synchronized
     fun setLibrary(songs: List<LocalSong>) {
@@ -105,8 +139,10 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
             }.map { it.await() }
         }
 
-        val mixtape = perQuery.flatten()
-        val finalFeed = interleave(mixtape)
+        val mixtape = interleave(perQuery.flatten())
+        val taken = mixtape.map { it.matchKey }.toHashSet()
+        val taste = takeTaste(TASTE_PER_PAGE, taken)
+        val finalFeed = weave(taste, mixtape)
         finalFeed.forEach { prefs.markSeen(it.id) }
         finalFeed
     }
@@ -224,6 +260,31 @@ class LuvsEngine(private val prefs: LuvsPrefs) {
             }
             true
         }
+    }
+
+    /**
+     * Taste songs come from the listener's own streaming, so the language filter
+     * does not apply; everything else that keeps the feed clean still does.
+     */
+    private fun passesTasteFilter(song: LuvSong): Boolean {
+        if (song.downloadUrl.isEmpty() || prefs.isSeen(song.id)) return false
+        val artist = song.artist.lowercase().trim()
+        if (artist.isNotEmpty() && prefs.skippedArtistNames().any { it.equals(artist, ignoreCase = true) }) return false
+        val title = song.title.lowercase()
+        if (devotionalKeywords.any { title.contains(it) || artist.contains(it) }) return false
+        if (unwantedKeywords.any { title.contains(it) || artist.contains(it) }) return false
+        return true
+    }
+
+    /** Alternates taste and discovery, taste first, keeping any leftovers at the end. */
+    private fun weave(taste: List<LuvSong>, discovery: List<LuvSong>): List<LuvSong> {
+        val out = ArrayList<LuvSong>(taste.size + discovery.size)
+        val longest = maxOf(taste.size, discovery.size)
+        for (i in 0 until longest) {
+            taste.getOrNull(i)?.let(out::add)
+            discovery.getOrNull(i)?.let(out::add)
+        }
+        return out
     }
 
     private fun deduplicate(songs: List<LuvSong>): List<LuvSong> {

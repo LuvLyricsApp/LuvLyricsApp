@@ -125,7 +125,7 @@ export const AudioDownloaderQueueTab = memo(() => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 140 },
+  listContent: { padding: 16, paddingBottom: 220 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',

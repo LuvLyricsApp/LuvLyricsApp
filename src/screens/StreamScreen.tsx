@@ -50,8 +50,10 @@ import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { Song, UnifiedSong } from '../types/song';
 import { Toast } from '../components/Toast';
+import { pillBarTop, PILL_STACK_GAP } from '../navigation/tabs';
+import { CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
 
-const ISLAND_CLEARANCE = 52; // the Dynamic Island mini player floats top-right
+const HEADER_HEIGHT = 52;
 
 const MOODS = [
   { label: 'Chill', query: 'chill lofi' },
@@ -181,6 +183,8 @@ const StreamScreen: React.FC = () => {
   }, [clearSearch, runSearch]);
 
   const isFocused = useIsFocused();
+  // Clear the tab bar pill plus the mini player pill stacked above it.
+  const bottomClearance = pillBarTop(insets.bottom) + PILL_STACK_GAP + CLASSIC_MINI_PLAYER_HEIGHT + Space.lg;
   const isPlaying = usePlayerStore(s => s.isPlaying);
   const shaderMood: AuraMood = (mood && SHADER_MOOD[mood]) || 'energy';
 
@@ -316,10 +320,9 @@ const StreamScreen: React.FC = () => {
       <DynamicAura palette={palette} playing={isPlaying} active={isFocused} mood={shaderMood} dim={0.18} />
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + Space.xs }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Space.xs, paddingBottom: bottomClearance }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Signal.wave} progressViewOffset={insets.top + 40} />}
       >
-        {/* Shares its line with the Dynamic Island mini player, top right. */}
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">Stream</Text>
         </View>
@@ -363,8 +366,8 @@ const StreamScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Signal.bg },
-  content: { paddingBottom: 180 },
-  header: { height: ISLAND_CLEARANCE, justifyContent: 'center', paddingHorizontal: GUTTER },
+  content: {},
+  header: { height: HEADER_HEIGHT, justifyContent: 'center', paddingHorizontal: GUTTER },
   title: { fontSize: 28, fontWeight: '700', color: Signal.ink },
   search: {
     flexDirection: 'row',
