@@ -219,6 +219,13 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       // consumers that read song.isLiked directly (RecentlyPlayedGrid,
       // SongCard) stay reactive without a full refetch.
       toggleLike: async (songId: string) => {
+         // A streamed song has no library row to like — saving it downloads it
+         // into the library instead (the row it then gets can be liked).
+         if (songId.startsWith('stream:')) {
+             const { StreamService } = await import('../services/stream/StreamService');
+             StreamService.save(songId);
+             return;
+         }
          try {
              const { usePlaylistStore } = await import('./playlistStore');
              await usePlaylistStore.getState().toggleLiked(songId);
