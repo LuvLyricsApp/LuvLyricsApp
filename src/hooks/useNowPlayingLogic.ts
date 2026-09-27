@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, Dimensions } from 'react-native';
-// Navigation handled by screen component
-import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withRepeat, Easing, withSequence } from 'react-native-reanimated';
+import { Alert } from 'react-native';
+import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
@@ -12,14 +11,9 @@ import * as queries from '../database/queries';
 import { getGradientColors } from '../constants/gradients';
 import { extractAlbumColors } from '../services/NativePalette';
 import { SynchronizedLyricsRef } from '../components/SynchronizedLyrics';
-import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 
-const { width } = Dimensions.get('window');
-
 export function useNowPlayingLogic(songId: string, initialLyrics = false) {
-  const colors = useThemeColors();
-  const isDark = useIsDark();
   const player = usePlayer();
   const currentSong = usePlayerStore(state => state.currentSong);
   const isCurrentSongLiked = useIsSongLiked(currentSong?.id);
@@ -32,13 +26,9 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
 
   const toggleLike = useSongsStore(state => state.toggleLike);
   const addRecentArt = useArtHistoryStore(state => state.addRecentArt);
-  const animateBackground = useSettingsStore(state => state.animateBackground);
-  const setAnimateBackground = useSettingsStore(state => state.setAnimateBackground);
 
   const flatListRef = useRef<SynchronizedLyricsRef>(null);
   const didAutoPlayRef = useRef(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
   // Apple Music (and Echo) open on the cover — where the canvas plays —
   // and lyrics are one tap away. Opening on lyrics hid the canvas entirely.
@@ -48,74 +38,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   // and only came back on a downward drag, which read as the player vanishing.
   const controlsVisible = true;
   const animatedStyle = { opacity: 1 } as const;
-
-  const handleMenuPress = (event: any) => {
-    const { nativeEvent } = event;
-    const anchor = { x: nativeEvent.pageX, y: nativeEvent.pageY };
-    setMenuAnchor(anchor);
-    setMenuVisible(true);
-  };
-
-  // Background blob animations
-  const blob1TranslateX = useSharedValue(0);
-  const blob1TranslateY = useSharedValue(0);
-  const blob1Scale = useSharedValue(1);
-  const blob2TranslateX = useSharedValue(0);
-  const blob2TranslateY = useSharedValue(0);
-  const blob2Scale = useSharedValue(1);
-  const blob3TranslateX = useSharedValue(0);
-  const blob3TranslateY = useSharedValue(0);
-  const blob3Scale = useSharedValue(1);
-
-  useEffect(() => {
-    if (animateBackground) {
-      blob1TranslateX.value = withRepeat(withTiming(width * 0.5, { duration: 45000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob1TranslateY.value = withRepeat(withTiming(width * 0.3, { duration: 55000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob1Scale.value = withRepeat(withTiming(1.2, { duration: 60000, easing: Easing.inOut(Easing.ease) }), -1, true);
-
-      blob2TranslateX.value = withRepeat(withTiming(-width * 0.5, { duration: 50000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob2TranslateY.value = withRepeat(withTiming(-width * 0.4, { duration: 62000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob2Scale.value = withRepeat(withTiming(1.3, { duration: 58000, easing: Easing.inOut(Easing.ease) }), -1, true);
-
-      blob3TranslateX.value = withRepeat(withTiming(-width * 0.2, { duration: 38000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob3TranslateY.value = withRepeat(withTiming(width * 0.2, { duration: 42000, easing: Easing.inOut(Easing.ease) }), -1, true);
-      blob3Scale.value = withRepeat(withTiming(1.4, { duration: 48000, easing: Easing.inOut(Easing.ease) }), -1, true);
-    } else {
-      blob1TranslateX.value = withTiming(0);
-      blob1TranslateY.value = withTiming(0);
-      blob1Scale.value = withTiming(1);
-      blob2TranslateX.value = withTiming(0);
-      blob2TranslateY.value = withTiming(0);
-      blob2Scale.value = withTiming(1);
-      blob3TranslateX.value = withTiming(0);
-      blob3TranslateY.value = withTiming(0);
-      blob3Scale.value = withTiming(1);
-    }
-  }, [animateBackground, blob1Scale, blob1TranslateX, blob1TranslateY, blob2Scale, blob2TranslateX, blob2TranslateY, blob3Scale, blob3TranslateX, blob3TranslateY]);
-
-  const blob1Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob1TranslateX.value } as any,
-      { translateY: blob1TranslateY.value } as any,
-      { scale: blob1Scale.value } as any,
-    ],
-  }));
-
-  const blob2Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob2TranslateX.value } as any,
-      { translateY: blob2TranslateY.value } as any,
-      { scale: blob2Scale.value } as any,
-    ],
-  }));
-
-  const blob3Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: blob3TranslateX.value } as any,
-      { translateY: blob3TranslateY.value } as any,
-      { scale: blob3Scale.value } as any,
-    ],
-  }));
 
   // Song loading
   useEffect(() => {
@@ -258,21 +180,11 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
     });
   }, [processedLyrics, lyricsDelay]);
 
-  // Playback controls
-  const playButtonScale = useSharedValue(1);
-
+  // Playback controls (the button's own press animation lives in NowPlayingControls)
   const togglePlay = () => {
     if (!player) return;
-    playButtonScale.value = withSequence(
-      withTiming(0.8, { duration: 100 }),
-      withTiming(1, { duration: 100 })
-    );
     requestPlayback(!usePlayerStore.getState().isPlaying);
   };
-
-  const playButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: playButtonScale.value }],
-  }));
 
   const skipForward = async () => {
     await usePlayerStore.getState().nextInPlaylist();
@@ -343,28 +255,18 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
     : (extractedColors ?? ['#111', '#333', '#000']);
 
   return {
-    colors,
-    isDark,
     currentSong,
     isCurrentSongLiked,
-    menuVisible,
-    setMenuVisible,
-    menuAnchor,
-    handleMenuPress,
     showCoverSearch,
     setShowCoverSearch,
     controlsVisible,
     animatedStyle,
     showLyrics,
     setShowLyrics,
-    blob1Style,
-    blob2Style,
-    blob3Style,
     processedLyrics,
     isLinear,
     flatListRef,
     getActiveLyricIndex,
-    playButtonStyle,
     togglePlay,
     skipForward,
     skipBackward,
@@ -374,8 +276,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
     isDynamicTheme,
     updateCurrentSong,
     addRecentArt,
-    animateBackground,
-    setAnimateBackground,
     loadedAudioId,
     storePlaying,
     toggleLike,
