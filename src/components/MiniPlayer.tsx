@@ -7,9 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
 import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
 import InstrumentalWaveform, { isInstrumentalLyric } from './InstrumentalWaveform';
@@ -234,14 +231,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
   const hideMiniPlayer = usePlayerStore(state => state.hideMiniPlayer);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
   const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const navBarStyle = useSettingsStore(state => state.navBarStyle);
   const isDark = useIsDark();
@@ -410,7 +405,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
     syncAudio();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, setMiniPlayerHidden, requestPlayback]);
+  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, requestPlayback]);
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
@@ -876,7 +871,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // `velocity`: a swipe up on the pill hands its speed to the sheet.
   const openNowPlaying = useCallback((velocity?: number) => {
     if (currentSong) {
-      setMiniPlayerHidden(true);
+      // No global hide here: NowPlaying hides the pill through its own source
+      // while it's focused and releases it as it closes. A global hide set
+      // here was never cleared, so the pill vanished after the player closed.
       openPlayerSheet(currentSong.id, typeof velocity === 'number' ? velocity : 0);
       expansionProgress.value = withSpring(0);
       lyricExpansionProgress.value = withSpring(0);
@@ -888,7 +885,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       setClassicFullExpanded(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong, setMiniPlayerHidden, navigation]);
+  }, [currentSong]);
   openNowPlayingRef.current = openNowPlaying;
 
   const handleLyricPress = useCallback((timestamp: number) => {
