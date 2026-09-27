@@ -229,7 +229,8 @@ const applyTrack = async (track: TrackInfo, playing: boolean, position: number, 
   }
   const ready = await waitForLoad(songId, gen);
   if (gen !== generation) return;
-  holdSync(1500);
+  // Loaded: shorten the load-time hold to the settle window (holdSync only extends).
+  muteBroadcastUntil = Date.now() + 1500;
   if (bypassBuffer || !ready) {
     seekMs(position);
     setPlaying(playing);
