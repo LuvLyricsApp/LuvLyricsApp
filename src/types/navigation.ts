@@ -9,7 +9,7 @@ import { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/n
 // Root Stack Navigator
 export type RootStackParamList = {
   Main: NavigatorScreenParams<TabParamList> | undefined;
-  NowPlaying: { songId: string };
+  NowPlaying: { songId: string; lyrics?: boolean };
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault

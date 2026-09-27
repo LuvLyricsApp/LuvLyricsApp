@@ -24,6 +24,7 @@ import { useArtworkPalette } from './allegra/useArtworkPalette';
 import CanvasVideoLayer from './CanvasVideoLayer';
 import { CanvasArtwork } from '../services/canvas/types';
 import { useSettingsStore } from '../store/settingsStore';
+import { diag } from '../utils/diag';
 
 interface NowPlayingBackgroundProps {
   coverImageUri?: string;
@@ -78,6 +79,9 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   }, [canvasAllowed, onCanvasVisibleChange]);
 
   const heroH = heroHeight(width, height);
+  useEffect(() => {
+    diag('player', `background ${style}, apple inspired ${appleInspired}, lyrics ${showLyrics}, glow ${glowOn}, hero ${heroOn}, canvas ${canvas ? canvas.source : 'none'}`);
+  }, [style, appleInspired, showLyrics, glowOn, heroOn, canvas]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

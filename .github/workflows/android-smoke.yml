@@ -1,8 +1,9 @@
 name: Android smoke test
 
-# Boots the release build on an Android emulator and records what the user
-# would see: a screenshot 45s after launch and the JS / crash lines from
-# logcat. Catches "installs fine, then blank screen" failures that no unit
+# Boots the release build on an Android emulator and drives it with
+# lyricflow:// deep links (see .github/scripts/android-smoke.sh): screenshots
+# of launch, the player, Library and Settings, a background-playback check,
+# the app's diagnostics and the JS / crash lines from logcat. Catches "installs fine, then blank screen" failures that no unit
 # test can. The screenshot and full logcat are published to the "smoke-latest"
 # release and uploaded as a workflow artifact.
 
@@ -95,7 +96,7 @@ jobs:
         run: |
           [ -f smoke/after-45s.png ] || exit 0
           gh release delete smoke-latest --yes --cleanup-tag || true
-          gh release create smoke-latest smoke/after-45s.png smoke/logcat.txt \
+          gh release create smoke-latest smoke/*.png smoke/*.txt \
             --prerelease --target "$GITHUB_SHA" \
             --title "Emulator smoke test — latest" \
-            --notes "Screenshot 45s after launch and full logcat, from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}."
+            --notes "Launch, player (cover and lyrics), Library and Settings screenshots, background playback check, diagnostics and full logcat, from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}."

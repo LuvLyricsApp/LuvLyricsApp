@@ -19,7 +19,7 @@ import { useIsSongLiked } from '../hooks/useIsSongLiked';
 const { Gesture } = GestureHandler;
 const { width } = Dimensions.get('window');
 
-export function useNowPlayingLogic(songId: string) {
+export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   const colors = useThemeColors();
   const isDark = useIsDark();
   const player = usePlayer();
@@ -45,7 +45,9 @@ export function useNowPlayingLogic(songId: string) {
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [showLyrics, setShowLyrics] = useState(true);
+  // Apple Music (and Echo) open on the cover — where the canvas plays —
+  // and lyrics are one tap away. Opening on lyrics hid the canvas entirely.
+  const [showLyrics, setShowLyrics] = useState(initialLyrics);
 
   // Auto-hide controls
   const controlsOpacity = useSharedValue(1);

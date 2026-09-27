@@ -22,6 +22,7 @@ import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 import { useStreamSession } from '../hooks/useStreamSession';
 import { useCoverArtBackfill } from '../hooks/useCoverArtBackfill';
+import { useDeepLinks } from '../hooks/useDeepLinks';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -29,6 +30,7 @@ export const RootNavigator: React.FC = () => {
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
   useStreamSession();
   useCoverArtBackfill();
+  useDeepLinks();
 
   // The mini player sits above the tab bar on every tab/screen — except Luvs,
   // a full-bleed reels feed running its own audio pool. The bar used to paint over

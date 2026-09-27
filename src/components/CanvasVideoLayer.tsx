@@ -18,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CanvasArtwork } from '../services/canvas/types';
 import { Motion, Signal } from '../constants/allegraTheme';
+import { diag } from '../utils/diag';
 
 // expo-video needs its native module, which Android only gets if it is listed
 // in android/app/src/main/java/expo/modules/ExpoModulesPackageList.kt. A build
@@ -64,6 +65,14 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
 
   useEffect(() => {
     if (!canvas) return;
+    const sub = player.addListener('statusChange', e => {
+      if (e.status === 'error') diag('canvas', `video error: ${e.error?.message ?? 'unknown'} (${canvas.url})`);
+    });
+    return () => sub.remove();
+  }, [canvas, player]);
+
+  useEffect(() => {
+    if (!canvas) return;
     if (playing && !reduceMotion) player.play();
     else player.pause();
   }, [canvas, playing, reduceMotion, player]);
@@ -86,6 +95,7 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
         allowsFullscreen={false}
         allowsPictureInPicture={false}
         onFirstFrameRender={() => {
+          diag('canvas', `first frame: ${canvas.url}`);
           opacity.value = withTiming(1, {
             duration: reduceMotion ? Motion.duration.fast : Motion.duration.crossfade,
             easing: Motion.ease.decelerate,
@@ -101,6 +111,8 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
     </Animated.View>
   );
 };
+
+if (!video) diag('canvas', 'expo-video native module missing: canvas disabled');
 
 export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = props =>
   (video ? <CanvasVideo {...props} lib={video} /> : null);

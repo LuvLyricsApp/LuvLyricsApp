@@ -13,6 +13,8 @@ import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { safeGoBack } from '../utils/navigationService';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useSettingsStore } from '../store/settingsStore';
 import { PlayerSheet, QueueList, SleepTimerList } from '../components/player/PlayerSheet';
 import { sleepLabel, useSleepTimerStore } from '../store/sleepTimerStore';
 
@@ -23,6 +25,16 @@ type Props = RootStackScreenProps<'NowPlaying'>;
 const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { songId } = route.params;
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
+
+  // Settings → Playback → Keep screen on: only while this screen is open.
+  const keepScreenOn = useSettingsStore(s => s.keepScreenOn);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!keepScreenOn) return undefined;
+      activateKeepAwakeAsync('now-playing').catch(() => {});
+      return () => { deactivateKeepAwake('now-playing').catch(() => {}); };
+    }, [keepScreenOn])
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -65,7 +77,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     toggleLike,
     isUserScrolling,
     scrollTimeoutRef,
-  } = useNowPlayingLogic(songId);
+  } = useNowPlayingLogic(songId, route.params.lyrics === true);
 
   const canvas = useCanvasArtwork(currentSong);
 

@@ -1,5 +1,7 @@
 /**
- * LyricFlow - Settings Screen
+ * Settings, in Allegra's language: one scrolling page of frosted sections
+ * (components/settings/SettingsKit) over the live shader, with jump chips.
+ * Every control here changes something.
  */
 
 import React from 'react';
@@ -9,26 +11,26 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Switch,
   Image,
   Modal,
   TextInput,
   Alert,
-  Animated,
-  PanResponder,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import type { LayoutChangeEvent } from 'react-native';
+import DynamicAura from '../components/allegra/DynamicAura';
+import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
+import * as Kit from '../components/settings/SettingsKit';
+import { Action, Choice, JumpChips, Row, Section } from '../components/settings/SettingsKit';
+import { Signal } from '../constants/allegraTheme';
+import appConfig from '../../app.json';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
-import { PlayerBackground, useSettingsStore } from '../store/settingsStore';
+import { MiniPlayerBackground, PlayerBackground, useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
-import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
-import { getGradientColors } from '../constants/gradients';
-import { useDailyStatsStore } from '../store/dailyStatsStore';
-import { AuroraHeader } from '../components/AuroraHeader';
 import { Colors } from '../constants/colors';
 import { SettingsStrings } from '../constants/uiStrings';
 import { exportAllSongs, shareExportedFile, importSongsFromJson } from '../utils/exportImport';
@@ -40,378 +42,20 @@ import { trustedPairingService, TrustedDesktopRecord } from '../services/Trusted
 import { useSongsStore } from '../store/songsStore';
 import { usePlaylistStore } from '../store/playlistStore';
 import { scanAudioFiles, convertAudioFileToSong } from '../services/mediaScanner';
-import * as ImagePicker from 'expo-image-picker';
-
-// ─── Mini player background options ──────────────────────────────────────────
-
-type MiniBgMode = 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
-
-const MINI_BG_MODES: MiniBgMode[] = ['album-art', 'song-gradient', 'aurora', 'purest-black', 'grey', 'theme-subtle', 'theme-blue'];
-
-const MINI_BG_LABELS: Record<MiniBgMode, string> = {
-  'album-art':     'Album Art',
-  'song-gradient': 'Song Gradient',
-  'aurora':        'Aurora',
-  'purest-black':  'Pure Black',
-  'grey':          'Spotify Grey',
-  'theme-subtle':  'Subtle Dark',
-  'theme-blue':    'LuvLyrics Blue',
-};
-
-// ─── Bottom Sheet ────────────────────────────────────────────────────────────
-
-interface BottomSheetProps {
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}
-
-const BottomSheet: React.FC<BottomSheetProps> = ({ visible, title, onClose, children }) => {
-  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = React.useRef(new Animated.Value(800)).current;
-  const panY = React.useRef(new Animated.Value(0)).current;
-  const [modalVisible, setModalVisible] = React.useState(false);
-  const isClosing = React.useRef(false);
-  const isDark = useIsDark();
-  const colors = useThemeColors();
-  const dividerColor = useSettingsDividerColor();
-
-  const closeOnce = React.useCallback(() => {
-    if (isClosing.current) return;
-    isClosing.current = true;
-    onClose();
-  }, [onClose]);
-
-  const panResponder = React.useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 8,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) panY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 80 || g.vy > 0.8) {
-          panY.setValue(0);
-          closeOnce();
-        } else {
-          Animated.spring(panY, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 300 }).start();
-        }
-      },
-    }),
-  ).current;
-
-  React.useEffect(() => {
-    if (visible) {
-      isClosing.current = false;
-      panY.setValue(0);
-      setModalVisible(true);
-      Animated.parallel([
-        Animated.timing(overlayOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 32, stiffness: 220, mass: 1.1 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(overlayOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(sheetTranslateY, { toValue: 800, duration: 220, useNativeDriver: true }),
-      ]).start(() => { setModalVisible(false); panY.setValue(0); });
-    }
-  }, [visible, overlayOpacity, panY, sheetTranslateY]);
-
-  return (
-    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeOnce} statusBarTranslucent>
-      <Animated.View style={[StyleSheet.absoluteFill, bs.backdrop, { opacity: overlayOpacity }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeOnce} />
-      </Animated.View>
-      <Animated.View style={[bs.sheet, { backgroundColor: isDark ? '#1C1C1E' : colors.card, transform: [{ translateY: Animated.add(sheetTranslateY, panY) }] }]} {...panResponder.panHandlers}>
-        <View style={bs.handle} />
-        <View style={[bs.header, { borderBottomColor: dividerColor }]}>
-          <Text style={[bs.title, { color: colors.textPrimary }]}>{title}</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
-          </Pressable>
-        </View>
-        <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={bs.content}>
-          {children}
-        </ScrollView>
-        <View style={[bs.sheetFloor, { backgroundColor: isDark ? '#1C1C1E' : colors.card }]} />
-      </Animated.View>
-    </Modal>
-  );
-};
-
-const bs = StyleSheet.create({
-  backdrop: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#1C1C1E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '65%',
-    paddingBottom: 36,
-  },
-  sheetFloor: {
-    position: 'absolute',
-    bottom: -100,
-    left: 0,
-    right: 0,
-    height: 100,
-    backgroundColor: '#1C1C1E',
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-});
-
-
-// ─── Reusable rows ───────────────────────────────────────────────────────────
-
-const useSettingsDividerColor = () => {
-  const colors = useThemeColors();
-  const isDark = useIsDark();
-  const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
-
-  if (!isDark) return colors.divider;
-  switch (libraryBackgroundMode) {
-    case 'purest-black':
-    case 'black':
-      return 'rgba(255,255,255,0.08)';
-    case 'grey':
-      return '#282828';
-    case 'theme-subtle':
-      return '#1F1F1F';
-    case 'theme-blue':
-      return '#1C3E6B';
-    default:
-      return colors.divider;
-  }
-};
-
-
-interface SettingsRowSwitchProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: boolean;
-  onToggle: (v: boolean) => void;
-}
-
-const SettingsRowSwitch: React.FC<SettingsRowSwitchProps> = ({ icon, label, value, onToggle }) => {
-  const dividerColor = useSettingsDividerColor();
-  const colors = useThemeColors();
-  return (
-    <View style={[styles.settingsRow, { borderBottomColor: dividerColor }]}>
-      <Ionicons name={icon} size={22} color={colors.textSecondary} />
-      <Text style={[styles.settingsLabel, { color: colors.textPrimary }]}>{label}</Text>
-      <Switch
-        value={value}
-        onValueChange={onToggle}
-        trackColor={{ false: '#39393D', true: '#34C759' }}
-        thumbColor="#fff"
-        accessibilityLabel={label}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: value }}
-      />
-    </View>
-  );
-};
-
-const PLAYER_BG_ORDER: PlayerBackground[] = ['blend', 'apple', 'glow'];
-const PLAYER_BG_LABELS: Record<PlayerBackground, string> = {
-  blend: 'Cover, glow for lyrics',
-  apple: 'Apple Music',
-  glow: 'Glow animated',
-};
-
-interface SettingsRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value?: string;
-  onPress: () => void;
-}
-
-const SettingsRow: React.FC<SettingsRowProps> = ({ icon, label, value, onPress }) => {
-  const dividerColor = useSettingsDividerColor();
-  const colors = useThemeColors();
-  return (
-    <Pressable
-      style={[styles.settingsRow, { borderBottomColor: dividerColor }]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Ionicons name={icon} size={22} color={colors.textSecondary} />
-      <Text style={[styles.settingsLabel, { color: colors.textPrimary }]}>{label}</Text>
-      {value ? (
-        <View style={styles.settingsValue}>
-          <Text style={[styles.settingsValueText, { color: colors.textSecondary }]}>{value}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </View>
-      ) : null}
-    </Pressable>
-  );
-};
-
-interface MenuRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  label: string;
-  badge?: string;
-  onPress: () => void;
-  isLast?: boolean;
-}
-
-const MenuRow: React.FC<MenuRowProps> = ({ icon, iconColor, label, badge, onPress, isLast }) => {
-  const dividerColor = useSettingsDividerColor();
-  const colors = useThemeColors();
-  return (
-    <Pressable
-      style={[styles.menuRow, { borderBottomColor: dividerColor }, isLast && styles.menuRowLast]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={[styles.menuIcon, { backgroundColor: iconColor + '22' }]}>
-        <Ionicons name={icon} size={20} color={iconColor} />
-      </View>
-      <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{label}</Text>
-      <View style={styles.menuRight}>
-        {badge ? <Text style={[styles.menuBadge, { color: colors.textSecondary }]}>{badge}</Text> : null}
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      </View>
-    </Pressable>
-  );
-};
-
-// ─── Pinnable items definition ───────────────────────────────────────────────
-
-type PinId = 'appearance' | 'playback' | 'library' | 'discovery' | 'miniplayer' | 'desktop' | 'data' | 'about' | 'export' | 'import' | 'scan';
-
-const PINNABLE_ITEMS: Record<PinId, {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  label: string;
-  section: 'personalization' | 'system' | 'tools';
-}> = {
-  appearance:  { icon: 'moon-outline',              iconColor: '#A78BFA', label: 'Appearance',   section: 'personalization' },
-  playback:    { icon: 'play-circle-outline',        iconColor: '#34C759', label: 'Playback',     section: 'personalization' },
-  library:     { icon: 'folder-open-outline',        iconColor: '#FF9F0A', label: 'Library',      section: 'personalization' },
-  discovery:   { icon: 'globe-outline',              iconColor: '#30D158', label: 'Discovery',    section: 'personalization' },
-  miniplayer:  { icon: 'radio-outline',              iconColor: '#FF6B6B', label: 'Mini Player',  section: 'personalization' },
-  desktop:     { icon: 'desktop-outline',            iconColor: '#0A84FF', label: 'Desktop',      section: 'system' },
-  data:        { icon: 'trash-outline',              iconColor: '#FF453A', label: 'Data',         section: 'system' },
-  about:       { icon: 'information-circle-outline', iconColor: '#8E8E93', label: 'About',        section: 'system' },
-  export:      { icon: 'download-outline',           iconColor: '#A78BFA', label: 'Export',       section: 'tools' },
-  import:      { icon: 'cloud-upload-outline',       iconColor: '#F472B6', label: 'Import',       section: 'tools' },
-  scan:        { icon: 'musical-notes-outline',      iconColor: '#60A5FA', label: 'Scan Audio',   section: 'tools' },
-};
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 type Props = TabScreenProps<'Settings'>;
 
+const APP_VERSION = appConfig.expo.version;
+
 const SettingsScreen: React.FC<Props> = () => {
   const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
-  const { fetchSongs, addSong, songs, getSong } = useSongsStore();
-  const applyThemeToOtherPages = useSettingsStore(state => state.applyThemeToOtherPages);
-  const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
-  const isDark = useIsDark();
-  const colors = useThemeColors();
-  const isSolidBg = libraryBackgroundMode === 'purest-black'
-    || libraryBackgroundMode === 'grey'
-    || libraryBackgroundMode === 'theme-subtle'
-    || libraryBackgroundMode === 'black'
-    || libraryBackgroundMode === 'theme-blue';
-  const currentSongId = usePlayerStore(state => state.currentSongId);
+  const { fetchSongs, addSong, songs } = useSongsStore();
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
-  const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-
-  const [activeThemeColors, setActiveThemeColors] = React.useState<string[] | undefined>(undefined);
-  const [activeImageUri, setActiveImageUri] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!applyThemeToOtherPages) {
-      setActiveThemeColors(undefined);
-      setActiveImageUri(null);
-      return;
-    }
-    const updateTheme = async () => {
-      let themeColors: string[] | undefined;
-      let image: string | null = null;
-      if (libraryBackgroundMode === 'current') {
-        if (currentSongId) {
-          image = playerCurrentCover || null;
-          if (!image && playerCurrentGradient) {
-            themeColors = playerCurrentGradient === 'dynamic' ? ['#f7971e', '#ffd200', '#ff6b35'] : getGradientColors(playerCurrentGradient);
-          }
-        }
-      } else if (libraryBackgroundMode === 'daily') {
-        const topId = useDailyStatsStore.getState().getTopSongOfYesterday() || useDailyStatsStore.getState().getTopSongOfToday();
-        if (topId) {
-          const song = songs.find(s => s.id === topId) || await getSong(topId);
-          if (song) {
-            image = song.coverImageUri || null;
-            if (!image && song.gradientId) {
-              themeColors = song.gradientId === 'dynamic' ? ['#f7971e', '#ffd200', '#ff6b35'] : getGradientColors(song.gradientId);
-            }
-          }
-        }
-      } else if (libraryBackgroundMode === 'black') {
-        themeColors = ['#050505', '#050505', '#050505'];
-        image = null;
-      } else if (libraryBackgroundMode === 'purest-black') {
-        themeColors = ['#000000', '#000000', '#000000'];
-        image = null;
-      } else if (libraryBackgroundMode === 'grey') {
-        themeColors = ['#121212', '#212121', '#121212'];
-        image = null;
-      } else if (libraryBackgroundMode === 'theme-subtle') {
-        themeColors = ['#0A0A0A', '#1F1F1F', '#0A0A0A'];
-        image = null;
-      } else if (libraryBackgroundMode === 'theme-blue') {
-        themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];
-        image = null;
-      }
-      setActiveThemeColors(themeColors); setActiveImageUri(image);
-    };
-    updateTheme();
-  }, [applyThemeToOtherPages, libraryBackgroundMode, currentSongId, playerCurrentCover, playerCurrentGradient, songs, songs.length, getSong]);
 
   const [, setIsImporting] = React.useState(false);
-  const [profileName, setProfileName] = React.useState('LyricFlow User');
-  const [profileImage, setProfileImage] = React.useState<string | null>(null);
-  const [editNameVisible, setEditNameVisible] = React.useState(false);
-  const [tempName, setTempName] = React.useState('');
   const [selectionModalVisible, setSelectionModalVisible] = React.useState(false);
   const [availableAudioFiles, setAvailableAudioFiles] = React.useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<Set<string>>(new Set());
@@ -437,42 +81,11 @@ const SettingsScreen: React.FC<Props> = () => {
   const [pairingPayloadText, setPairingPayloadText] = React.useState('');
   const [pairingBusy, setPairingBusy] = React.useState(false);
   const [, setTrustedDesktops] = React.useState<TrustedDesktopRecord[]>([]);
-  const [activeSheet, setActiveSheet] = React.useState<string | null>(null);
-  const closeSheet = React.useCallback(() => setActiveSheet(null), []);
-  const quickPins = useSettingsStore(state => state.quickPins);
-  const [, setPinPickerSlot] = React.useState<number | null>(null);
 
   const [alertConfig, setAlertConfig] = React.useState<{
     visible: boolean; title: string; message: string;
     buttons: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }[];
   }>({ visible: false, title: '', message: '', buttons: [] });
-
-  const handleEditAvatar = React.useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo library access to change your profile picture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1] as [number, number],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setProfileImage(result.assets[0].uri);
-    }
-  }, []);
-
-  const handleEditName = React.useCallback(() => {
-    setTempName(profileName);
-    setEditNameVisible(true);
-  }, [profileName]);
-
-  const handleSaveName = React.useCallback(() => {
-    if (tempName.trim()) setProfileName(tempName.trim());
-    setEditNameVisible(false);
-  }, [tempName]);
 
   const handleExport = React.useCallback(async () => {
     try {
@@ -574,425 +187,240 @@ const SettingsScreen: React.FC<Props> = () => {
     }
   }, [pairingPayloadText]);
 
-  const cardBg = isDark ? 'rgba(255,255,255,0.06)' : colors.card;
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : colors.border;
+  // Allegra's shell: the live shader in the playing cover's colours behind
+  // frosted section panels, jump chips that stay under the status bar.
+  const isFocused = useIsFocused();
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const palette = useArtworkPalette(playerCurrentCover);
+  const scrollRef = React.useRef<ScrollView>(null);
+  const sectionY = React.useRef<Record<string, number>>({});
+  const at = (key: string) => (e: LayoutChangeEvent) => { sectionY.current[key] = e.nativeEvent.layout.y; };
+  const jump = (key: string) => scrollRef.current?.scrollTo({ y: Math.max(0, (sectionY.current[key] ?? 0) - 64), animated: true });
+
+  const bgHint: Record<PlayerBackground, string> = {
+    blend: 'The cover while a song plays, drifting glow when lyrics are open.',
+    apple: 'The cover melting into its own blur, like Apple Music.',
+    glow: 'Soft glows in the cover\u2019s colours, always.',
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#000' : colors.background }]}>
-      {isDark && applyThemeToOtherPages && (
-        <View style={StyleSheet.absoluteFill}>
-          <AuroraHeader palette="settings" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} />
+    <View style={styles.container}>
+      <DynamicAura palette={palette} playing={isPlaying} active={isFocused} dim={0.35} />
+      <ScrollView
+        ref={scrollRef}
+        stickyHeaderIndices={[1]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 150 + insets.bottom }}
+      >
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle} accessibilityRole="header">Settings</Text>
+          <Text style={styles.heroLead}>Make it feel like yours. Everything here is saved on this phone and applies straight away.</Text>
         </View>
-      )}
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 150 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
-          {/* ── Screen title ── */}
-          <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>{SettingsStrings.screenTitle}</Text>
+        <View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <JumpChips
+              onJump={jump}
+              items={[
+                { key: 'player', label: 'Player' },
+                { key: 'playback', label: 'Playback' },
+                { key: 'lyrics', label: 'Lyrics' },
+                { key: 'nav', label: 'Navigation' },
+                { key: 'discover', label: 'Discover' },
+                { key: 'library', label: 'Library & data' },
+                { key: 'desktop', label: 'Desktop' },
+                { key: 'about', label: 'About' },
+              ]}
+            />
+          </ScrollView>
+        </View>
 
-          {/* ── Profile card ── */}
-          <View style={[styles.profileCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            {/* Avatar */}
-            <Pressable
-              style={[styles.avatar, {
-                backgroundColor: isDark ? 'rgba(6,21,43,1)' : colors.cardHover,
-                borderColor: cardBorder,
-              }]}
-              onPress={handleEditAvatar}
-            >
-              {profileImage
-                ? <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-                : <Ionicons name="person" size={34} color={isDark ? 'rgba(255,255,255,0.4)' : colors.textMuted} />}
-              <View style={[styles.editBadge, { borderColor: isDark ? '#000' : colors.background }]}>
-                <Ionicons name="camera" size={12} color="#000" />
-              </View>
-            </Pressable>
-
-            {/* Name + stats */}
-            <View style={styles.profileRight}>
-              <Pressable onPress={handleEditName} style={styles.nameRow}>
-                <Text style={[styles.profileName, { color: colors.textPrimary }]} numberOfLines={1}>{profileName}</Text>
-                <Ionicons name="pencil-outline" size={14} color={colors.textMuted} style={{ marginLeft: 6 }} />
-              </Pressable>
-              <Text style={[styles.profileSub, { color: colors.textMuted }]}>Offline · Privacy First</Text>
-
-              {/* Stats strip */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{songs.length}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{SettingsStrings.songs}</Text>
+        <Section icon="play-circle-outline" title="Player" lead="How Now Playing and the mini player look." onLayout={at('player')}>
+          <Kit.Switch
+            label="Apple Music inspired"
+            hint="The cover runs full width and melts into its own blur. Off shows a floating artwork card."
+            value={settings.appleMusicInspired}
+            onChange={settings.setAppleMusicInspired}
+          />
+          {settings.appleMusicInspired ? (
+            <Kit.Switch label="Hide volume slider" hint="Keep the phone's volume keys only." value={settings.hidePlayerVolume} onChange={settings.setHidePlayerVolume} />
+          ) : null}
+          <Choice<PlayerBackground>
+            label="Player background"
+            hint={bgHint[settings.playerBackground]}
+            value={settings.playerBackground}
+            options={[{ value: 'blend', label: 'Blend' }, { value: 'apple', label: 'Apple Music' }, { value: 'glow', label: 'Glow' }]}
+            onChange={settings.setPlayerBackground}
+          />
+          <Choice<MiniPlayerBackground>
+            label="Mini player background"
+            hint={settings.miniPlayerBackground === 'glow' ? 'Two glows drifting in the cover\u2019s colours.' : 'A calm tone of the cover.'}
+            value={settings.miniPlayerBackground}
+            options={[{ value: 'glow', label: 'Glow' }, { value: 'tint', label: 'Cover tint' }]}
+            onChange={settings.setMiniPlayerBackground}
+          />
+          <Kit.Switch
+            label="Canvas"
+            hint="Looping motion artwork on the cover when a song has one: Echo Canvas, Apple Music, then ArchiveTune."
+            value={settings.canvasEnabled}
+            onChange={settings.setCanvasEnabled}
+          />
+          {settings.canvasEnabled ? (
+            <Row label="Your own tokens" hint="Optional. Apple Music already works without one. Stored on this phone only." stack>
+              {([
+                { label: 'Apple MusicKit token', value: settings.appleMusicToken, onChange: settings.setAppleMusicToken, placeholder: 'eyJhbGciOiJFUzI1NiIs\u2026' },
+                { label: 'Tidal client token', value: settings.tidalToken, onChange: settings.setTidalToken, placeholder: 'Unlocks Tidal video covers' },
+              ] as const).map(field => (
+                <View key={field.label} style={styles.tokenField}>
+                  <Text style={styles.tokenLabel}>{field.label}{field.value ? ' \u00b7 saved' : ''}</Text>
+                  <TextInput
+                    style={styles.tokenInput}
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={Signal.inkFaint}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry
+                  />
                 </View>
-                <View style={[styles.statDivider, { backgroundColor: cardBorder }]} />
-                <View style={styles.statItem}>
-                  <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{likedCount}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{SettingsStrings.liked}</Text>
-                </View>
-                <View style={[styles.statDivider, { backgroundColor: cardBorder }]} />
-                <View style={styles.statItem}>
-                  <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{hiddenSongs.length}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{SettingsStrings.hidden}</Text>
-                </View>
-              </View>
-            </View>
-          </View>
+              ))}
+            </Row>
+          ) : null}
+        </Section>
 
-          {/* ── Quick pins ── */}
-          <View style={styles.quickActions}>
-            {(quickPins as string[]).map((pinId, slotIndex) => {
-              const item = PINNABLE_ITEMS[pinId as PinId];
-              if (!item) return null;
-              return (
-                <Pressable
-                  key={slotIndex}
-                  style={[styles.quickAction, { backgroundColor: cardBg, borderColor: cardBorder }]}
-                  onPress={() => {
-                    if (pinId === 'export') handleExport();
-                    else if (pinId === 'import') handleImport();
-                    else if (pinId === 'scan') handleImportLocalAudio();
-                    else setActiveSheet(pinId);
-                  }}
-                  onLongPress={() => setPinPickerSlot(slotIndex)}
-                  delayLongPress={400}
-                >
-                  <View style={[styles.quickIcon, { backgroundColor: item.iconColor + '22' }]}>
-                    <Ionicons name={item.icon} size={20} color={item.iconColor} />
-                  </View>
-                  <Text style={[styles.quickActionText, { color: colors.textPrimary }]}>{item.label}</Text>
-                  <View style={styles.quickEditHint}>
-                    <Ionicons name="ellipsis-horizontal" size={12} color={colors.textMuted} />
-                  </View>
-                </Pressable>
-              );
+        <Section icon="musical-notes-outline" title="Playback" lead="What happens when you press play." onLayout={at('playback')}>
+          <Kit.Switch
+            label="Stay on the list when a song starts"
+            hint="Off opens Now Playing every time you pick a song."
+            value={settings.playInMiniPlayerOnly}
+            onChange={settings.setPlayInMiniPlayerOnly}
+          />
+          <Kit.Switch label="Keep screen on" hint="While Now Playing is open." value={settings.keepScreenOn} onChange={settings.setKeepScreenOn} />
+          <Kit.Switch label="Haptics" hint="Little taps you feel on buttons and swipes." value={settings.hapticsEnabled ?? true} onChange={settings.setHapticsEnabled} />
+        </Section>
+
+        <Section icon="text-outline" title="Lyrics" lead="How lyrics look and keep time." onLayout={at('lyrics')}>
+          <Choice<'small' | 'medium' | 'large'>
+            label="Text size"
+            value={settings.lyricsFontSize}
+            options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]}
+            onChange={settings.setLyricsFontSize}
+          />
+          <Choice<'compact' | 'normal' | 'relaxed'>
+            label="Line spacing"
+            value={settings.lineSpacing}
+            options={[{ value: 'compact', label: 'Tight' }, { value: 'normal', label: 'Normal' }, { value: 'relaxed', label: 'Airy' }]}
+            onChange={settings.setLineSpacing}
+          />
+          <Row label={`Timing  ${settings.lyricsDelay > 0 ? '+' : ''}${settings.lyricsDelay.toFixed(1)}s`} hint="Lyrics running late? Slide right. Early? Slide left." stack>
+            <Slider
+              style={styles.slider}
+              minimumValue={-5.0}
+              maximumValue={5.0}
+              step={0.1}
+              value={settings.lyricsDelay}
+              onSlidingComplete={settings.setLyricsDelay}
+              minimumTrackTintColor={Signal.wave}
+              maximumTrackTintColor="rgba(244,241,234,0.18)"
+              thumbTintColor={Signal.wave}
+            />
+          </Row>
+          <Kit.Switch
+            label="Hide controls while lyrics play"
+            hint="The controls fade after a few seconds without a touch."
+            value={settings.autoHideControls}
+            onChange={settings.setAutoHideControls}
+          />
+        </Section>
+
+        <Section icon="navigate-outline" title="Navigation and voice" lead="The bar at the bottom and the mic in it." onLayout={at('nav')}>
+          <Choice<'modern-pill' | 'classic'>
+            label="Bottom bar"
+            value={settings.navBarStyle}
+            options={[{ value: 'modern-pill', label: 'Floating pill' }, { value: 'classic', label: 'Classic' }]}
+            onChange={settings.setNavBarStyle}
+          />
+          <Kit.Switch label="Voice button" hint="Say a song and it plays." value={settings.micEnabled ?? true} onChange={settings.setMicEnabled} />
+          {(settings.micEnabled ?? true) ? (
+            <Choice<'hold' | 'tap'>
+              label="Voice button works by"
+              value={settings.voiceMode ?? 'hold'}
+              options={[{ value: 'hold', label: 'Hold to talk' }, { value: 'tap', label: 'Tap to talk' }]}
+              onChange={settings.setVoiceMode}
+            />
+          ) : null}
+        </Section>
+
+        <Section icon="compass-outline" title="Discover" lead="What Luvs and Stream bring you." onLayout={at('discover')}>
+          <Action label="Song languages" hint="Luvs, mood mixes and new songs lean towards these." value={luvsLanguageSummary} onPress={() => setLanguagePickerVisible(true)} />
+          <Kit.Switch label="Luvs clips start at the hook" hint="Jump straight to the best part of each song." value={settings.luvsStartAtHook} onChange={settings.setLuvsStartAtHook} />
+          <Kit.Switch label="YouTube video preview" hint="Beta. Shows a song's video in the player; needs your own YouTube Data API key." value={settings.ytVideoPreview} onChange={settings.setYtVideoPreview} />
+          {settings.ytVideoPreview ? (
+            <Row label="YouTube API key" hint="console.cloud.google.com → enable YouTube Data API v3 → Credentials → Create API key." stack>
+              <TextInput
+                style={styles.tokenInput}
+                value={settings.youtubeApiKey}
+                onChangeText={settings.setYoutubeApiKey}
+                placeholder="AIzaSy\u2026"
+                placeholderTextColor={Signal.inkFaint}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </Row>
+          ) : null}
+        </Section>
+
+        <Section icon="folder-open-outline" title="Library and data" lead="Your songs, backups and clean-up." onLayout={at('library')}>
+          <Action label="Add songs from this phone" hint="Find music files already on your device." onPress={handleImportLocalAudio} />
+          <Action label="Export library" hint="Songs, lyrics and playlists as one file." onPress={handleExport} />
+          <Action label="Import a backup" onPress={handleImport} />
+          <Action label="Hidden songs" value={`${hiddenSongs.length}`} onPress={() => { fetchHiddenSongs(); setHiddenSongsVisible(true); }} />
+          <Action
+            label="Delete all library data"
+            hint="Every song and playlist on this phone. This cannot be undone."
+            destructive
+            onPress={() => setAlertConfig({
+              visible: true,
+              title: 'Delete all library data',
+              message: 'This permanently deletes every song and playlist on this phone. It cannot be undone.',
+              buttons: [
+                { text: SettingsStrings.cancel, onPress: () => {}, style: 'cancel' },
+                { text: 'Delete everything', onPress: async () => { await clearAllData(); await fetchSongs(); }, style: 'destructive' },
+              ],
             })}
-          </View>
-          <Text style={[styles.quickHint, { color: colors.textMuted }]}>Hold any shortcut to customise</Text>
-
-          {/* ── Section: Personalization ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Personalisation</Text>
-          <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <MenuRow icon="moon-outline" iconColor="#A78BFA" label="Appearance" onPress={() => setActiveSheet('appearance')} />
-            <MenuRow icon="play-circle-outline" iconColor="#34C759" label="Playback" onPress={() => setActiveSheet('playback')} />
-            <MenuRow icon="radio-outline" iconColor="#FF6B6B" label="Mini Player" onPress={() => setActiveSheet('miniplayer')} />
-            <MenuRow icon="folder-open-outline" iconColor="#FF9F0A" label="Library" onPress={() => setActiveSheet('library')} />
-            <MenuRow icon="globe-outline" iconColor="#30D158" label="Discovery" onPress={() => setActiveSheet('discovery')} isLast />
-          </View>
-
-          {/* ── Section: System ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>System</Text>
-          <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <MenuRow
-              icon="desktop-outline" iconColor="#0A84FF" label="Desktop Connect"
-              badge={desktopConnectEnabled ? 'On' : 'Off'}
-              onPress={() => setActiveSheet('desktop')}
-            />
-            <MenuRow icon="trash-outline" iconColor="#FF453A" label="Data" onPress={() => setActiveSheet('data')} />
-            <MenuRow icon="information-circle-outline" iconColor="#8E8E93" label="About" onPress={() => setActiveSheet('about')} isLast />
-          </View>
-
-          {/* ── Section: Tools ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Tools</Text>
-          <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <MenuRow icon="download-outline" iconColor="#A78BFA" label="Export Library" onPress={handleExport} />
-            <MenuRow icon="cloud-upload-outline" iconColor="#F472B6" label="Import Backup" onPress={handleImport} />
-            <MenuRow icon="musical-notes-outline" iconColor="#60A5FA" label="Scan Local Audio" onPress={handleImportLocalAudio} isLast />
-          </View>
-
-        </ScrollView>
-      </SafeAreaView>
-
-      {/* ── Bottom Sheets ───────────────────────────────────────────────────── */}
-
-      <BottomSheet visible={activeSheet === 'appearance'} title="Appearance" onClose={closeSheet}>
-        <SettingsRow icon="moon-outline" label="App Theme" value="Dark" onPress={() => {}} />
-        <SettingsRow
-          icon="text-outline" label="Lyrics Size"
-          value={settings.lyricsFontSize.charAt(0).toUpperCase() + settings.lyricsFontSize.slice(1)}
-          onPress={() => {}}
-        />
-        <SettingsRowSwitch icon="speedometer-outline" label="Show FPS Counter" value={settings.showPerformanceHUD} onToggle={settings.setShowPerformanceHUD} />
-        <SettingsRowSwitch icon="flask-outline" label="Beta: YouTube Video Preview" value={settings.ytVideoPreview} onToggle={settings.setYtVideoPreview} />
-        {settings.ytVideoPreview && (
-          <View style={styles.apiKeyContainer}>
-            <View style={styles.apiKeyHeader}>
-              <Ionicons name="key-outline" size={16} color="#A78BFA" />
-              <Text style={styles.apiKeyLabel}>YouTube API Key</Text>
-              {settings.youtubeApiKey ? (
-                <View style={styles.apiKeySaved}>
-                  <Ionicons name="checkmark-circle" size={14} color="#30D158" />
-                  <Text style={styles.apiKeySavedText}>Saved</Text>
-                </View>
-              ) : null}
-            </View>
-            <TextInput
-              style={styles.apiKeyInput}
-              value={settings.youtubeApiKey}
-              onChangeText={settings.setYoutubeApiKey}
-              placeholder="AIzaSy..."
-              placeholderTextColor="#555"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={false}
-            />
-            <Text style={styles.apiKeyHint}>
-              Get a free key at console.cloud.google.com → Enable YouTube Data API v3 → Credentials → Create API Key
-            </Text>
-          </View>
-        )}
-        <SettingsRow
-          icon="color-palette-outline"
-          label="Mini player background"
-          value={settings.miniPlayerBackground === 'tint' ? 'Cover tint' : 'Glow animated'}
-          onPress={() => settings.setMiniPlayerBackground(settings.miniPlayerBackground === 'tint' ? 'glow' : 'tint')}
-        />
-        <SettingsRowSwitch icon="logo-apple" label="Apple Music inspired" value={settings.appleMusicInspired} onToggle={settings.setAppleMusicInspired} />
-        {settings.appleMusicInspired ? (
-          <SettingsRowSwitch icon="volume-medium-outline" label="Hide volume slider" value={settings.hidePlayerVolume} onToggle={settings.setHidePlayerVolume} />
-        ) : null}
-        <SettingsRow
-          icon="contrast-outline"
-          label="Player background style"
-          value={PLAYER_BG_LABELS[settings.playerBackground]}
-          onPress={() => settings.setPlayerBackground(PLAYER_BG_ORDER[(PLAYER_BG_ORDER.indexOf(settings.playerBackground) + 1) % PLAYER_BG_ORDER.length])}
-        />
-        <SettingsRowSwitch icon="film-outline" label="Canvas" value={settings.canvasEnabled} onToggle={settings.setCanvasEnabled} />
-        {settings.canvasEnabled && (
-          <View style={styles.apiKeyContainer}>
-            <Text style={styles.apiKeyHint}>
-              Looping video behind the player, from the Echo Canvas library and ArchiveTune. Add
-              your own tokens below to also search Apple Music and Tidal motion artwork.
-            </Text>
-            {([
-              {
-                label: 'Apple MusicKit Token',
-                value: settings.appleMusicToken,
-                onChange: settings.setAppleMusicToken,
-                placeholder: 'eyJhbGciOiJFUzI1NiIs...',
-                hint: 'A developer token from your Apple Developer account (MusicKit key). Stored on this device only.',
-              },
-              {
-                label: 'Tidal Client Token',
-                value: settings.tidalToken,
-                onChange: settings.setTidalToken,
-                placeholder: 'Tidal client token',
-                hint: 'Optional. Unlocks Tidal album video covers. Stored on this device only.',
-              },
-            ] as const).map(field => (
-              <View key={field.label} style={{ marginTop: 12 }}>
-                <View style={styles.apiKeyHeader}>
-                  <Ionicons name="key-outline" size={16} color="#d9e66a" />
-                  <Text style={styles.apiKeyLabel}>{field.label}</Text>
-                  {field.value ? (
-                    <View style={styles.apiKeySaved}>
-                      <Ionicons name="checkmark-circle" size={14} color="#30D158" />
-                      <Text style={styles.apiKeySavedText}>Saved</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <TextInput
-                  style={styles.apiKeyInput}
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  placeholder={field.placeholder}
-                  placeholderTextColor="#555"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                />
-                <Text style={styles.apiKeyHint}>{field.hint}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
-        <SettingsRowSwitch icon="play-outline" label="Auto-Scroll Lyrics" value={true} onToggle={() => {}} />
-        <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
-        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
-        <SettingsRow
-          icon="navigate-outline" label="Navigation Bar Style"
-          value={settings.navBarStyle === 'modern-pill' ? 'Modern Pill' : 'Classic'}
-          onPress={() => {
-            const next = settings.navBarStyle === 'modern-pill' ? 'classic' : 'modern-pill';
-            settings.setNavBarStyle(next);
-          }}
-        />
-        <SettingsRowSwitch
-          icon="mic-outline" label="Voice Button"
-          value={settings.micEnabled ?? true}
-          onToggle={settings.setMicEnabled}
-        />
-        {(settings.micEnabled ?? true) && (
-          <SettingsRow
-            icon="mic-outline" label="Voice Button Mode"
-            value={(settings.voiceMode ?? 'hold') === 'hold' ? 'Hold to Talk' : 'Tap to Talk'}
-            onPress={() => settings.setVoiceMode((settings.voiceMode ?? 'hold') === 'hold' ? 'tap' : 'hold')}
           />
-        )}
-        <SettingsRowSwitch icon="sunny-outline" label="Keep Screen On" value={settings.keepScreenOn} onToggle={settings.setKeepScreenOn} />
-        <SettingsRowSwitch icon="phone-portrait-outline" label="Haptics" value={settings.hapticsEnabled ?? true} onToggle={settings.setHapticsEnabled} />
-        <View style={styles.sliderRow}>
-          <View style={styles.sliderHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="timer-outline" size={20} color={Colors.textSecondary} style={{ marginRight: 10 }} />
-              <Text style={styles.sliderLabel}>Lyrics Delay</Text>
-            </View>
-            <Text style={styles.sliderValue}>{settings.lyricsDelay.toFixed(1)}s</Text>
-          </View>
-          <Slider
-            style={{ width: '100%', height: 36 }}
-            minimumValue={-5.0} maximumValue={5.0} step={0.1}
-            value={settings.lyricsDelay}
-            onSlidingComplete={settings.setLyricsDelay}
-            minimumTrackTintColor={Colors.primary}
-            maximumTrackTintColor={Colors.cardHover}
-            thumbTintColor={Colors.primary}
+        </Section>
+
+        <Section icon="desktop-outline" title="Desktop Connect" lead="Send songs between this phone and your computer." onLayout={at('desktop')}>
+          <Kit.Switch label="Desktop Connect" hint="Lets a paired computer see and control this phone." value={desktopConnectEnabled} onChange={setDesktopConnectEnabled} />
+          <Kit.Switch label="Allow downloads from desktop" value={allowDesktopDownloads} onChange={setAllowDesktopDownloads} />
+          <Action label="Pair a computer" onPress={() => setPairingModalVisible(true)} />
+        </Section>
+
+        <Section icon="information-circle-outline" title="About" lead="Version, credits and a fresh start." onLayout={at('about')}>
+          <Row label="LuvLyrics" hint={`Version ${APP_VERSION}. ${songs.length} songs, ${likedCount} liked.`} />
+          <Row
+            label="Credits"
+            hint="Music data from YouTube Music, audio from Saavn and Gaana, lyrics from LRCLIB and community providers, canvases from Echo Canvas and Apple Music. Design after Allegra."
           />
-          <Text style={styles.sliderHint}>Negative = lyrics arrive late · Positive = early</Text>
-        </View>
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'miniplayer'} title="Mini Player" onClose={closeSheet}>
-        <SettingsRow
-          icon="image-outline"
-          label="Dynamic Island Background"
-          value={MINI_BG_LABELS[settings.islandBgMode as MiniBgMode] ?? 'Album Art'}
-          onPress={() => {
-            const next = MINI_BG_MODES[(MINI_BG_MODES.indexOf(settings.islandBgMode as MiniBgMode) + 1) % MINI_BG_MODES.length];
-            settings.setIslandBgMode(next);
-          }}
-        />
-        <SettingsRow
-          icon="albums-outline"
-          label="Classic Bar Background"
-          value={MINI_BG_LABELS[settings.classicBarBgMode as MiniBgMode] ?? 'Album Art'}
-          onPress={() => {
-            const next = MINI_BG_MODES[(MINI_BG_MODES.indexOf(settings.classicBarBgMode as MiniBgMode) + 1) % MINI_BG_MODES.length];
-            settings.setClassicBarBgMode(next);
-          }}
-        />
-        {settings.navBarStyle === 'classic' && (
-          <SettingsRow
-            icon="layers-outline" label="Mini Player Style"
-            value={settings.miniPlayerStyle === 'island' ? 'Dynamic Island' : 'Classic Bar'}
-            onPress={() => settings.setMiniPlayerStyle(settings.miniPlayerStyle === 'island' ? 'bar' : 'island')}
-          />
-        )}
-        <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
-        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'library'} title="Library" onClose={closeSheet}>
-        <SettingsRow
-          icon="color-palette-outline" label="Background Theme"
-          value={
-            settings.libraryBackgroundMode === 'daily' ? 'Most Played Yesterday' :
-            settings.libraryBackgroundMode === 'current' ? 'Current Song' :
-            settings.libraryBackgroundMode === 'black' ? 'Pure Black' :
-            settings.libraryBackgroundMode === 'grey' ? 'Spotify Grey' :
-            settings.libraryBackgroundMode === 'theme-blue' ? 'LuvLyrics Blue' :
-            settings.libraryBackgroundMode === 'purest-black' ? 'Purest Black' :
-            settings.libraryBackgroundMode === 'theme-subtle' ? 'Subtle Dark' : 'Aurora'
-          }
-          onPress={() => {
-            const modes: ('daily' | 'current' | 'aurora' | 'black' | 'grey' | 'theme-blue' | 'purest-black' | 'theme-subtle')[] = [
-              'daily', 'current', 'aurora', 'black', 'grey', 'theme-blue', 'purest-black', 'theme-subtle'
-            ];
-            const next = modes[(modes.indexOf(settings.libraryBackgroundMode) + 1) % modes.length];
-            settings.setLibraryBackgroundMode(next);
-          }}
-        />
-        <SettingsRowSwitch
-          icon="color-filter-outline"
-          label="Apply Theme to Other Pages"
-          value={settings.applyThemeToOtherPages}
-          onToggle={settings.setApplyThemeToOtherPages}
-        />
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'desktop'} title="Desktop Connect" onClose={closeSheet}>
-        <SettingsRowSwitch
-          icon="desktop-outline"
-          label="Enable Desktop Connect"
-          value={desktopConnectEnabled}
-          onToggle={setDesktopConnectEnabled}
-        />
-        <SettingsRowSwitch
-          icon="cloud-download-outline"
-          label="Allow Desktop Downloads"
-          value={allowDesktopDownloads}
-          onToggle={setAllowDesktopDownloads}
-        />
-        <SettingsRow
-          icon="qr-code-outline"
-          label="Pair New Desktop"
-          onPress={() => { closeSheet(); setPairingModalVisible(true); }}
-        />
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'discovery'} title="Discovery" onClose={closeSheet}>
-        <SettingsRowSwitch
-          icon="musical-notes-outline"
-          label="Show Thumbnails"
-          value={settings.showThumbnails}
-          onToggle={settings.setShowThumbnails}
-        />
-        <SettingsRow
-          icon="language-outline"
-          label="Luvs Languages"
-          value={luvsLanguageSummary}
-          onPress={() => { closeSheet(); setLanguagePickerVisible(true); }}
-        />
-        <SettingsRow
-          icon="scan-outline"
-          label="Scan Local Audio"
-          onPress={() => { closeSheet(); handleImportLocalAudio(); }}
-        />
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'data'} title="Data" onClose={closeSheet}>
-        <SettingsRow
-          icon="eye-off-outline"
-          label="Hidden Songs"
-          value={`${hiddenSongs.length}`}
-          onPress={() => { closeSheet(); fetchHiddenSongs(); setHiddenSongsVisible(true); }}
-        />
-        <SettingsRow
-          icon="refresh-outline"
-          label="Reset Settings to Defaults"
-          onPress={() => {
-            setAlertConfig({
+          <Kit.Switch label="Show frame rate" hint="For checking smoothness." value={settings.showPerformanceHUD} onChange={settings.setShowPerformanceHUD} />
+          <Action
+            label="Reset settings"
+            hint="Put everything on this page back to how it started. Your songs stay."
+            onPress={() => setAlertConfig({
               visible: true,
-              title: 'Reset Settings',
-              message: 'All settings will be restored to their defaults. Your library will not be affected.',
+              title: 'Reset settings',
+              message: 'Every setting goes back to its default. Your library is not touched.',
               buttons: [
                 { text: SettingsStrings.cancel, onPress: () => {}, style: 'cancel' },
-                { text: 'Reset', onPress: () => { settings.resetToDefaults(); closeSheet(); }, style: 'destructive' },
+                { text: 'Reset', onPress: () => settings.resetToDefaults(), style: 'destructive' },
               ],
-            });
-          }}
-        />
-        <SettingsRow
-          icon="trash-outline"
-          label="Clear All Library Data"
-          onPress={() => {
-            setAlertConfig({
-              visible: true,
-              title: 'Clear All Data',
-              message: 'This will permanently delete your entire song library and playlists. This cannot be undone.',
-              buttons: [
-                { text: SettingsStrings.cancel, onPress: () => {}, style: 'cancel' },
-                { text: 'Delete Everything', onPress: async () => { await clearAllData(); closeSheet(); }, style: 'destructive' },
-              ],
-            });
-          }}
-        />
-      </BottomSheet>
-
-      <BottomSheet visible={activeSheet === 'about'} title="About" onClose={closeSheet}>
-        <SettingsRow icon="musical-note-outline" label="App" value="LuvLyrics" onPress={() => {}} />
-        <SettingsRow icon="code-slash-outline" label="Version" value="1.0.0" onPress={() => {}} />
-      </BottomSheet>
+            })}
+          />
+        </Section>
+      </ScrollView>
 
       {/* ── Alerts & Utility Modals ──────────────────────────────────────────── */}
 
@@ -1009,25 +437,6 @@ const SettingsScreen: React.FC<Props> = () => {
         onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
       />
 
-      <Modal visible={editNameVisible} transparent animationType="fade" onRequestClose={() => setEditNameVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setEditNameVisible(false)}>
-          <View style={styles.nameModal}>
-            <Text style={styles.nameModalTitle}>Edit Name</Text>
-            <TextInput
-              style={styles.nameInput} value={tempName} onChangeText={setTempName}
-              placeholder="Enter your name" placeholderTextColor="rgba(255,255,255,0.3)" autoFocus
-            />
-            <View style={styles.nameModalButtons}>
-              <Pressable style={styles.nameModalButton} onPress={() => setEditNameVisible(false)}>
-                <Text style={styles.nameModalButtonText}>{SettingsStrings.cancel}</Text>
-              </Pressable>
-              <Pressable style={[styles.nameModalButton, styles.nameModalButtonPrimary]} onPress={handleSaveName}>
-                <Text style={[styles.nameModalButtonText, styles.nameModalButtonTextPrimary]}>{SettingsStrings.save}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
 
       <Modal visible={selectionModalVisible} transparent animationType="slide" onRequestClose={handleCloseSelectionModal}>
         <Pressable style={styles.selectionOverlay} onPress={handleCloseSelectionModal}>
@@ -1163,102 +572,28 @@ const SettingsScreen: React.FC<Props> = () => {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  hero: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 },
+  heroTitle: { color: Signal.ink, fontSize: 34, fontWeight: '700' },
+  heroLead: { color: Signal.inkMuted, fontSize: 15, lineHeight: 21, marginTop: 6 },
+  slider: { width: '100%', height: 36 },
+  tokenField: { marginBottom: 12 },
+  tokenLabel: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  tokenInput: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    color: Signal.ink,
+    fontSize: 14,
+    backgroundColor: 'rgba(244,241,234,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
   container: { flex: 1 },
-  safeArea: { flex: 1 },
-  content: { paddingHorizontal: 16 },
-
-  // Screen title
-  screenTitle: { fontSize: 34, fontWeight: '700', marginTop: 12, marginBottom: 20 },
-
-  // Profile card
-  profileCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 16,
-    borderRadius: 20, padding: 16, marginBottom: 14,
-    borderWidth: 1,
-  },
-  avatar: {
-    width: 72, height: 72, borderRadius: 36,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, flexShrink: 0,
-  },
-  avatarImage: { width: '100%', height: '100%', borderRadius: 36 },
-  editBadge: {
-    position: 'absolute', bottom: -2, right: -2, width: 24, height: 24,
-    borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2,
-  },
-  profileRight: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
-  profileName: { fontSize: 18, fontWeight: '700' },
-  profileSub: { fontSize: 12, marginBottom: 12 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 0 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 17, fontWeight: '700' },
-  statLabel: { fontSize: 11, marginTop: 1 },
-  statDivider: { width: 1, height: 28, opacity: 0.5 },
-
-  // Quick Actions
-  quickActions: { flexDirection: 'row', gap: 10, marginBottom: 6 },
-  quickAction: {
-    flex: 1, borderRadius: 16,
-    paddingVertical: 14, paddingHorizontal: 12,
-    alignItems: 'center', gap: 8,
-    borderWidth: 1,
-  },
-  quickIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  quickActionText: { fontSize: 13, fontWeight: '600' },
-  quickActionSub: { fontSize: 11 },
-  quickEditHint: { position: 'absolute', top: 8, right: 10 },
-  quickHint: { fontSize: 11, textAlign: 'center', marginBottom: 24, opacity: 0.7 },
-
-  // Pin picker
-  pinSectionLabel: { fontSize: 11, fontWeight: '600', marginTop: 12, marginBottom: 4, marginLeft: 2 },
-  pinPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
-  pinPickerLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
-  pinPickerUsed: { fontSize: 12, marginRight: 4 },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 13, fontWeight: '600',
-    marginBottom: 8, marginLeft: 4,
-  },
-
-  // Menu groups
-  menuGroup: {
-    borderRadius: 16, overflow: 'hidden', borderWidth: 1, marginBottom: 20,
-  },
-  menuRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth, gap: 14,
-  },
-  menuRowLast: { borderBottomWidth: 0 },
-  menuIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
-  menuRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  menuBadge: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
-
-  // Settings rows (inside sheets)
-  settingsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)', gap: 14,
-  },
-  settingsLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
-  settingsValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  settingsValueText: { fontSize: 14, color: Colors.textSecondary },
-
-  // Slider row
-  sliderRow: { paddingTop: 14, paddingBottom: 4 },
-  sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  sliderLabel: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
-  sliderValue: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
-  sliderHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   nameModal: { backgroundColor: '#1C1C1E', borderRadius: 16, padding: 24, width: '80%', maxWidth: 320 },
   nameModalTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16, textAlign: 'center' },
-  nameInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, fontSize: 15, color: Colors.textPrimary, marginBottom: 18 },
   nameModalButtons: { flexDirection: 'row', gap: 10 },
   nameModalButton: { flex: 1, padding: 13, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
   nameModalButtonPrimary: { backgroundColor: '#2E2E2E' },
@@ -1295,35 +630,6 @@ const styles = StyleSheet.create({
   selectionButtonDisabled: { backgroundColor: 'rgba(0,122,255,0.3)' },
   selectionButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   selectionButtonTextImport: { color: '#fff' },
-
-  // Beta: YouTube API key
-  apiKeyContainer: {
-    marginTop: 4, marginBottom: 4,
-    paddingHorizontal: 4, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
-  },
-  apiKeyHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10,
-  },
-  apiKeyLabel: {
-    flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textPrimary,
-  },
-  apiKeySaved: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-  },
-  apiKeySavedText: {
-    fontSize: 12, color: '#30D158', fontWeight: '600',
-  },
-  apiKeyInput: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 13, color: Colors.textPrimary, fontFamily: 'monospace',
-    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
-    marginBottom: 8,
-  },
-  apiKeyHint: {
-    fontSize: 11, color: Colors.textSecondary, lineHeight: 16,
-  },
 });
 
 export default SettingsScreen;
