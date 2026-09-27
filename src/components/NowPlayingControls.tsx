@@ -18,6 +18,13 @@ import TimelineScrubber from './TimelineScrubber';
 import { Glass, PlayerType, Radius, Signal, Space } from '../constants/allegraTheme';
 import { CanvasSource } from '../services/canvas/types';
 
+const CANVAS_LABEL: Record<CanvasSource, string> = {
+  EchoCanvas: 'Echo',
+  ArtistVideo: 'ArchiveTune',
+  Tidal: 'Tidal',
+  AppleMusic: 'Apple Music',
+};
+
 interface NowPlayingControlsProps {
   animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
   controlsVisible: boolean;
@@ -85,9 +92,9 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
 
       <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, Space.md) + Space.xs }]}>
         {canvasSource ? (
-          <View style={styles.canvasChip} accessibilityLabel={`Motion artwork from ${canvasSource}`}>
+          <View style={styles.canvasChip} accessibilityLabel={`Motion artwork from ${CANVAS_LABEL[canvasSource]}`}>
             <View style={styles.canvasDot} />
-            <Text style={styles.canvasChipText}>CANVAS · {canvasSource.toUpperCase()}</Text>
+            <Text style={styles.canvasChipText}>CANVAS · {CANVAS_LABEL[canvasSource].toUpperCase()}</Text>
           </View>
         ) : null}
 

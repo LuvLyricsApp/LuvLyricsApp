@@ -136,7 +136,9 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
         <BlurView intensity={60} tint={isDark ? 'dark' : 'light'} style={styles.blur}>
           <View style={styles.tabsRow}>
             {/* Left tabs */}
-            <View style={styles.tabGroup}>
+            {/* Each side is weighted by its tab count so an odd number of tabs
+                still spaces every icon evenly around the centre mic. */}
+            <View style={[styles.tabGroup, { flex: leftRoutes.length }]}>
               {leftRoutes.map((route, i) => renderTab(route, i, 0))}
             </View>
 
@@ -148,7 +150,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
             )}
 
             {/* Right tabs */}
-            <View style={styles.tabGroup}>
+            <View style={[styles.tabGroup, { flex: rightRoutes.length }]}>
               {rightRoutes.map((route, i) => renderTab(route, i, midpoint))}
             </View>
           </View>
@@ -171,8 +173,8 @@ const styles = StyleSheet.create({
     elevation: 100,
   },
   pillContainer: {
-    width: '85%',
-    maxWidth: 400,
+    width: '92%',
+    maxWidth: 440,
     borderRadius: Radius.pill,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
@@ -199,7 +201,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly',
   },
   // Center slot for inline mic button
   centerSlot: {
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     paddingTop: 8,
     paddingBottom: 4,
     borderRadius: Radius.pill,

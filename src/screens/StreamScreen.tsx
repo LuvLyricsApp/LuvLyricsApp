@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Keyboard,
   Pressable,
@@ -404,7 +405,8 @@ const StreamScreen: React.FC = () => {
   );
 };
 
-const COLUMN_WIDTH = 340;
+// One column fills the screen minus a peek of the next, so the shelf reads as swipeable.
+const COLUMN_WIDTH = Math.min(Dimensions.get('window').width - 44, 420);
 
 const styles = StyleSheet.create({
   screen: {
