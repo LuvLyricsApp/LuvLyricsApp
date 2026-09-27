@@ -1,0 +1,110 @@
+name: LuvLyrics APK
+
+# Builds an installable APK on every push to this branch (or by hand
+# from the Actions tab) and publishes it to the "luvlyricsapp" release, so one
+# link always downloads the newest build:
+#   https://github.com/LuvLyricsApp/LuvLyricsApp/releases/download/luvlyricsapp/luvlyricsapp.apk
+#
+# Signing follows android-apk.yml on the redesign branch, so builds from either
+# install over each other and over a local `expo run:android` build.
+
+on:
+  push:
+    branches: [claude/luvlyricsapp-ui-ux-overhaul-o7eggn]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: luvlyricsapp-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build and publish luvlyricsapp.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Release builds are signed with android/app/debug.keystore (see
+      # android/app/build.gradle), which is gitignored. Android only installs an
+      # update over an app signed with the same key, so:
+      #   1. a repo secret ANDROID_DEBUG_KEYSTORE_BASE64 (base64 of your local
+      #      android/app/debug.keystore) wins if set;
+      #   2. otherwise the keystore from Expo's SDK 54 template — the one
+      #      `expo prebuild` puts in every project, so it matches local builds.
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 --decode > android/app/debug.keystore
+            echo "Using the keystore from the ANDROID_DEBUG_KEYSTORE_BASE64 secret"
+          else
+            mkdir -p /tmp/tpl && cd /tmp/tpl
+            npm pack expo-template-bare-minimum@sdk-54 --silent
+            tar -xzf expo-template-bare-minimum-*.tgz package/android/app/debug.keystore
+            cp package/android/app/debug.keystore "$GITHUB_WORKSPACE/android/app/debug.keystore"
+            echo "Using the Expo SDK 54 template keystore"
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          # No Sentry auth token in CI: skip the source-map upload step.
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_GENIUS_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_GENIUS_ACCESS_TOKEN }}
+        # gradlew was committed without the executable bit. gradle.properties
+        # caps the JVM at 2 GB, which leaves R8 (minify) thrashing; runners have
+        # 16 GB. Both ABIs: arm64 for modern phones, armeabi-v7a for older and
+        # Android Go phones that run a 32-bit system.
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
+
+      - name: Collect APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk luvlyricsapp.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luvlyricsapp-apk
+          path: luvlyricsapp.apk
+          retention-days: 14
+
+      - name: Publish to the luvlyricsapp release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete luvlyricsapp --yes --cleanup-tag || true
+          gh release create luvlyricsapp luvlyricsapp.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "LuvLyrics — luvlyricsapp.apk" \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Download luvlyricsapp.apk below and open it on your Android phone to install. Direct link: https://github.com/${GITHUB_REPOSITORY}/releases/download/luvlyricsapp/luvlyricsapp.apk"
