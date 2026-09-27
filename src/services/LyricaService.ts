@@ -4,6 +4,8 @@
  */
 
 import { LyricLine } from '../types/song';
+import { EchoLyricsCascade } from './lyrics/EchoLyricsCascade';
+import { ProviderLyrics } from './lyrics/providers';
 
 const BASE_URL = 'https://test-0k.onrender.com/lyrics';
 
@@ -20,7 +22,13 @@ export interface LyricaResult {
 }
 
 class LyricaService {
-  async fetchLyrics(song: string, artist: string, syncedOnly: boolean = false, duration?: number): Promise<LyricaResult | null> {
+  async fetchLyrics(
+    song: string,
+    artist: string,
+    syncedOnly: boolean = false,
+    duration?: number,
+    options: { skipEcho?: boolean } = {},
+  ): Promise<LyricaResult | null> {
     try {
       // Clean song title - remove file extensions and extra metadata
       let cleanSong = song
@@ -40,7 +48,17 @@ class LyricaService {
         cleanSong = parts.slice(1).join(' - ').trim();
       }
       
-      console.log('[Lyrica] Cleaned - Artist:', cleanArtist, 'Song:', cleanSong, 'Duration:', duration);
+      if (__DEV__) console.log('[Lyrica] Cleaned - Artist:', cleanArtist, 'Song:', cleanSong, 'Duration:', duration);
+
+      // Echo Music provider cascade first (YouLyPlus, Paxsenix, Unison, BetterLyrics,
+      // SimpMusic, LRCLIB, KuGou). A synced hit wins outright; a plain hit is held
+      // back in case the Lyrica backend below has timestamps.
+      const echo = options.skipEcho ? null : await EchoLyricsCascade.fetchBest(
+        { title: cleanSong, artist: cleanArtist, duration },
+        undefined,
+        syncedOnly,
+      );
+      if (echo?.synced) return this.fromProvider(echo);
       
       // Priority: Synced (slow) > Synced (fast) > Plain text
       // User request: "synced slow , then synced fats then plain"
@@ -61,16 +79,36 @@ class LyricaService {
         
         console.log(`[Lyrica] Trying ${strategy.label}`);
         
-        const result = await this.executeFetch(url, strategy.label);
+        let result: LyricaResult | null;
+        try {
+          result = await this.executeFetch(url, strategy.label);
+        } catch (e) {
+          // Backend down or timed out: the Echo plain lyrics beat an error.
+          if (echo) return this.fromProvider(echo);
+          throw e;
+        }
         if (result) return result;
       }
       
-      console.log('[Lyrica] All strategies exhausted');
-      return null;
+      if (__DEV__) console.log('[Lyrica] All strategies exhausted');
+      return echo ? this.fromProvider(echo) : null;
     } catch (error) {
       console.error('[Lyrica] Fetch error:', error);
       throw error;
     }
+  }
+
+  fromProvider(hit: ProviderLyrics): LyricaResult {
+    return {
+      lyrics: hit.lyrics,
+      source: hit.provider,
+      metadata: {
+        title: hit.trackName,
+        artist: hit.artistName,
+        album: hit.albumName,
+        duration: hit.duration,
+      },
+    };
   }
 
   private async executeFetch(url: string, label: string): Promise<LyricaResult | null> {
