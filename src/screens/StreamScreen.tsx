@@ -45,6 +45,9 @@ import { YTSong } from '../services/ytmusic/parsers';
 import { playYTSongs } from '../services/stream/browsePlay';
 import { BrowseShelf } from '../components/browse/BrowseShelf';
 import { useFollowedArtistsStore } from '../store/followedArtistsStore';
+import { personalMoodMix, Taste } from '../services/stream/moodMix';
+import { tasteSeeds } from '../services/luvsTaste';
+import { leadArtist } from '../services/ytmusic/browse';
 import { recommendFor } from '../services/stream/recommend';
 import { buildHomeFeed, HomeFeed } from '../services/stream/homeFeed';
 import { StreamService } from '../services/stream/StreamService';
@@ -105,6 +108,7 @@ const StreamScreen: React.FC = () => {
   const [pendingSong, setPendingSong] = useState<string | null>(null);
   const followed = useFollowedArtistsStore(s => s.artists);
 
+
   const loadYtHome = useCallback(async () => {
     const first = await YTMusicClient.home().catch(() => null);
     if (!first) return;
@@ -141,6 +145,24 @@ const StreamScreen: React.FC = () => {
   historyRef.current = history;
   const localRef = useRef(localSongs);
   localRef.current = localSongs;
+
+  // "Your <mood> mix": the chip's mood by the artists you follow and play,
+  // in your languages (services/stream/moodMix).
+  const [moodMix, setMoodMix] = useState<YTSong[] | null>(null);
+  const mixSeq = useRef(0);
+  const loadMoodMix = useCallback((label: string) => {
+    const seq = ++mixSeq.current;
+    setMoodMix(null);
+    const seen = new Set<string>();
+    const artistsInOrder = [
+      ...followed.map(a => a.name),
+      ...tasteSeeds(historyRef.current, localRef.current, Date.now(), 8).map(s => leadArtist(s.artist)),
+    ].filter(a => a && !/^unknown artist$/i.test(a) && !seen.has(a.toLowerCase()) && seen.add(a.toLowerCase()));
+    const taste: Taste = { artists: artistsInOrder, languages: preferred };
+    personalMoodMix(label, taste, q => YTMusicClient.searchSongs(q))
+      .then(songs => { if (seq === mixSeq.current) setMoodMix(songs); })
+      .catch(() => { if (seq === mixSeq.current) setMoodMix([]); });
+  }, [followed, preferred]);
 
   const loadFeed = useCallback(async () => {
     const next = await buildHomeFeed(
@@ -186,6 +208,8 @@ const StreamScreen: React.FC = () => {
     setArtists([]);
     setYtChip(null);
     setChipShelves(null);
+    mixSeq.current++;
+    setMoodMix(null);
     setQuery('');
     setMood(null);
     setResults(null);
@@ -228,13 +252,17 @@ const StreamScreen: React.FC = () => {
       clearSearch();
       setMood(chip.title);
       setYtChip(chip);
+      loadMoodMix(chip.title);
       YTMusicClient.home(chip.browse).then(page => setChipShelves(page.shelves)).catch(() => setChipShelves([]));
       return;
     }
     const picked = MOODS.find(m => m.label === label);
     if (!picked) clearSearch();
-    else runSearch(picked.query, picked.label);
-  }, [clearSearch, runSearch, ytChips]);
+    else {
+      runSearch(picked.query, picked.label);
+      loadMoodMix(picked.label);
+    }
+  }, [clearSearch, runSearch, ytChips, loadMoodMix]);
 
   const isFocused = useIsFocused();
   // Clear the tab bar pill plus the mini player pill stacked above it.
@@ -270,11 +298,31 @@ const StreamScreen: React.FC = () => {
     <BrowseShelf key={`yt-${shelf.title}-${i}`} shelf={shelf} onOpen={openItem} onPlay={playYT} pendingId={pendingSong} />
   ));
 
+  const mixSection = mood ? (
+    moodMix === null ? (
+      <View>
+        <SectionHeading title={`Your ${mood.toLowerCase()} mix`} subtitle="Finding it in artists you play…" />
+        <ActivityIndicator color={Signal.wave} style={styles.spinner} />
+      </View>
+    ) : moodMix.length > 0 ? (
+      <BrowseShelf
+        shelf={{ title: `Your ${mood.toLowerCase()} mix`, strapline: 'From artists you play, in your languages', items: moodMix.map(song => ({ kind: 'song' as const, song })) }}
+        rows
+        maxRows={8}
+        onMore={() => playYT(moodMix, 0)}
+        onOpen={openItem}
+        onPlay={playYT}
+        pendingId={pendingSong}
+      />
+    ) : null
+  ) : null;
+
   let body: React.ReactNode;
   if (ytChip && !searchActive) {
     body = (
       <View>
         <SectionHeading title={ytChip.title} action="Clear" onAction={clearSearch} />
+        {mixSection}
         {chipShelves === null ? <ActivityIndicator color={Signal.wave} style={styles.spinner} /> : null}
         {chipShelves?.length === 0 ? <Text style={styles.empty}>Nothing here right now. Try another mood.</Text> : null}
         {(chipShelves ?? []).map((shelf, i) => (
@@ -292,6 +340,7 @@ const StreamScreen: React.FC = () => {
           action="Clear"
           onAction={clearSearch}
         />
+        {mixSection}
         {artists.length > 0 ? (
           <BrowseShelf shelf={{ title: 'Artists', items: artists }} onOpen={openItem} onPlay={playYT} pendingId={pendingSong} />
         ) : null}
