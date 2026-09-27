@@ -7,8 +7,11 @@ import { create } from 'zustand';
 import { Song, SortOption } from '../types/song';
 import * as queries from '../database/queries';
 import { useDailyStatsStore } from './dailyStatsStore';
-import { registerSongsGetter } from './playerStore';
 import { nativeSearch } from '../services/NativeSearch';
+
+// Deliberately no static import of './playerStore' here: playerStore imports this
+// module, and a back-edge evaluated at init left playerStore half-initialised
+// (a TDZ throw on web; a silently reset getter on Hermes). Use dynamic imports.
 
 interface SongsState {
   // State
@@ -250,6 +253,3 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       
       clearError: () => set({ error: null }),
 }));
-
-// Give playerStore a sync path to songs — breaks the circular require in nextInPlaylist
-registerSongsGetter(() => useSongsStore.getState().songs);

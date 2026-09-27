@@ -70,7 +70,7 @@ not enough, because the two components race across component boundaries.
 unmounts mid-load.
 
 ### Library auto-next
-`nextInPlaylist()` in `playerStore.ts` dynamically `require`s `songsStore` (circular dep workaround) to rebuild queue when `currentPlaylistId === 'library'` and queue is null.
+`nextInPlaylist()` in `playerStore.ts` reads `useSongsStore.getState().songs` at call time to rebuild the queue when `currentPlaylistId === 'library'` and queue is null. `songsStore` must never statically import `playerStore` (only `await import`) — the init-time back-edge used to leave `playerStore` half-initialised.
 
 ## File map
 
@@ -120,7 +120,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 20 suites / 256 tests passing
+node_modules\.bin\jest.cmd                  # expect 21 suites / 257 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.
