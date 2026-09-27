@@ -19,7 +19,6 @@ import {
   Group,
   Image as SkiaImage,
   LinearGradient,
-  Mask,
   Rect,
   SkImage,
   useImage,
@@ -62,6 +61,18 @@ export const HERO_MASK_ALPHAS = [1, 1, 0.4, 0];
 /** The inverse of the hero mask: where the veil lets the room back in. */
 const VEIL_ALPHAS = HERO_MASK_ALPHAS.map(a => 1 - a);
 
+/**
+ * Echo's dissolve: drawn last inside a `<Group layer>`, a DstIn gradient keeps
+ * each pixel of what's already in the layer by the gradient's alpha. (Skia's
+ * <Mask> dropped children that paint with their own shader — gradients, the
+ * blurred image — so the dissolve silently did nothing.)
+ */
+const DissolveRect: React.FC<{ width: number; heroH: number; alphas: readonly number[] }> = ({ width, heroH, alphas }) => (
+  <Rect x={0} y={0} width={width} height={heroH} blendMode="dstIn">
+    <LinearGradient start={vec(0, 0)} end={vec(0, heroH)} positions={HERO_MASK_POSITIONS} colors={alphas.map(a => `rgba(0,0,0,${a})`)} />
+  </Rect>
+);
+
 const Layer: React.FC<{
   image: SkImage;
   width: number;
@@ -76,17 +87,14 @@ const Layer: React.FC<{
       {/* clamp: a decal blur fades to transparent near the image's edges. */}
       <Blur blur={BLUR} mode="clamp" />
     </SkiaImage>
-    {roomOnly ? null : <Group opacity={hero}>
-      <Mask
-        mask={(
-          <Rect x={0} y={0} width={width} height={heroH}>
-            <LinearGradient start={vec(0, 0)} end={vec(0, heroH)} positions={HERO_MASK_POSITIONS} colors={HERO_MASK_ALPHAS.map(a => `rgba(0,0,0,${a})`)} />
-          </Rect>
-        )}
-      >
-        <SkiaImage image={image} x={0} y={0} width={width} height={heroH} fit="cover" />
-      </Mask>
-    </Group>}
+    {roomOnly ? null : (
+      <Group opacity={hero}>
+        <Group layer>
+          <SkiaImage image={image} x={0} y={0} width={width} height={heroH} fit="cover" />
+          <DissolveRect width={width} heroH={heroH} alphas={HERO_MASK_ALPHAS} />
+        </Group>
+      </Group>
+    )}
   </Group>
 );
 
@@ -156,15 +164,10 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
     return (
       <View style={[styles.veil, { height: heroH }]} pointerEvents="none">
         <Canvas style={StyleSheet.absoluteFill}>
-          <Mask
-            mask={(
-              <Rect x={0} y={0} width={width} height={heroH}>
-                <LinearGradient start={vec(0, 0)} end={vec(0, heroH)} positions={HERO_MASK_POSITIONS} colors={VEIL_ALPHAS.map(a => `rgba(0,0,0,${a})`)} />
-              </Rect>
-            )}
-          >
+          <Group layer>
             {room}
-          </Mask>
+            <DissolveRect width={width} heroH={heroH} alphas={VEIL_ALPHAS} />
+          </Group>
           {/* The same shade the still cover sits under, over the video too. */}
           {shade}
         </Canvas>
