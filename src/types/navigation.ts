@@ -7,9 +7,12 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 
 // Root Stack Navigator
+/** Sheets Now Playing can open straight away (deep links, invites). */
+export type PlayerSheetName = 'menu' | 'together' | 'queue' | 'timer';
+
 export type RootStackParamList = {
   Main: NavigatorScreenParams<TabParamList> | undefined;
-  NowPlaying: { songId: string; lyrics?: boolean };
+  NowPlaying: { songId: string; lyrics?: boolean; sheet?: PlayerSheetName };
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault

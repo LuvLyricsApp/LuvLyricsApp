@@ -17,3 +17,10 @@ describe('parseDeepLink', () => {
     expect(parseDeepLink('https://example.com')).toBeNull();
   });
 });
+
+describe('player and invite links', () => {
+  it('parses a sheet request and an invite code', () => {
+    expect(parseDeepLink('lyricflow://player?sheet=menu')).toEqual({ action: 'player', params: { sheet: 'menu' } });
+    expect(parseDeepLink('lyricflow://together?code=ab12cd')).toEqual({ action: 'together', params: { code: 'ab12cd' } });
+  });
+});

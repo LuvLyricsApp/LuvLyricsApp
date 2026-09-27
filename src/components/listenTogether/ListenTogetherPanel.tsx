@@ -70,8 +70,9 @@ const Lobby: React.FC = () => {
   const autoApprove = useListenTogetherStore(s => s.autoApprove);
   const connection = useListenTogetherStore(s => s.connection);
   const pendingJoinCode = useListenTogetherStore(s => s.pendingJoinCode);
+  const invite = useListenTogetherStore(s => s.inviteCode);
   const [name, setName] = useState(saved);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(invite ?? '');
   const ready = name.trim().length > 0;
 
   if (pendingJoinCode) {
@@ -133,7 +134,9 @@ const Room: React.FC = () => {
   const host = room.users.find(u => u.user_id === room.host_id);
 
   const shareCode = () => {
-    Share.share({ message: `Listen with me on LuvLyrics or Echo Music — room code ${room.room_code}` }).catch(() => {});
+    Share.share({
+      message: `Listen with me on LuvLyrics or Echo Music — room code ${room.room_code}\nlyricflow://together?code=${room.room_code}`,
+    }).catch(() => {});
   };
   const copyCode = () => {
     Clipboard.setStringAsync(room.room_code).catch(() => {});

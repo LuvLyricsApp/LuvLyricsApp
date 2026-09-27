@@ -32,6 +32,8 @@ interface ListenTogetherState {
   joinRequests: JoinRequestPayload[];
   suggestions: SuggestionReceivedPayload[];
   bufferingUsers: string[];
+  /** A room code from an invite link, waiting to be joined. */
+  inviteCode: string | null;
   /** Waiting for the host to let us in. */
   pendingJoinCode: string | null;
   /** One-line news for a toast ("Room ABC123 created", "Maya joined"). */
@@ -61,6 +63,7 @@ export const useListenTogetherStore = create<ListenTogetherState>()(
       suggestions: [],
       bufferingUsers: [],
       pendingJoinCode: null,
+      inviteCode: null,
       notice: null,
       rttMs: null,
 

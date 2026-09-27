@@ -5,6 +5,10 @@
  *       find the song (official YouTube Music match, catalog audio), play it
  *       and open Now Playing — on the cover, or on lyrics with lyrics=1
  *   lyricflow://open/<stream|luvs|library|playlists|search|settings>
+ *   lyricflow://player[?sheet=menu|together|queue|timer]
+ *       open Now Playing on the current song (optionally with a sheet up)
+ *   lyricflow://together?code=<room>
+ *       a Listen together invite: opens the room sheet with the code filled in
  *   lyricflow://diagnose
  *       turn on diagnostics (utils/diag) for this run
  *
@@ -18,6 +22,10 @@ import { searchOfficial } from '../services/stream/officialSearch';
 import { StreamService } from '../services/stream/StreamService';
 import { usePlayerStore } from '../store/playerStore';
 import { diag, enableDiagnostics } from '../utils/diag';
+import { useListenTogetherStore } from '../store/listenTogetherStore';
+import type { PlayerSheetName } from '../types/navigation';
+
+const SHEETS: PlayerSheetName[] = ['menu', 'together', 'queue', 'timer'];
 
 export const parseDeepLink = (url: string): { action: string; params: Record<string, string> } | null => {
   const m = /^lyricflow:\/\/([^?#]*)(?:\?([^#]*))?/i.exec(url.trim());
@@ -51,6 +59,16 @@ const handle = async (url: string | null) => {
     StreamService.play(found, 0);
     const songId = usePlayerStore.getState().currentSongId;
     if (songId) navigationRef.navigate('NowPlaying', { songId, lyrics: link.params.lyrics === '1' });
+    return;
+  }
+  if (link.action === 'player' || link.action === 'together') {
+    const songId = usePlayerStore.getState().currentSongId;
+    const code = (link.params.code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (link.action === 'together' && code) useListenTogetherStore.setState({ inviteCode: code });
+    const requested = link.action === 'together' ? 'together' : link.params.sheet;
+    const sheet = SHEETS.find(s => s === requested);
+    if (songId) navigationRef.navigate('NowPlaying', { songId, sheet });
+    else if (link.action === 'together') useListenTogetherStore.getState().announce('Play a song, then open Listen together to join');
     return;
   }
   if (link.action.startsWith('open/')) {

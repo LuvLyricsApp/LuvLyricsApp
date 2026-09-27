@@ -437,7 +437,7 @@ export const joinRoom = (roomCode: string, username: string): void => {
   const code = roomCode.trim().toUpperCase();
   if (!code) return;
   store().setUsername(username);
-  patch({ session: null, room: null, role: 'none', pendingJoinCode: code });
+  patch({ session: null, room: null, role: 'none', pendingJoinCode: code, inviteCode: null });
   whenConnected({ kind: 'join', roomCode: code, username: username.trim() });
 };
 

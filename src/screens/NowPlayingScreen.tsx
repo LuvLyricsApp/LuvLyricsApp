@@ -231,7 +231,18 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [artistName, animateClose]);
 
-  const [sheet, setSheet] = React.useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(null);
+  const [sheet, setSheet] = React.useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(route.params.sheet ?? null);
+
+  // A link can arrive while the player is already open (lyricflow://play?…&lyrics=1,
+  // lyricflow://player?sheet=menu, an invite): apply it instead of ignoring it.
+  const linkLyrics = route.params.lyrics;
+  const linkSheet = route.params.sheet;
+  useEffect(() => {
+    if (linkLyrics) setShowLyrics(true);
+  }, [linkLyrics, route.params.songId, setShowLyrics]);
+  useEffect(() => {
+    if (linkSheet) setSheet(linkSheet);
+  }, [linkSheet]);
   const closeSheet = useCallback(() => setSheet(null), []);
 
   // The sleep timer's remaining time, refreshed while it runs.
