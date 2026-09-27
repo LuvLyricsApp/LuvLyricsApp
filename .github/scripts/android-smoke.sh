@@ -11,7 +11,7 @@
 #   listen-together.png  the Listen together sheet
 #   after-close-2.png    back from the player a second time
 #   transition-*.png     frames taken during page changes (no white flashes)
-#   library.png, settings.png
+#   library.png, settings.png, search.png, playlists.png, luvs.png
 #   playback.txt         media session state before/after 45s in the background
 #   diag.txt             the app's [diag:*] lines (canvas, Apple token, player)
 set -u
@@ -101,6 +101,15 @@ shot settings
 burst stream link "lyricflow://open/stream"
 sleep 4
 shot stream-back
+link "lyricflow://open/search"
+sleep 5
+shot search
+link "lyricflow://open/playlists"
+sleep 5
+shot playlists
+link "lyricflow://open/luvs"
+sleep 12
+shot luvs
 
 adb logcat -d -v time > "$OUT/logcat.txt"
 grep -F "[diag:" "$OUT/logcat.txt" > "$OUT/diag.txt" || true
