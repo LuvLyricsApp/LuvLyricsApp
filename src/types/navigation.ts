@@ -43,6 +43,14 @@ export type TabParamList = {
   // bottom bar stays on screen, as in Spotify and Apple Music (see VISIBLE_TABS).
   Settings: undefined;
   AudioDownloader: AudioDownloaderParams;
+  /** YouTube Music pages (artists, albums, playlists), stacked so back walks the trail. */
+  Browse: NavigatorScreenParams<BrowseStackParamList> | undefined;
+};
+
+export type BrowseStackParamList = {
+  /** By channel id, or by name (looked up on YouTube Music). */
+  Artist: { browseId?: string; name?: string };
+  Collection: { browseId: string; title?: string; thumbnail?: string };
 };
 
 /**

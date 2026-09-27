@@ -56,6 +56,18 @@ export const StreamService = {
     prepareNextInQueue();
   },
 
+  /** Adds songs to the end of the stream queue (a list still resolving in the background). */
+  append(songs: UnifiedSong[]): void {
+    const state = usePlayerStore.getState();
+    if (!state.playlistQueue || state.currentPlaylistId !== STREAM_QUEUE_ID) return;
+    const queued = state.playlistQueue.flatMap(s => [s.id, `${s.title.trim().toLowerCase()}|${(s.artist ?? '').trim().toLowerCase()}`]);
+    const fresh = dedupeStreamable(songs, queued);
+    if (fresh.length === 0) return;
+    remember(fresh);
+    state.updateQueue([...state.playlistQueue, ...fresh.map(s => toStreamSong(s))]);
+    prepareNextInQueue();
+  },
+
   /**
    * "Save" for a streamed song: queue it for download so it lands in the
    * library with lyrics and art. Returns false when the song is unknown.

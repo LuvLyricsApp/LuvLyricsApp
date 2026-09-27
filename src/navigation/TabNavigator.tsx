@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { TabParamList, LibraryStackParamList } from '../types/navigation';
+import { TabParamList, LibraryStackParamList, BrowseStackParamList } from '../types/navigation';
 import { ModernPillTabBar } from '../components/ModernPillTabBar';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { useSettingsStore } from '../store/settingsStore';
@@ -19,6 +19,8 @@ import StreamScreen from '../screens/StreamScreen';
 import DownloadsScreen from '../screens/DownloadsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
+import ArtistScreen from '../screens/ArtistScreen';
+import CollectionScreen from '../screens/CollectionScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -41,6 +43,19 @@ const LibraryStackScreen: React.FC = () => (
 );
 
 
+const BrowseStack = createNativeStackNavigator<BrowseStackParamList>();
+
+/**
+ * YouTube Music pages. A stack inside a hidden tab: the bar and mini player
+ * stay, and back walks artist → similar artist → album. `getId` makes each
+ * artist or album its own screen instead of replacing the last one.
+ */
+const BrowseStackScreen: React.FC = () => (
+  <BrowseStack.Navigator id="BrowseStack" screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+    <BrowseStack.Screen name="Artist" component={ArtistScreen} getId={({ params }) => params?.browseId ?? params?.name} />
+    <BrowseStack.Screen name="Collection" component={CollectionScreen} getId={({ params }) => params?.browseId} />
+  </BrowseStack.Navigator>
+);
 
 const HomeIcon = ({ color, focused }: { color: string; focused: boolean }) => (
   <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
@@ -104,6 +119,7 @@ export const TabNavigator: React.FC = () => {
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
       <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarLabel: 'Downloader' }} />
+      <Tab.Screen name="Browse" component={BrowseStackScreen} options={{ tabBarLabel: 'Browse' }} />
     </Tab.Navigator>
   );
 };

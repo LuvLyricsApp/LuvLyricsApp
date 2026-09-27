@@ -39,6 +39,12 @@ import { PrimaryButton, SectionHeading } from '../components/allegra/home';
 import { CoverShelf, GUTTER, MoodChips, QuickPicks, ShortcutGrid, SongRow, TrackItem } from '../components/stream/StreamHome';
 import { ShimmerBlock } from '../components/stream/StreamItems';
 import { searchOfficial } from '../services/stream/officialSearch';
+import { YTMusicClient } from '../services/ytmusic/YTMusicClient';
+import { HomeChip, HomePage, Shelf, YTItem, YTPageItem } from '../services/ytmusic/browse';
+import { YTSong } from '../services/ytmusic/parsers';
+import { playYTSongs } from '../services/stream/browsePlay';
+import { BrowseShelf } from '../components/browse/BrowseShelf';
+import { useFollowedArtistsStore } from '../store/followedArtistsStore';
 import { recommendFor } from '../services/stream/recommend';
 import { buildHomeFeed, HomeFeed } from '../services/stream/homeFeed';
 import { StreamService } from '../services/stream/StreamService';
@@ -91,6 +97,39 @@ const StreamScreen: React.FC = () => {
   const [mood, setMood] = useState<string | null>(null);
   const searchSeq = useRef(0);
 
+  // YouTube Music's own home (Echo's feed): mood chips and shelves.
+  const [ytHome, setYtHome] = useState<HomePage | null>(null);
+  const [ytChip, setYtChip] = useState<HomeChip | null>(null);
+  const [chipShelves, setChipShelves] = useState<Shelf[] | null>(null);
+  const [artists, setArtists] = useState<YTPageItem<'artist'>[]>([]);
+  const [pendingSong, setPendingSong] = useState<string | null>(null);
+  const followed = useFollowedArtistsStore(s => s.artists);
+
+  const loadYtHome = useCallback(async () => {
+    const first = await YTMusicClient.home().catch(() => null);
+    if (!first) return;
+    setYtHome(first);
+    // Echo fills the feed with one more page straight away.
+    if (first.continuation) {
+      const more = await YTMusicClient.homeMore(first.continuation).catch(() => null);
+      if (more?.shelves.length) setYtHome({ ...first, shelves: [...first.shelves, ...more.shelves], continuation: more.continuation });
+    }
+  }, []);
+  useEffect(() => { loadYtHome(); }, [loadYtHome]);
+
+  const openItem = useCallback((item: Exclude<YTItem, { kind: 'song' }>) => {
+    if (item.kind === 'artist') navigation.navigate('Browse', { screen: 'Artist', params: { browseId: item.browseId } });
+    else navigation.navigate('Browse', { screen: 'Collection', params: { browseId: item.browseId, title: item.title, thumbnail: item.thumbnail } });
+  }, [navigation]);
+
+  const playYT = useCallback(async (songs: YTSong[], index: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    setPendingSong(songs[index]?.videoId ?? null);
+    const ok = await playYTSongs(songs, index);
+    setPendingSong(null);
+    if (!ok) setToast('That one isn\u2019t available to stream');
+  }, []);
+
   const preferred = useMemo(
     () => [...languages].filter(l => l.weight > 0).sort((a, b) => b.weight - a.weight).map(l => l.language),
     [languages],
@@ -134,6 +173,8 @@ const StreamScreen: React.FC = () => {
     const seq = ++searchSeq.current;
     setSearching(true);
     setResults([]);
+    setArtists([]);
+    if (!moodLabel) YTMusicClient.searchArtists(q).then(a => { if (seq === searchSeq.current) setArtists(a); }).catch(() => {});
     const found = await searchOfficial(q).catch(() => []);
     if (seq !== searchSeq.current) return; // a newer search won
     setResults(found);
@@ -142,6 +183,9 @@ const StreamScreen: React.FC = () => {
 
   const clearSearch = useCallback(() => {
     searchSeq.current++;
+    setArtists([]);
+    setYtChip(null);
+    setChipShelves(null);
     setQuery('');
     setMood(null);
     setResults(null);
@@ -175,18 +219,28 @@ const StreamScreen: React.FC = () => {
     navigation.navigate('Library', { screen: 'Downloads' });
   }, [navigation]);
 
+  const ytChips = useMemo(() => ytHome?.chips ?? [], [ytHome]);
   const selectMood = useCallback((label: string | null) => {
     Haptics.selectionAsync().catch(() => {});
+    // YouTube Music's chips open their own shelves, as in Echo.
+    const chip = ytChips.find(c => c.title === label);
+    if (chip?.browse) {
+      clearSearch();
+      setMood(chip.title);
+      setYtChip(chip);
+      YTMusicClient.home(chip.browse).then(page => setChipShelves(page.shelves)).catch(() => setChipShelves([]));
+      return;
+    }
     const picked = MOODS.find(m => m.label === label);
     if (!picked) clearSearch();
     else runSearch(picked.query, picked.label);
-  }, [clearSearch, runSearch]);
+  }, [clearSearch, runSearch, ytChips]);
 
   const isFocused = useIsFocused();
   // Clear the tab bar pill plus the mini player pill stacked above it.
   const bottomClearance = pillBarTop(insets.bottom) + PILL_STACK_GAP + CLASSIC_MINI_PLAYER_HEIGHT + Space.lg;
   const isPlaying = usePlayerStore(s => s.isPlaying);
-  const shaderMood: AuraMood = (mood && SHADER_MOOD[mood]) || 'energy';
+  const shaderMood: AuraMood = (mood && (SHADER_MOOD[mood] ?? (/relax|chill|sleep|focus|romance|sad|calm/i.test(mood) ? 'chill' : undefined))) || 'energy';
 
   // The shader takes its colours from whatever is playing (or the top pick).
   const washArt = currentSong?.coverImageUri ?? feed?.keepListening[0]?.highResArt ?? feed?.quickPicks[0]?.highResArt;
@@ -209,8 +263,26 @@ const StreamScreen: React.FC = () => {
 
   const searchActive = results !== null || searching;
 
+  const followedShelf: Shelf | null = followed.length > 0
+    ? { title: 'Your artists', items: followed.map(a => ({ kind: 'artist' as const, browseId: a.browseId, title: a.name, thumbnail: a.thumbnail })) }
+    : null;
+  const ytShelves = (ytHome?.shelves ?? []).map((shelf, i) => (
+    <BrowseShelf key={`yt-${shelf.title}-${i}`} shelf={shelf} onOpen={openItem} onPlay={playYT} pendingId={pendingSong} />
+  ));
+
   let body: React.ReactNode;
-  if (searchActive) {
+  if (ytChip && !searchActive) {
+    body = (
+      <View>
+        <SectionHeading title={ytChip.title} action="Clear" onAction={clearSearch} />
+        {chipShelves === null ? <ActivityIndicator color={Signal.wave} style={styles.spinner} /> : null}
+        {chipShelves?.length === 0 ? <Text style={styles.empty}>Nothing here right now. Try another mood.</Text> : null}
+        {(chipShelves ?? []).map((shelf, i) => (
+          <BrowseShelf key={`chip-${shelf.title}-${i}`} shelf={shelf} onOpen={openItem} onPlay={playYT} pendingId={pendingSong} />
+        ))}
+      </View>
+    );
+  } else if (searchActive) {
     const count = results?.length ?? 0;
     body = (
       <View>
@@ -220,6 +292,9 @@ const StreamScreen: React.FC = () => {
           action="Clear"
           onAction={clearSearch}
         />
+        {artists.length > 0 ? (
+          <BrowseShelf shelf={{ title: 'Artists', items: artists }} onOpen={openItem} onPlay={playYT} pendingId={pendingSong} />
+        ) : null}
         {searching ? <ActivityIndicator color={Signal.wave} style={styles.spinner} /> : null}
         {!searching && count === 0 ? (
           <Text style={styles.empty}>Nothing streamable for that. Try the artist name or a different spelling.</Text>
@@ -246,6 +321,13 @@ const StreamScreen: React.FC = () => {
         <ShimmerBlock width={140} height={22} radius={6} />
         {[0, 1, 2, 3].map(i => <ShimmerBlock key={i} width="100%" height={52} radius={6} />)}
       </View>
+    );
+  } else if ((!feed || (feed.quickPicks.length === 0 && feed.keepListening.length === 0)) && ytShelves.length > 0) {
+    body = (
+      <RiseIn>
+        {followedShelf ? <BrowseShelf shelf={followedShelf} onOpen={openItem} onPlay={playYT} /> : null}
+        {ytShelves}
+      </RiseIn>
     );
   } else if (!feed || (feed.quickPicks.length === 0 && feed.keepListening.length === 0)) {
     body = (
@@ -309,6 +391,9 @@ const StreamScreen: React.FC = () => {
             <CoverShelf items={feed.forgottenFavorites.map(localTrack)} onPress={i => playLocal(feed.forgottenFavorites, i)} />
           </>
         ) : null}
+
+        {followedShelf ? <BrowseShelf shelf={followedShelf} onOpen={openItem} onPlay={playYT} /> : null}
+        {ytShelves}
       </RiseIn>
     );
   }
@@ -348,7 +433,7 @@ const StreamScreen: React.FC = () => {
         </View>
 
         <View style={styles.chips}>
-          <MoodChips moods={MOOD_LABELS} selected={mood} onSelect={selectMood} />
+          <MoodChips moods={ytChips.length > 0 ? ytChips.map(c => c.title) : MOOD_LABELS} selected={mood} onSelect={selectMood} />
         </View>
 
         {body}

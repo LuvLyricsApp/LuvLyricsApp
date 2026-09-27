@@ -69,6 +69,13 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const canvas = useCanvasArtwork(currentSong);
 
+  // Tap the artist line to open their page (YouTube Music, Echo style).
+  const artistName = currentSong?.artist;
+  const openArtist = React.useMemo(() => {
+    if (!artistName || /^unknown artist$/i.test(artistName)) return undefined;
+    return () => navigation.navigate('Main', { screen: 'Browse', params: { screen: 'Artist', params: { name: artistName } } });
+  }, [artistName, navigation]);
+
   const [sheet, setSheet] = React.useState<'queue' | 'timer' | null>(null);
   const closeSheet = useCallback(() => setSheet(null), []);
 
@@ -218,6 +225,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           onOpenQueue={() => setSheet('queue')}
           onOpenTimer={() => setSheet('timer')}
           sleepLabel={sleepText}
+          onArtistPress={openArtist}
         />
 
         <PlayerSheet visible={sheet === 'queue'} title="Playing next" onClose={closeSheet}>
