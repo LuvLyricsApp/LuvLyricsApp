@@ -34,7 +34,7 @@ import { useFocusEffect, useNavigation, useIsFocused } from '@react-navigation/n
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLuvsFeedStore } from '../store/luvsFeedStore';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
-import { LuvCard } from '../components/LuvCard';
+import { LuvCard, LUVS_GUTTER } from '../components/LuvCard';
 import {
   LuvsPager,
   LuvsPagerHandle,
@@ -55,6 +55,8 @@ import { StreamService } from '../services/stream/StreamService';
 import { streamIdFor } from '../services/stream/streamSong';
 import { hookOffsetSeconds } from '../services/luvsHook';
 import { useSettingsStore } from '../store/settingsStore';
+import { Fonts } from '../constants/fonts';
+import { Signal } from '../constants/allegraTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -512,8 +514,13 @@ const LuvsScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Ionicons name="chevron-back" size={26} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color="#fff" />
         </Pressable>
+
+        {/* Centred title — absolutely centred so uneven button groups can't shift it */}
+        <View style={styles.titleWrap} pointerEvents="none">
+          <Text style={styles.title}>Luvs</Text>
+        </View>
 
         <View style={styles.topBarRight}>
           <Pressable
@@ -523,7 +530,7 @@ const LuvsScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Reload feed"
           >
-            <Ionicons name="refresh" size={22} color="#fff" />
+            <Ionicons name="refresh" size={20} color="#fff" />
           </Pressable>
 
           <Pressable
@@ -533,7 +540,7 @@ const LuvsScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel={`Vault, ${vault.length} saved`}
           >
-            <MaterialCommunityIcons name="heart-multiple" size={22} color="#fff" />
+            <MaterialCommunityIcons name="heart-multiple" size={20} color="#fff" />
             {vault.length > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{vault.length}</Text>
@@ -573,8 +580,8 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: LUVS_GUTTER,
+    right: LUVS_GUTTER,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -589,17 +596,28 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  titleWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontFamily: Fonts.interBold,
+    fontSize: 17,
+    letterSpacing: -0.3,
+    color: '#fff',
   },
   badge: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: '#FF2D55',
+    backgroundColor: Signal.accent,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -610,7 +628,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontFamily: Fonts.interBold,
   },
   loadingContainer: {
     position: 'absolute',
