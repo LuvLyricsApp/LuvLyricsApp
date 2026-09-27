@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import Artwork from './allegra/Artwork';
+import { useSettingsStore } from '../store/settingsStore';
 import { SharedValue } from 'react-native-reanimated';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +21,8 @@ interface NowPlayingLyricsAreaProps {
   isUserScrollingRef: React.MutableRefObject<boolean>;
   scrollTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
+  coverImageUri?: string;
+  songArtist?: string;
 }
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
@@ -30,10 +34,23 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   isUserScrollingRef,
   scrollTimeoutRef,
   flatListRef,
+  coverImageUri,
+  songArtist,
 }) => {
   const insets = useSafeAreaInsets();
-  // The cover itself is drawn full-bleed by the backdrop (AppleBackdrop).
-  if (!showLyrics) return null;
+  const { width } = useWindowDimensions();
+  const appleInspired = useSettingsStore(s => s.appleMusicInspired);
+  if (!showLyrics) {
+    // Apple Music inspired: the cover is drawn full-bleed by the backdrop.
+    // Off: a floating artwork card, as in Echo's other player design.
+    if (appleInspired) return null;
+    const size = Math.min(width - 64, 380);
+    return (
+      <View style={[styles.cardArea, { paddingTop: insets.top + HEADER_CLEARANCE + 24 }]}>
+        <Artwork uri={coverImageUri} title={songTitle ?? ''} artist={songArtist} size={size} priority="high" style={[styles.card, { width: size, height: size }]} />
+      </View>
+    );
+  }
 
   // Apple Music's lyrics view: the lines own the space between the header and
   // the controls, and the sung line rides a third of the way down — not in
@@ -67,6 +84,8 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
 };
 
 const styles = StyleSheet.create({
+  cardArea: { alignItems: 'center' },
+  card: { borderRadius: 14, overflow: 'hidden' },
   lyricsFrame: {
     flex: 1,
     // The controls (meta, scrubber, transport) float over the bottom.

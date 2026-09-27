@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
-import { useSettingsStore } from '../store/settingsStore';
+import { PlayerBackground, useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
@@ -243,6 +243,13 @@ const SettingsRowSwitch: React.FC<SettingsRowSwitchProps> = ({ icon, label, valu
       />
     </View>
   );
+};
+
+const PLAYER_BG_ORDER: PlayerBackground[] = ['blend', 'apple', 'glow'];
+const PLAYER_BG_LABELS: Record<PlayerBackground, string> = {
+  blend: 'Cover, glow for lyrics',
+  apple: 'Apple Music',
+  glow: 'Glow animated',
 };
 
 interface SettingsRowProps {
@@ -731,7 +738,23 @@ const SettingsScreen: React.FC<Props> = () => {
             </Text>
           </View>
         )}
-        <SettingsRowSwitch icon="film-outline" label="Canvas: Motion Artwork" value={settings.canvasEnabled} onToggle={settings.setCanvasEnabled} />
+        <SettingsRow
+          icon="color-palette-outline"
+          label="Mini player background"
+          value={settings.miniPlayerBackground === 'tint' ? 'Cover tint' : 'Glow animated'}
+          onPress={() => settings.setMiniPlayerBackground(settings.miniPlayerBackground === 'tint' ? 'glow' : 'tint')}
+        />
+        <SettingsRowSwitch icon="logo-apple" label="Apple Music inspired" value={settings.appleMusicInspired} onToggle={settings.setAppleMusicInspired} />
+        {settings.appleMusicInspired ? (
+          <SettingsRowSwitch icon="volume-medium-outline" label="Hide volume slider" value={settings.hidePlayerVolume} onToggle={settings.setHidePlayerVolume} />
+        ) : null}
+        <SettingsRow
+          icon="contrast-outline"
+          label="Player background style"
+          value={PLAYER_BG_LABELS[settings.playerBackground]}
+          onPress={() => settings.setPlayerBackground(PLAYER_BG_ORDER[(PLAYER_BG_ORDER.indexOf(settings.playerBackground) + 1) % PLAYER_BG_ORDER.length])}
+        />
+        <SettingsRowSwitch icon="film-outline" label="Canvas" value={settings.canvasEnabled} onToggle={settings.setCanvasEnabled} />
         {settings.canvasEnabled && (
           <View style={styles.apiKeyContainer}>
             <Text style={styles.apiKeyHint}>

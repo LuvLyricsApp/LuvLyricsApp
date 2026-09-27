@@ -17,7 +17,7 @@ class PaletteModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("Palette")
 
-        // Returns JSON: { dominant, vibrant, darkVibrant, muted, darkMuted, lightVibrant }
+        // Returns JSON: { dominant, vibrant, darkVibrant, muted, darkMuted, lightVibrant, lightMuted }
         // Each present swatch: { color: "#RRGGBB", titleTextColor: "#RRGGBB", bodyTextColor: "#RRGGBB" }
         // Absent swatches are omitted. Returns null string on any failure.
         AsyncFunction("extractColors") { imageUri: String ->
@@ -35,7 +35,34 @@ class PaletteModule : Module() {
                 null
             }
         }
+
+        // Echo Music's glow colours, exactly: Palette with maximumColorCount(8)
+        // over a 100x100 area, then vibrant, light vibrant, dark vibrant, muted,
+        // light muted, dark muted (each falling back to `fallback`), distinct.
+        AsyncFunction("extractGlowColors") { imageUri: String, fallback: String ->
+            if (imageUri.isBlank()) return@AsyncFunction emptyList<String>()
+            glowCache.get(imageUri)?.let { return@AsyncFunction it }
+            try {
+                val bitmap = decodeBitmap(imageUri) ?: return@AsyncFunction emptyList<String>()
+                val palette = Palette.from(bitmap).maximumColorCount(8).resizeBitmapArea(100 * 100).generate()
+                val fb = android.graphics.Color.parseColor(fallback)
+                val colors = listOf(
+                    palette.getVibrantColor(fb),
+                    palette.getLightVibrantColor(fb),
+                    palette.getDarkVibrantColor(fb),
+                    palette.getMutedColor(fb),
+                    palette.getLightMutedColor(fb),
+                    palette.getDarkMutedColor(fb),
+                ).distinct().map { colorHex(it) }
+                glowCache.put(imageUri, colors)
+                colors
+            } catch (_: Exception) {
+                emptyList<String>()
+            }
+        }
     }
+
+    private val glowCache = LruCache<String, List<String>>(50)
 
     private fun decodeBitmap(uriStr: String): Bitmap? {
         val context = appContext.reactContext ?: return null
@@ -76,6 +103,7 @@ class PaletteModule : Module() {
         palette.mutedSwatch?.let         { root.put("muted",        swatchJson(it)) }
         palette.darkMutedSwatch?.let     { root.put("darkMuted",    swatchJson(it)) }
         palette.lightVibrantSwatch?.let  { root.put("lightVibrant", swatchJson(it)) }
+        palette.lightMutedSwatch?.let    { root.put("lightMuted",   swatchJson(it)) }
         return root.toString()
     }
 

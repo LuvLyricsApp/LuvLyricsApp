@@ -13,6 +13,9 @@ type FontSize = 'small' | 'medium' | 'large';
 type LineSpacing = 'compact' | 'normal' | 'relaxed';
 type ScrollSpeed = 'slow' | 'medium' | 'fast';
 
+export type MiniPlayerBackground = 'glow' | 'tint';
+export type PlayerBackground = 'blend' | 'apple' | 'glow';
+
 interface SettingsState {
   // Appearance
   theme: Theme;
@@ -98,6 +101,18 @@ interface SettingsState {
 
   // Canvas: looping motion artwork behind the player (Echo Music providers)
   canvasEnabled: boolean;
+  /** Echo's mini player background: 'glow' (Glow animated) or 'tint' (calm cover tone). */
+  miniPlayerBackground: MiniPlayerBackground;
+  /** Echo's "Apple Music inspired" player: full-bleed cover. Off = a floating artwork card. */
+  appleMusicInspired: boolean;
+  /** Echo's "Hide volume slider" (Apple Music player only). */
+  hidePlayerVolume: boolean;
+  /** 'blend' = Apple Music for the cover, Glow animated once lyrics open. */
+  playerBackground: PlayerBackground;
+  setMiniPlayerBackground: (v: MiniPlayerBackground) => void;
+  setAppleMusicInspired: (v: boolean) => void;
+  setHidePlayerVolume: (v: boolean) => void;
+  setPlayerBackground: (v: PlayerBackground) => void;
   setCanvasEnabled: (enabled: boolean) => void;
   /** Your own Apple MusicKit developer token — unlocks Apple motion artwork. */
   appleMusicToken: string;
@@ -145,6 +160,10 @@ const DEFAULT_SETTINGS = {
   ytVideoPreview: false,
   youtubeApiKey: '',
   canvasEnabled: true,
+  miniPlayerBackground: 'glow' as MiniPlayerBackground,
+  appleMusicInspired: true,
+  hidePlayerVolume: false,
+  playerBackground: 'blend' as PlayerBackground,
   appleMusicToken: '',
   tidalToken: '',
   luvsStartAtHook: true,
@@ -216,6 +235,15 @@ export const useSettingsStore = create<SettingsState>()(
 
       canvasEnabled: true,
       setCanvasEnabled: (canvasEnabled) => set({ canvasEnabled }),
+      miniPlayerBackground: 'glow',
+      setMiniPlayerBackground: (miniPlayerBackground) => set({ miniPlayerBackground }),
+      appleMusicInspired: true,
+      // As in Echo: turning the Apple Music player on also picks its background.
+      setAppleMusicInspired: (appleMusicInspired) => set(appleMusicInspired ? { appleMusicInspired, playerBackground: 'blend' } : { appleMusicInspired }),
+      hidePlayerVolume: false,
+      setHidePlayerVolume: (hidePlayerVolume) => set({ hidePlayerVolume }),
+      playerBackground: 'blend',
+      setPlayerBackground: (playerBackground) => set({ playerBackground }),
       appleMusicToken: '',
       setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
       tidalToken: '',

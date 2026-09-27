@@ -30,6 +30,7 @@ import { MorphIcon, NudgeIcon, SwapText, Tactile } from './allegra/motion';
 import { PlayerType } from '../constants/allegraTheme';
 import { formatTimeSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
+import { useSettingsStore } from '../store/settingsStore';
 
 interface NowPlayingControlsProps {
   animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
@@ -143,6 +144,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   compact = false,
 }) => {
   const insets = useSafeAreaInsets();
+  const hideVolume = useSettingsStore(s => s.appleMusicInspired && s.hidePlayerVolume);
   const [backNudge, setBackNudge] = useState(0);
   const [forwardNudge, setForwardNudge] = useState(0);
 
@@ -242,7 +244,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           </Tactile>
         </View>
 
-        {compact ? null : <VolumeRow />}
+        {compact || hideVolume ? null : <VolumeRow />}
 
         <View style={styles.footer}>
           <Pressable onPress={() => { tick('light'); onOpenQueue(); }} hitSlop={10} style={styles.footerBtn} accessibilityRole="button" accessibilityLabel="Playing next">

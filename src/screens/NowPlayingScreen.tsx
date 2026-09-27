@@ -201,6 +201,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}
+            coverImageUri={currentSong?.coverImageUri}
+            songArtist={currentSong?.artist}
           />
         </View>
 

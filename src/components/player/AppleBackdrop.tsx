@@ -36,11 +36,18 @@ interface AppleBackdropProps {
   showHero: boolean;
 }
 
-const BLUR = 42;
-const BLEED = 80;
+// Echo's APPLE_MUSIC background: the cover blurred (150dp on a 128px decode)
+// fills the screen; the sharp cover takes the top 65% of the height.
+const BLUR = 70;
+const BLEED = 120;
+export const HERO_SHARE = 0.65;
 
-/** Hero height: full width and then some, like the reference (about 60% of the screen). */
-export const heroHeight = (width: number, height: number): number => Math.max(width * 1.12, height * 0.6);
+/** Hero height: 65% of the screen, as in Echo's fillMaxHeight(0.65f). */
+export const heroHeight = (_width: number, height: number): number => Math.round(height * HERO_SHARE);
+
+/** Echo's DstIn mask: solid to 75%, 40% at 92%, gone at the bottom edge. */
+export const HERO_MASK_POSITIONS = [0, 0.75, 0.92, 1];
+export const HERO_MASK_ALPHAS = [1, 1, 0.4, 0];
 
 const Layer: React.FC<{
   image: SkImage;
@@ -57,7 +64,7 @@ const Layer: React.FC<{
       <Mask
         mask={(
           <Rect x={0} y={0} width={width} height={heroH}>
-            <LinearGradient start={vec(0, heroH * 0.52)} end={vec(0, heroH)} colors={['#000000ff', '#00000000']} />
+            <LinearGradient start={vec(0, 0)} end={vec(0, heroH)} positions={HERO_MASK_POSITIONS} colors={HERO_MASK_ALPHAS.map(a => `rgba(0,0,0,${a})`)} />
           </Rect>
         )}
       >
@@ -81,12 +88,12 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero })
     lastUri.current = uri;
     setLayers(l => ({ prev: l.next, next: image }));
     fade.value = 0;
-    fade.value = withTiming(1, { duration: Motion.duration.cinematic, easing: Motion.ease.standard });
+    fade.value = withTiming(1, { duration: 1200, easing: Motion.ease.standard });
   }, [image, uri, fade]);
 
   const hero = useSharedValue(showHero ? 1 : 0);
   useEffect(() => {
-    hero.value = withTiming(showHero ? 1 : 0, { duration: Motion.duration.slow, easing: Motion.ease.standard });
+    hero.value = withTiming(showHero ? 1 : 0, { duration: 500, easing: Motion.ease.standard });
   }, [showHero, hero]);
   const heroOpacity = useDerivedValue(() => hero.value);
   const fadeOpacity = useDerivedValue(() => fade.value);
@@ -105,9 +112,9 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero })
             <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} />
           </Group>
         ) : null}
-        {/* Apple keeps the blurred room a touch dark so white text always reads. */}
+        {/* Echo: black 5% at the top to 40% at the bottom, so white text reads. */}
         <Rect x={0} y={0} width={width} height={height}>
-          <LinearGradient start={vec(0, 0)} end={vec(0, height)} positions={[0, 0.45, 1]} colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']} />
+          <LinearGradient start={vec(0, 0)} end={vec(0, height)} colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.4)']} />
         </Rect>
       </Canvas>
     </View>

@@ -39,6 +39,9 @@ import { Motion } from '../constants/allegraTheme';
 import { positionSV, durationSV } from '../playback/positionBus';
 import { pillBarInset } from '../navigation/tabs';
 import { isLowEndDevice } from '../utils/performanceTier';
+import GlowBackground from './player/GlowBackground';
+import { useGlowColors } from './player/useGlowColors';
+import { useSettingsStore } from '../store/settingsStore';
 
 export const PILL_PLAYER_HEIGHT = 60;
 const DISC = 46;
@@ -104,6 +107,11 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
     backgroundColor: interpolateColor(mix.value, [0, 1], [fromColor.value, toColor.value]),
   }));
 
+  // Settings → Appearance → Mini player background: Echo's "Glow animated"
+  // (two drifting glows of the cover's palette) or the calm cover tint.
+  const glow = useSettingsStore(s => s.miniPlayerBackground) !== 'tint';
+  const glowColors = useGlowColors(glow ? coverImageUri : null);
+
   // ── Disc: turns slowly while playing, holds its angle when paused ─────────
   const spin = useSharedValue(0);
   useEffect(() => {
@@ -162,6 +170,11 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.shell, { left: side, right: side, bottom }, shellColor, shellMotion]}>
+        {glow ? (
+          <View style={[StyleSheet.absoluteFill, styles.glowClip]} pointerEvents="none">
+            <GlowBackground colors={glowColors} variant="mini" />
+          </View>
+        ) : null}
         <Pressable
           onPress={onOpen}
           style={styles.row}
@@ -230,6 +243,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     zIndex: 10,
   },
+  glowClip: { borderRadius: PILL_PLAYER_HEIGHT / 2, overflow: 'hidden' },
   row: {
     flex: 1,
     flexDirection: 'row',
