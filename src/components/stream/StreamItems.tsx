@@ -5,7 +5,6 @@
  */
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -16,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Glass, Motion, Radius, Signal, Space } from '../../constants/allegraTheme';
 import { Fonts } from '../../constants/fonts';
+import Artwork from '../allegra/Artwork';
 
 const formatDuration = (seconds?: number): string => {
   if (!seconds || seconds <= 0) return '';
@@ -62,13 +62,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
     style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
   >
     <View style={styles.rowArtWrap}>
-      {artwork ? (
-        <Image source={{ uri: artwork }} style={styles.rowArt} contentFit="cover" transition={Motion.duration.fast} />
-      ) : (
-        <View style={[styles.rowArt, styles.artFallback]}>
-          <Ionicons name="musical-note" size={18} color={Signal.inkFaint} />
-        </View>
-      )}
+      <Artwork uri={artwork} title={title} artist={artist} size={48} style={styles.rowArt} />
       {isCurrent ? (
         <View style={styles.nowDot}>
           <Ionicons name="volume-medium" size={11} color={Signal.waveInk} />
@@ -132,11 +126,6 @@ export const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.thumb,
-    backgroundColor: Signal.bgSubtle,
-  },
-  artFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: Signal.bgSubtle,
   },
   nowDot: {

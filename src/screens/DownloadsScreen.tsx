@@ -58,7 +58,8 @@ const DownloadsScreen: React.FC = () => {
   }, [songs, sort, filter]);
 
   // The room takes the colour of what's playing, else of the newest download.
-  const stageArt = currentCover ?? downloaded.find(s => s.coverImageUri)?.coverImageUri;
+  const stageSong = downloaded.find(s => s.coverImageUri) ?? downloaded[0];
+  const stageArt = currentCover ?? stageSong?.coverImageUri;
   const palette = useArtworkPalette(stageArt);
   const eyebrowInk = accentInk(palette);
 
@@ -117,6 +118,8 @@ const DownloadsScreen: React.FC = () => {
         <View style={styles.heroRow}>
           <Sleeve
             artwork={stageArt}
+            title={stageSong?.title ?? 'Downloads'}
+            artist={stageSong?.artist}
             size={112}
             playing={false}
             onPress={() => play(0)}

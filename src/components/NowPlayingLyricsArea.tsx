@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Image, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
 import AppleArtworkStage from './AppleArtworkStage';
+import Artwork from './allegra/Artwork';
 // Theme context used via props
 type ProcessedLyric = { timestamp: number; text: string };
 
@@ -14,6 +14,9 @@ interface NowPlayingLyricsAreaProps {
   currentTime: any;
   onLyricPress: (timestamp: number) => void;
   songTitle?: string;
+  songArtist?: string;
+  /** Changes on every track change; drives the artwork transition. */
+  songId?: string;
   isUserScrollingRef: React.MutableRefObject<boolean>;
   scrollTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
@@ -35,13 +38,13 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   currentTime,
   onLyricPress,
   songTitle,
+  songArtist,
+  songId,
   isUserScrollingRef,
   scrollTimeoutRef,
   flatListRef,
   coverImageUri,
   storePlaying,
-  isDark,
-  colors,
   onCoverLongPress,
   canvasVisible = false,
 }) => {
@@ -51,6 +54,9 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
         {canvasVisible ? null : (
           <AppleArtworkStage
             uri={coverImageUri}
+            title={songTitle ?? 'Untitled'}
+            artist={songArtist}
+            songKey={songId ?? songTitle ?? 'song'}
             size={width - 64}
             playing={storePlaying}
             onLongPress={onCoverLongPress}
@@ -89,13 +95,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
               pressed && { opacity: 0.8 },
             ]}
           >
-            {coverImageUri ? (
-              <Image source={{ uri: coverImageUri }} style={styles.mainCover} />
-            ) : (
-              <View style={[styles.mainCover, { backgroundColor: isDark ? '#333' : colors.cardHover, justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="musical-note" size={60} color={isDark ? '#666' : colors.textMuted} />
-              </View>
-            )}
+            <Artwork uri={coverImageUri} title={songTitle ?? 'Untitled'} artist={songArtist} size={250} priority="high" style={styles.mainCover} />
           </Pressable>
         </View>
         )

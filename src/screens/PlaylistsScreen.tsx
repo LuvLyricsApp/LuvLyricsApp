@@ -261,7 +261,7 @@ export const PlaylistsScreen: React.FC = () => {
                 onLongPress={(e) => handleLongPress(item, e)}
                 delayLongPress={300}
               >
-                <MosaicCover songs={playlistSongs[item.id] || []} size={160} />
+                <MosaicCover songs={playlistSongs[item.id] || []} size={160} name={item.name} />
                 <Text style={styles.playlistName} numberOfLines={2}>
                   {item.name}
                 </Text>

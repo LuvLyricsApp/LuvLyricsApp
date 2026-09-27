@@ -169,3 +169,42 @@ favorites". The Dynamic Island mini player now shows on Stream as well as Home.
 - **Motion** — `RiseIn` is Allegra's `riseIn` (opacity 0→1, y 18→0,
   scale 0.97→1, 400 ms decelerate, 40 ms stagger); `Tactile` is the press
   spring (stiffness 400, damping 30). Transform and opacity only.
+
+## Cover art
+
+- **One component:** every song cover renders through `Artwork`. The real
+  cover cross-dissolves in over a designed placeholder, and if it fails to
+  load, the placeholder stays.
+- **Designed fallback:** `GeneratedArtwork` builds a cover from the song
+  itself: a duotone from Allegra's colour family (picked by hashing the title
+  and artist, so a song always gets the same one), an oversized monogram, faint
+  vinyl grooves, and the title and artist set in Inter. Empty playlists get one
+  made from the playlist name. The Luvs card uses the same duotone as its
+  background.
+- **Backfill:** a few seconds after launch, `useCoverArtBackfill` looks up
+  library songs that have no cover, most-played first and 40 per session. It
+  tries iTunes at 1000×1000 first, then JioSaavn. A cover is only accepted when
+  the title, artist and duration agree; a wrong cover is worse than the designed
+  one. Misses are retried after a week. The result is saved with a
+  single-column update that never overwrites a cover you already have.
+- Stream tracks resolved from YouTube Music fall back to YouTube Music's own
+  thumbnail if the Saavn row has no art.
+
+## Motion system
+
+Grounded in Material 3 motion and Apple's interaction guidance: springs for
+anything a finger can interrupt, 200–400 ms for state changes, 30–60 ms list
+staggers, and at most two effects moving on a screen at once.
+
+| Moment | Motion |
+|--------|--------|
+| Now Playing opens | the cover rises in (scale 0.9, +24 px) on a spring |
+| Next / previous | the cover slides out and the new one slides in from the direction of travel; title and artist lift out and rise in (`SwapText`) |
+| Play/pause, like | the glyph morphs (rotate, scale, cross-fade) instead of snapping (`MorphIcon`) |
+| Skip buttons | the glyph leans the way it skips (`NudgeIcon`), plus a haptic |
+| Any tap | tactile press spring (`Tactile`) |
+| Stream scroll | the hero drifts at parallax speed and dims; a compact glass header takes over past the title |
+| Lists and sections | rise in with a 40 ms stagger (`RiseIn`) |
+| Tabs | a glass highlight springs to the selected tab, and the icon lifts once |
+
+Reduce Motion collapses every one of these to a fade.

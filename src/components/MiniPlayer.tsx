@@ -40,6 +40,7 @@ import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout'
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
+import Artwork from './allegra/Artwork';
 
 const { width } = Dimensions.get('window');
 
@@ -87,16 +88,13 @@ interface TrackInfoProps {
 const TrackInfo = memo(({ title, artist, coverImageUri, isIsland, onPress, onBodyPress }: TrackInfoProps) => (
   <>
     <Pressable onPress={(e) => { e.stopPropagation(); onPress(); }}>
-      {coverImageUri ? (
-        <Animated.Image
-          source={{ uri: coverImageUri }}
-          style={[styles.coverThumbnail, isIsland && styles.islandCover]}
-        />
-      ) : (
-        <View style={[styles.placeholderThumbnail, isIsland && styles.islandCover]}>
-          <Ionicons name="musical-notes" size={20} color="#666" />
-        </View>
-      )}
+      <Artwork
+        uri={coverImageUri}
+        title={title || 'Untitled'}
+        artist={artist}
+        size={48}
+        style={[styles.coverThumbnail, isIsland && styles.islandCover]}
+      />
     </Pressable>
     <Pressable onPress={(e) => { e.stopPropagation(); onBodyPress(); }} style={styles.info}>
       <Text style={styles.title} numberOfLines={1}>{title}</Text>

@@ -54,7 +54,8 @@ export const resolveToCatalog = async (yt: YTSong, search: CatalogSearch): Promi
     const score = matchScore(yt, c);
     if (score !== null && (!best || score > best.score)) best = { song: c, score };
   }
-  const result = best?.song ?? null;
+  // Some catalog rows ship without art; YouTube Music's thumbnail is the same release.
+  const result = best ? (best.song.highResArt ? best.song : { ...best.song, highResArt: yt.thumbnail ?? '' }) : null;
   resolved.set(key, result);
   return result;
 };

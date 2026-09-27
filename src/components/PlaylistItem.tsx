@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, interpolate, Easing, cancelAnimation, SharedValue } from 'react-native-reanimated';
 import { RenderItemParams } from 'react-native-draggable-flatlist';
 import { Song } from '../types/song';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useThemeColors } from '../contexts/ThemeContext';
+import Artwork from './allegra/Artwork';
 
 interface PlaylistItemProps extends Partial<RenderItemParams<Song>> {
   item: Song;
@@ -117,13 +117,7 @@ const PlaylistItemComponent: React.FC<PlaylistItemProps> = ({
       </View>
 
       <View style={styles.smallCoverContainer}>
-        {item.coverImageUri ? (
-          <Image source={{ uri: item.coverImageUri }} style={styles.smallCover} contentFit="cover" cachePolicy="memory-disk" />
-        ) : (
-          <View style={[styles.smallCover, styles.placeholderCover]}>
-            <Ionicons name="musical-note" size={20} color="#666" />
-          </View>
-        )}
+        <Artwork uri={item.coverImageUri} title={item.title} artist={item.artist} size={48} style={styles.smallCover} />
         {isScanning && (
           <View style={styles.scanningOverlay}>
             <Ionicons name="sync" size={16} color="#FFF" />

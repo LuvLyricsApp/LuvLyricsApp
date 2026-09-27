@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,9 @@ import { luvsEngine } from '../services/luvsEngine';
 import CanvasVideoLayer from './CanvasVideoLayer';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { Glass, Radius, Signal } from '../constants/allegraTheme';
+import Artwork from './allegra/Artwork';
+import { duotoneFor } from './allegra/artworkSeed';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ART_SIZE = SCREEN_WIDTH * 0.72;
 const PROGRESS_W = SCREEN_WIDTH - 40;
@@ -266,6 +269,7 @@ export const LuvCard = React.memo<LuvCardProps>(
      isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
     // Only the card on screen looks up and decodes a canvas.
+    const duotone = useMemo(() => duotoneFor(`${song.title}|${song.artist ?? ''}`), [song.title, song.artist]);
     const canvas = useCanvasArtwork(isActive ? { title: song.title, artist: song.artist, duration: song.duration } : null);
     const [canvasVisible, setCanvasVisible] = useState(false);
     const [burstTrigger, setBurstTrigger] = useState(0);
@@ -388,13 +392,22 @@ export const LuvCard = React.memo<LuvCardProps>(
         renderToHardwareTextureAndroid
       >
         <Pressable style={[StyleSheet.absoluteFill, styles.pressable]} onPress={handleTap}>
-          {/* Full-screen blurred bg */}
-          {song.highResArt && (
+          {/* Full-screen blurred bg — or, with no cover, the song's own duotone
+              (the same one its generated artwork uses) so the card is never black. */}
+          {song.highResArt ? (
             <Image
               source={{ uri: song.highResArt }}
               style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: luvHeight }]}
               blurRadius={isActive ? 45 : 0}
               resizeMode="cover"
+            />
+          ) : (
+            <LinearGradient
+              colors={[duotone[0], duotone[1], duotone[0]]}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
             />
           )}
 
@@ -416,13 +429,9 @@ export const LuvCard = React.memo<LuvCardProps>(
               <Animated.View style={[styles.artGlow, glowStyle]} />
 
               {/* Album art */}
-              {song.highResArt ? (
-                <Image source={{ uri: song.highResArt }} style={styles.coverArt} resizeMode="cover" />
-              ) : (
-                <View style={styles.coverArtFallback}>
-                  <Ionicons name="musical-note" size={64} color="rgba(255,255,255,0.3)" />
-                </View>
-              )}
+              <View style={styles.coverArt}>
+                <Artwork uri={song.highResArt} title={song.title} artist={song.artist} size={ART_SIZE} priority={isActive ? 'high' : 'normal'} style={styles.coverArtInner} />
+              </View>
             </>
           ) : null}
 
@@ -488,13 +497,7 @@ export const LuvCard = React.memo<LuvCardProps>(
               style={[styles.bottomGrad, { paddingBottom: insets.bottom + 20 }]}
             >
               <View style={styles.songCard}>
-                {song.highResArt ? (
-                  <Image source={{ uri: song.highResArt }} style={styles.miniArt} />
-                ) : (
-                  <View style={styles.miniArtFallback}>
-                    <Ionicons name="musical-note" size={18} color="#fff" />
-                  </View>
-                )}
+                <Artwork uri={song.highResArt} title={song.title} artist={song.artist} size={50} style={styles.miniArt} />
                 <View style={styles.songTexts}>
                   <Text style={styles.songTitle} numberOfLines={1}>{song.title}</Text>
                   <View style={styles.artistRow}>
@@ -555,6 +558,10 @@ const styles = StyleSheet.create({
     height: ART_SIZE + 70,
     borderRadius: (ART_SIZE + 70) / 2,
     backgroundColor: 'rgba(255,255,255,0.11)',
+  },
+  coverArtInner: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 22,
   },
   coverArt: {
     width: ART_SIZE,

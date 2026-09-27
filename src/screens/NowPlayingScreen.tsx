@@ -198,6 +198,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             currentTime={positionSV}
             onLyricPress={handleLyricTap}
             songTitle={currentSong?.title}
+            songArtist={currentSong?.artist}
+            songId={currentSong?.id}
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}

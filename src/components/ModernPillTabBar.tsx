@@ -4,8 +4,9 @@
  * Center mic button bulges above the pill.
  */
 
-import React from 'react';
-import { View, StyleSheet, Pressable, Platform, ImageBackground } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { View, StyleSheet, Pressable, Platform, ImageBackground, ViewStyle } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -13,9 +14,29 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
-import { Glass, Radius, Signal } from '../constants/allegraTheme';
+import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
 
 const MIC_WRAPPER_SIZE = 56;
+const INDICATOR_W = 54;
+
+/** The selected icon gives a small lift — acknowledges the tap, then settles. */
+const TabIcon: React.FC<{ focused: boolean; children: React.ReactNode }> = ({ focused, children }) => {
+  const reduce = useReducedMotion();
+  const lift = useSharedValue(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!focused || reduce) return;
+    lift.value = withSequence(
+      withTiming(1, { duration: Motion.duration.fast, easing: Motion.ease.decelerate }),
+      withSpring(0, Motion.spring.tactile),
+    );
+  }, [focused, reduce, lift]);
+  const style = useAnimatedStyle((): ViewStyle => ({
+    transform: [{ translateY: -3 * lift.value }, { scale: 1 + 0.12 * lift.value }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+};
 
 export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   state,
@@ -27,6 +48,35 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const micEnabled = useSettingsStore(s => s.micEnabled);
   const isDark = useIsDark();
   const colors = useThemeColors();
+
+  // Glass highlight that springs between tabs. Positions are measured, and it
+  // moves by translateX only (never width) — Allegra's transform-only rule.
+  const reduceMotion = useReducedMotion();
+  const [groupX, setGroupX] = useState({ left: 0, right: 0 });
+  const [tabCenters, setTabCenters] = useState<Record<string, number>>({});
+  const indicatorX = useSharedValue(0);
+  const indicatorOpacity = useSharedValue(0);
+  const splitAt = Math.ceil(state.routes.length / 2);
+  const activeKey = state.routes[state.index]?.key;
+  const activeCenter = activeKey !== undefined && tabCenters[activeKey] !== undefined
+    ? (state.index < splitAt ? groupX.left : groupX.right) + tabCenters[activeKey]
+    : null;
+
+  useEffect(() => {
+    if (activeCenter === null) return;
+    const target = activeCenter - INDICATOR_W / 2;
+    if (indicatorOpacity.value === 0 || reduceMotion) {
+      indicatorX.value = target;
+      indicatorOpacity.value = withTiming(1, { duration: Motion.duration.base });
+    } else {
+      indicatorX.value = withSpring(target, Motion.spring.sheet);
+    }
+  }, [activeCenter, reduceMotion, indicatorX, indicatorOpacity]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    opacity: indicatorOpacity.value,
+    transform: [{ translateX: indicatorX.value }],
+  }));
 
   // Completely hide tab bar on Luvs
   const currentRoute = state.routes[state.index];
@@ -88,13 +138,20 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
         accessibilityRole="tab"
         accessibilityState={{ selected: isFocused }}
         accessibilityLabel={typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name}
+        onLayout={e => {
+          const { x, width } = e.nativeEvent.layout;
+          const center = x + width / 2;
+          setTabCenters(prev => (prev[route.key] === center ? prev : { ...prev, [route.key]: center }));
+        }}
         style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
       >
-        {options.tabBarIcon?.({
-          focused: isFocused,
-          color: isFocused ? activeIconColor : inactiveIconColor,
-          size: 24,
-        })}
+        <TabIcon focused={isFocused}>
+          {options.tabBarIcon?.({
+            focused: isFocused,
+            color: isFocused ? activeIconColor : inactiveIconColor,
+            size: 24,
+          })}
+        </TabIcon>
         {/* Allegra route marker: the stable signal color, never artwork-tinted. */}
         <View style={[styles.activeMarker, { opacity: isFocused ? 1 : 0 }]} />
       </Pressable>
@@ -135,10 +192,14 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
         <BlurView intensity={60} tint={isDark ? 'dark' : 'light'} style={styles.blur}>
           <View style={styles.tabsRow}>
+            <Animated.View pointerEvents="none" style={[styles.indicator, indicatorStyle]} />
             {/* Left tabs */}
             {/* Each side is weighted by its tab count so an odd number of tabs
                 still spaces every icon evenly around the centre mic. */}
-            <View style={[styles.tabGroup, { flex: leftRoutes.length }]}>
+            <View
+              style={[styles.tabGroup, { flex: leftRoutes.length }]}
+              onLayout={e => { const x = e.nativeEvent.layout.x; setGroupX(g => (g.left === x ? g : { ...g, left: x })); }}
+            >
               {leftRoutes.map((route, i) => renderTab(route, i, 0))}
             </View>
 
@@ -150,7 +211,10 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
             )}
 
             {/* Right tabs */}
-            <View style={[styles.tabGroup, { flex: rightRoutes.length }]}>
+            <View
+              style={[styles.tabGroup, { flex: rightRoutes.length }]}
+              onLayout={e => { const x = e.nativeEvent.layout.x; setGroupX(g => (g.right === x ? g : { ...g, right: x })); }}
+            >
               {rightRoutes.map((route, i) => renderTab(route, i, midpoint))}
             </View>
           </View>
@@ -221,6 +285,17 @@ const styles = StyleSheet.create({
   },
   tabPressed: {
     transform: [{ scale: 0.92 }],
+  },
+  indicator: {
+    position: 'absolute',
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: INDICATOR_W,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
   },
   activeMarker: {
     width: 4,

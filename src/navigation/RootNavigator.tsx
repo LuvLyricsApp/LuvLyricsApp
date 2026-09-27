@@ -23,6 +23,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 import { useStreamSession } from '../hooks/useStreamSession';
+import { useCoverArtBackfill } from '../hooks/useCoverArtBackfill';
 
 // Tabs whose layout leaves room for the Dynamic Island mini player up top.
 const ISLAND_ROUTES = new Set(['Home', 'Stream']);
@@ -33,6 +34,7 @@ export const RootNavigator: React.FC = () => {
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   useStreamSession();
+  useCoverArtBackfill();
 
   // Island mode: only render MiniPlayer on the Home and Stream tabs.
   // Classic bar mode: render MiniPlayer on every tab/screen — except Luvs, which is

@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated as RNAnimated } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Song } from '../types/song';
@@ -8,6 +7,7 @@ import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { songHasAnyLyrics } from '../utils/lyricsState';
+import Artwork from './allegra/Artwork';
 
 interface SongListItemProps {
   song: Song;
@@ -72,13 +72,7 @@ export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQ
         unstable_pressDelay={50}
       >
         <View style={styles.artworkContainer}>
-          {song.coverImageUri ? (
-            <Image source={{ uri: song.coverImageUri }} style={styles.artwork} contentFit="cover" cachePolicy="memory-disk" />
-          ) : (
-            <View style={[styles.artwork, styles.placeholderArtwork]}>
-              <Ionicons name="musical-note" size={20} color={colors.textMuted} />
-            </View>
-          )}
+          <Artwork uri={song.coverImageUri} title={song.title} artist={song.artist} size={56} style={styles.artwork} />
           {isScanning && (
             <View style={styles.statusOverlay}>
               <Ionicons name="sync" size={14} color="#FFF" style={styles.spinningIcon} />

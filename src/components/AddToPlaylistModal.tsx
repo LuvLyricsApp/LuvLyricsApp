@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
-  Image,
   Dimensions,
   TextInput,
   ActivityIndicator,
@@ -23,6 +22,7 @@ import { RootStackParamList } from '../types/navigation';
 import { Song, Playlist } from '../types/song';
 import * as playlistQueries from '../database/playlistQueries';
 import { safeGoBack } from '../utils/navigationService';
+import Artwork from './allegra/Artwork';
 
 type AddToPlaylistNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AddToPlaylistRouteProp = RouteProp<RootStackParamList, 'AddToPlaylist'>;
@@ -123,15 +123,9 @@ export const AddToPlaylistModal = () => {
           onPress={() => toggleSelection(item.id)}
           disabled={isExisting}
         >
-          <Image
-            source={item.coverImageUri ? { uri: item.coverImageUri } : require('../../assets/icon.png')}
-            style={[styles.gridImage, isExisting && { opacity: 0.3 }]}
-          />
-          {!item.coverImageUri && (
-            <View style={[StyleSheet.absoluteFill, styles.placeholderGrid]}>
-              <Ionicons name="musical-note" size={24} color="#666" />
-            </View>
-          )}
+          <View style={[styles.gridImage, isExisting && { opacity: 0.3 }]}>
+            <Artwork uri={item.coverImageUri} title={item.title} artist={item.artist} size={GRID_ITEM_WIDTH} style={StyleSheet.absoluteFill} />
+          </View>
           {isSelected && (
             <View style={styles.checkOverlay}>
               <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
@@ -154,15 +148,9 @@ export const AddToPlaylistModal = () => {
         disabled={isExisting}
       >
         <View style={styles.listLeft}>
-          <Image
-            source={item.coverImageUri ? { uri: item.coverImageUri } : require('../../assets/icon.png')}
-            style={[styles.listImage, isExisting && { opacity: 0.5 }]}
-          />
-          {!item.coverImageUri && (
-            <View style={[styles.listImage, styles.placeholderList]}>
-              <Ionicons name="musical-note" size={20} color="#666" />
-            </View>
-          )}
+          <View style={[styles.listImage, isExisting && { opacity: 0.5 }]}>
+            <Artwork uri={item.coverImageUri} title={item.title} artist={item.artist} size={48} style={StyleSheet.absoluteFill} />
+          </View>
           <View style={styles.listTextContainer}>
             <Text style={[styles.listTitle, isExisting && { color: '#666' }]} numberOfLines={1}>{item.title}</Text>
             <Text style={styles.listSubtitle} numberOfLines={1}>{item.artist}</Text>

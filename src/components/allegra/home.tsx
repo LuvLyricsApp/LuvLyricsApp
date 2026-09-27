@@ -14,12 +14,12 @@
 import React, { useState } from 'react';
 import { LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
 import { Blur, Canvas, Image as SkiaImage, LinearGradient as SkiaLinearGradient, Mask, Rect, useImage, vec } from '@shopify/react-native-skia';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Fonts } from '../../constants/fonts';
-import { Glass, Motion, Radius, Signal, Space } from '../../constants/allegraTheme';
+import { Glass, Radius, Signal, Space } from '../../constants/allegraTheme';
 import { Tactile } from './motion';
+import Artwork from './Artwork';
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -86,14 +86,10 @@ export const GlassButton: React.FC<{ label?: string; icon?: IconName; onPress: (
 
 // ─── Artwork ───────────────────────────────────────────────────────────────
 
-const Art: React.FC<{ uri?: string; radius: number; size?: number; style?: object }> = ({ uri, radius, size, style }) =>
-  uri ? (
-    <Image source={{ uri }} style={[{ borderRadius: radius }, size ? { width: size, height: size } : styles.fill, style]} contentFit="cover" transition={Motion.duration.base} />
-  ) : (
-    <View style={[{ borderRadius: radius }, size ? { width: size, height: size } : styles.fill, styles.artFallback, style]}>
-      <Ionicons name="musical-notes" size={(size ?? 120) * 0.28} color={Signal.inkFaint} />
-    </View>
-  );
+/** Cover art with the designed fallback — never a grey box. */
+const Art: React.FC<{ uri?: string; title: string; artist?: string; size: number; priority?: 'low' | 'normal' | 'high' }> = ({ uri, title, artist, size, priority }) => (
+  <Artwork uri={uri} title={title} artist={artist} size={size} priority={priority} style={StyleSheet.absoluteFill} />
+);
 
 // ─── Spotlight hero ────────────────────────────────────────────────────────
 
@@ -140,12 +136,12 @@ export const SpotlightWash: React.FC<{ artwork?: string }> = ({ artwork }) => {
 };
 
 /** Two tilted glass plates behind a slightly rotated cover, with the play bubble. */
-export const Sleeve: React.FC<{ artwork?: string; size: number; playing?: boolean; onPress: () => void; label: string }> = ({ artwork, size, playing, onPress, label }) => (
+export const Sleeve: React.FC<{ artwork?: string; title: string; artist?: string; size: number; playing?: boolean; onPress: () => void; label: string }> = ({ artwork, title, artist, size, playing, onPress, label }) => (
   <View style={{ width: size, height: size }}>
     <View style={[styles.plate, { width: size, height: size, opacity: 0.65, transform: [{ translateX: -size * 0.09 }, { translateY: size * 0.03 }, { rotate: '-10deg' }] }]} />
     <View style={[styles.plate, styles.plateFront, { width: size, height: size, transform: [{ translateX: -size * 0.045 }, { translateY: size * 0.015 }, { rotate: '-6deg' }] }]} />
     <Tactile onPress={onPress} pressScale={0.98} accessibilityRole="button" accessibilityLabel={label} style={[styles.cover, { width: size, height: size }]}>
-      <Art uri={artwork} radius={0} />
+      <Art uri={artwork} title={title} artist={artist} size={size} priority="high" />
       <View style={styles.coverPlay}>
         <Ionicons name={playing ? 'pause' : 'play'} size={20} color={Signal.waveInk} style={playing ? undefined : styles.playNudge} />
       </View>
@@ -157,7 +153,9 @@ export const Sleeve: React.FC<{ artwork?: string; size: number; playing?: boolea
 
 export const QuickCard: React.FC<{ title: string; subtitle?: string; artwork?: string; isCurrent?: boolean; onPress: () => void; onLongPress?: () => void }> = ({ title, subtitle, artwork, isCurrent, onPress, onLongPress }) => (
   <Tactile onPress={onPress} onLongPress={onLongPress} pressScale={0.98} accessibilityRole="button" accessibilityLabel={title} style={[styles.quick, isCurrent && styles.currentBorder]}>
-    <Art uri={artwork} radius={0} size={64} />
+    <View style={styles.quickArt}>
+      <Art uri={artwork} title={title} artist={subtitle} size={64} />
+    </View>
     <View style={styles.quickCopy}>
       <Text style={[styles.quickTitle, isCurrent && { color: Signal.wave }]} numberOfLines={1}>{title}</Text>
       {subtitle ? <Text style={styles.quickSub} numberOfLines={1}>{subtitle}</Text> : null}
@@ -182,7 +180,7 @@ export const Tile: React.FC<{
 }> = ({ title, subtitle, eyebrow, artwork, size = 156, isCurrent, onPress, onLongPress, onAction, actionIcon = 'arrow-down-circle-outline' }) => (
   <View style={{ width: size }}>
     <Tactile onPress={onPress} onLongPress={onLongPress} pressScale={0.97} accessibilityRole="button" accessibilityLabel={title} style={[styles.tileArt, { width: size, height: size }, isCurrent && styles.currentBorder]}>
-      <Art uri={artwork} radius={0} />
+      <Art uri={artwork} title={title} artist={subtitle} size={size} />
       <View style={styles.tilePlay}>
         <Ionicons name={isCurrent ? 'volume-medium' : 'play'} size={18} color={Signal.waveInk} style={isCurrent ? undefined : styles.playNudge} />
       </View>
@@ -218,7 +216,7 @@ export const ChartRow: React.FC<{
     <Tactile onPress={onPress} onLongPress={onLongPress} pressScale={0.985} accessibilityRole="button" accessibilityLabel={`${title}${subtitle ? `, ${subtitle}` : ''}`} wrapperStyle={styles.flex} style={styles.chartMain}>
       <Text style={[styles.rank, isCurrent && { color: Signal.wave }]}>{rank}</Text>
       <View style={styles.chartArt}>
-        <Art uri={artwork} radius={0} />
+        <Art uri={artwork} title={title} artist={subtitle} size={48} />
         <View style={styles.chartPlay}>
           <Ionicons name={isCurrent ? 'volume-medium' : 'play'} size={14} color="#fff" />
         </View>
@@ -342,6 +340,7 @@ export const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
+  quickArt: { width: 64, height: 64 },
   quickCopy: { flex: 1, minWidth: 0 },
   quickTitle: { fontFamily: Fonts.interSemiBold, fontSize: 14, color: Signal.ink },
   quickSub: { fontFamily: Fonts.interRegular, fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
@@ -419,5 +418,4 @@ export const styles = StyleSheet.create({
   },
   moodLabel: { fontFamily: Fonts.interBold, fontSize: 17, letterSpacing: -0.3, color: Signal.ink },
   moodNote: { fontFamily: Fonts.interRegular, fontSize: 12, color: 'rgba(244, 241, 234, 0.72)', marginTop: 2 },
-  artFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: Signal.bgSubtle },
 });

@@ -83,6 +83,7 @@ unmounts mid-load.
 | Lyrics providers | `src/services/lyrics/` — Echo Music cascade (YouLyPlus, Paxsenix, Unison, BetterLyrics, SimpMusic, LRCLIB, KuGou), runs before the Lyrica backend in `LyricaService.fetchLyrics` |
 | Canvas (motion artwork) | `src/services/canvas/`, `src/hooks/useCanvasArtwork.ts`, `src/components/CanvasVideoLayer.tsx` — see `docs/canvas-and-providers.md` |
 | Design tokens | `src/constants/allegraTheme.ts` — Allegra "Soft Signal" colors, radius, motion |
+| Artwork | `src/components/allegra/Artwork.tsx` — **every** song cover renders through `<Artwork>`: real cover cross-dissolves over `GeneratedArtwork` (per-song duotone + monogram, `artworkSeed.ts`); never a grey box / note icon. `useCoverArtBackfill` (RootNavigator) fills missing library covers from iTunes 1000px → Saavn via `services/covers/CoverArtResolver.ts`, persisted with the one-column `patchCoverImageUri` |
 | Allegra UI system | `src/components/allegra/` — `MusicFlowField` (Allegra's WebGL shader ported to a Skia runtime shader), `DynamicAura` (field + flutes + vignette + scrim, used by Stream, Downloads, Now Playing), `palette.ts` / `useArtworkPalette` (cover colours via native Palette, Allegra's vivify rules), `motion.tsx` (`RiseIn`, `Tactile`), `home.tsx` (spotlight, sleeve, rail, tiles, chart rows, mood cards, buttons) |
 | Streaming | `src/services/stream/` — `StreamService` (play/queue/radio/lyrics for `stream:` songs), `homeFeed.ts` (Echo-style feed), `src/screens/StreamScreen.tsx`, `src/hooks/useStreamSession.ts` (mounted in RootNavigator) |
 | Downloads | `src/screens/DownloadsScreen.tsx` — inside the Library tab stack |
@@ -105,6 +106,7 @@ unmounts mid-load.
 - `src/services/ytmusic/` is metadata only (search / next / related). Never add stream-URL extraction, client spoofing or PoToken code there — audio always comes from the catalog providers via `resolver.ts`
 - After changing the queue under a playing track, call `prepareNextInQueue()` — Media3 may have staged the old "next" for gapless advance
 - Fonts in `assets/fonts/` must be real font binaries — the Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto. Inter is the `@expo-google-fonts/inter` build (OFL, `Inter-OFL.txt`)
+- Motion: springs for anything a finger can interrupt, 200–400ms for state changes, 40ms list staggers, max two moving effects per screen, transform/opacity only. Primitives live in `components/allegra/motion.tsx` (`RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`) — reuse them instead of hand-rolling
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 
@@ -123,7 +125,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 22 suites / 264 tests passing
+node_modules\.bin\jest.cmd                  # expect 23 suites / 273 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

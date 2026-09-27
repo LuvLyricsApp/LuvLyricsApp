@@ -8,13 +8,15 @@
  * the atmosphere reaches the bottom edge. Play/pause wears the stable
  * chartreuse action color; liked state wears coral.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TimelineScrubber from './TimelineScrubber';
+import { MorphIcon, NudgeIcon, SwapText, Tactile } from './allegra/motion';
 import { Glass, PlayerType, Radius, Signal, Space } from '../constants/allegraTheme';
 import { CanvasSource } from '../services/canvas/types';
 
@@ -55,6 +57,14 @@ interface NowPlayingControlsProps {
   onMorePress?: (event: GestureResponderEvent) => void;
 }
 
+/** Motion is felt as well as seen: every transport tap gets a haptic tick. */
+const tick = (kind: 'light' | 'medium' | 'success') => {
+  const run = kind === 'success'
+    ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    : Haptics.impactAsync(kind === 'medium' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+  run.catch(() => {});
+};
+
 const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   animatedStyle,
   controlsVisible,
@@ -78,6 +88,8 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   onMorePress,
 }) => {
   const insets = useSafeAreaInsets();
+  const [backNudge, setBackNudge] = useState(0);
+  const [forwardNudge, setForwardNudge] = useState(0);
   // Over artwork and canvas the player is always a dark room; light mode only
   // softens the scrim.
   const ink = isDark ? Signal.ink : colors.textPrimary;
@@ -100,36 +112,38 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
 
         <View style={styles.metaRow}>
           <View style={styles.metaText}>
-            <Text style={[styles.title, { color: ink }]} numberOfLines={1}>
-              {currentSongTitle || 'Not playing'}
-            </Text>
-            <Text style={[styles.artist, { color: inkMuted }]} numberOfLines={1}>
-              {currentSongArtist || 'Unknown Artist'}
-            </Text>
+            <View style={styles.swapLine}>
+              <SwapText style={[styles.title, { color: ink }]} numberOfLines={1}>
+                {currentSongTitle || 'Not playing'}
+              </SwapText>
+            </View>
+            <View style={styles.swapLineSmall}>
+              <SwapText style={[styles.artist, { color: inkMuted }]} numberOfLines={1}>
+                {currentSongArtist || 'Unknown Artist'}
+              </SwapText>
+            </View>
           </View>
 
-          <Pressable
-            onPress={onToggleLike}
+          <Tactile
+            onPress={() => { tick(isCurrentSongLiked ? 'light' : 'success'); onToggleLike(); }}
             hitSlop={10}
+            pressScale={0.88}
             accessibilityRole="button"
             accessibilityLabel={isCurrentSongLiked ? 'Unlike' : 'Like'}
-            style={({ pressed }) => [styles.roundGlass, pressed && styles.pressed]}
+            style={styles.roundGlass}
           >
-            <Ionicons
-              name={isCurrentSongLiked ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isCurrentSongLiked ? Signal.accent : ink}
-            />
-          </Pressable>
-          <Pressable
-            onPress={onMorePress ?? onToggleLyrics}
+            <MorphIcon on={isCurrentSongLiked} onIcon="heart" offIcon="heart-outline" size={20} color={isCurrentSongLiked ? Signal.accent : ink} />
+          </Tactile>
+          <Tactile
+            onPress={e => { tick('light'); (onMorePress ?? onToggleLyrics)(e); }}
             hitSlop={10}
+            pressScale={0.88}
             accessibilityRole="button"
             accessibilityLabel="More"
-            style={({ pressed }) => [styles.roundGlass, pressed && styles.pressed]}
+            style={styles.roundGlass}
           >
             <Ionicons name="ellipsis-horizontal" size={20} color={ink} />
-          </Pressable>
+          </Tactile>
         </View>
 
         <View style={styles.scrubber}>
@@ -137,41 +151,39 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         </View>
 
         <View style={styles.transport}>
-          <Pressable
-            onPress={onSkipBackward}
+          <Tactile
+            onPress={() => { tick('light'); setBackNudge(n => n + 1); onSkipBackward(); }}
             hitSlop={12}
+            pressScale={0.86}
             accessibilityRole="button"
             accessibilityLabel="Previous"
-            style={({ pressed }) => [styles.transportBtn, pressed && styles.pressed]}
+            style={styles.transportBtn}
           >
-            <Ionicons name="play-back" size={38} color={ink} />
-          </Pressable>
+            <NudgeIcon name="play-back" size={38} color={ink} direction={-1} trigger={backNudge} />
+          </Tactile>
 
-          <Pressable
-            onPress={onTogglePlay}
+          <Tactile
+            onPress={() => { tick('medium'); onTogglePlay(); }}
+            pressScale={0.9}
             accessibilityRole="button"
             accessibilityLabel={storePlaying ? 'Pause' : 'Play'}
-            style={({ pressed }) => [styles.playBtn, pressed && styles.pressed]}
+            style={styles.playBtn}
           >
             <Animated.View style={playButtonStyle}>
-              <Ionicons
-                name={storePlaying ? 'pause' : 'play'}
-                size={36}
-                color={Signal.waveInk}
-                style={storePlaying ? undefined : styles.playGlyphNudge}
-              />
+              <MorphIcon on={storePlaying} onIcon="pause" offIcon="play" size={36} color={Signal.waveInk} offStyle={styles.playGlyphNudge} />
             </Animated.View>
-          </Pressable>
+          </Tactile>
 
-          <Pressable
-            onPress={onSkipForward}
+          <Tactile
+            onPress={() => { tick('light'); setForwardNudge(n => n + 1); onSkipForward(); }}
             hitSlop={12}
+            pressScale={0.86}
             accessibilityRole="button"
             accessibilityLabel="Next"
-            style={({ pressed }) => [styles.transportBtn, pressed && styles.pressed]}
+            style={styles.transportBtn}
           >
-            <Ionicons name="play-forward" size={38} color={ink} />
-          </Pressable>
+            <NudgeIcon name="play-forward" size={38} color={ink} direction={1} trigger={forwardNudge} />
+          </Tactile>
         </View>
 
         <View style={styles.footerRow}>
@@ -234,6 +246,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+  },
+  swapLine: {
+    height: 28,
+    overflow: 'hidden',
+  },
+  swapLineSmall: {
+    height: 24,
+    marginTop: 2,
+    overflow: 'hidden',
   },
   metaText: {
     flex: 1,

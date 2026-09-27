@@ -32,7 +32,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
-import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
+import { BlurIntensity, Glass, Radius, Signal, Space } from '../constants/allegraTheme';
+import { BlurView } from 'expo-blur';
 import { Fonts } from '../constants/fonts';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
@@ -219,6 +220,13 @@ const StreamScreen: React.FC = () => {
     transform: [{ translateY: interpolate(scrollY.value, [-100, 0, 400], [-30, 0, 120], Extrapolation.CLAMP) }],
   }));
 
+  // iOS large-title collapse: a compact glass bar takes over once the big
+  // title has scrolled under the status bar.
+  const compactStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [150, 210], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [150, 210], [-6, 0], Extrapolation.CLAMP) }],
+  }));
+
   const onStagePlay = () => {
     if (stage?.live) togglePlayback();
     else if (pickedForYou) play([pickedForYou, ...(feed?.quickPicks ?? [])], 0);
@@ -237,6 +245,8 @@ const StreamScreen: React.FC = () => {
         <View style={styles.now}>
           <Sleeve
             artwork={stage.artwork}
+            title={stage.title}
+            artist={stage.artist}
             size={128}
             playing={stage.live && isPlaying}
             onPress={onStagePlay}
@@ -298,10 +308,11 @@ const StreamScreen: React.FC = () => {
     </Animated.View>
   );
 
-  const chart = (list: UnifiedSong[]) =>
+  // Rows cascade in 40ms apart (research: 30–60ms offsets read as one gesture).
+  const chart = (list: UnifiedSong[], firstIndex = 0) =>
     list.map((song, i) => (
+      <RiseIn key={streamIdFor(song)} index={firstIndex + i}>
       <ChartRow
-        key={streamIdFor(song)}
         rank={i + 1}
         title={song.title}
         subtitle={song.artist}
@@ -312,6 +323,7 @@ const StreamScreen: React.FC = () => {
         onAction={() => save(song)}
         actionLabel={`Save ${song.title} to Downloads`}
       />
+      </RiseIn>
     ));
 
   const tileShelf = (key: string, list: UnifiedSong[], eyebrowFor?: (s: UnifiedSong, i: number) => string | undefined) => (
@@ -374,7 +386,8 @@ const StreamScreen: React.FC = () => {
     body = (
       <>
         {chartSongs.length > 0 ? (
-          <RiseIn index={1}>
+          <View>
+            <RiseIn index={1}>
             <SectionHeading
               eyebrow={feed.coldStart ? 'Trending now' : 'Radio from your favourites'}
               accent={eyebrowInk}
@@ -382,8 +395,9 @@ const StreamScreen: React.FC = () => {
               action="Play all"
               onAction={() => play(feed.quickPicks, 0)}
             />
-            {chart(chartSongs)}
-          </RiseIn>
+            </RiseIn>
+            {chart(chartSongs, 2)}
+          </View>
         ) : null}
 
         {feed.dailyDiscover.length > 0 ? (
@@ -449,6 +463,12 @@ const StreamScreen: React.FC = () => {
         {hero}
         {body}
       </Animated.ScrollView>
+      <Animated.View pointerEvents="none" style={[styles.compact, { height: insets.top + 50 }, compactStyle]}>
+        <BlurView intensity={BlurIntensity.panel} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.compactScrim} />
+        <Text style={[styles.compactTitle, { marginTop: insets.top + 12 }]}>Stream</Text>
+        <View style={styles.compactRule} />
+      </Animated.View>
       {toast ? <Toast visible message={toast} type="info" duration={2200} onDismiss={() => setToast(null)} /> : null}
     </View>
   );
@@ -516,6 +536,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
   },
+  compact: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
+  compactScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10, 11, 14, 0.45)' },
+  compactTitle: { fontFamily: Fonts.interBold, fontSize: 17, letterSpacing: -0.3, color: Signal.ink, paddingHorizontal: Space.lg - 4 },
+  compactRule: { position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: Glass.hairline },
   emptyTitle: { fontFamily: Fonts.interBold, fontSize: 18, color: Signal.ink },
   emptyBody: { fontFamily: Fonts.interRegular, fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
 });

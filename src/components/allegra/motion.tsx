@@ -7,14 +7,17 @@
  *
  * Transform and opacity only. Reduce Motion collapses to a plain fade.
  */
-import React from 'react';
-import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, PressableProps, StyleProp, StyleSheet, TextProps, TextStyle, View, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   EntryAnimationsValues,
+  ExitAnimationsValues,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -83,3 +86,98 @@ export const Tactile: React.FC<TactileProps> = ({ style, wrapperStyle, pressScal
     </Pressable>
   );
 };
+
+// ─── Swaps and morphs ──────────────────────────────────────────────────────
+
+const swapEnter = (_v: EntryAnimationsValues) => {
+  'worklet';
+  const t = { duration: Motion.duration.base, easing: Motion.ease.decelerate };
+  return {
+    initialValues: { opacity: 0, transform: [{ translateY: 10 }] },
+    animations: { opacity: withTiming(1, t), transform: [{ translateY: withTiming(0, t) }] },
+  };
+};
+
+const swapExit = (_v: ExitAnimationsValues) => {
+  'worklet';
+  const t = { duration: Motion.duration.fast, easing: Motion.ease.accelerate };
+  return {
+    initialValues: { opacity: 1, transform: [{ translateY: 0 }] },
+    animations: { opacity: withTiming(0, t), transform: [{ translateY: withTiming(-8, t) }] },
+  };
+};
+
+/**
+ * Text that changes in place (song title, artist): the old line lifts away,
+ * the new one rises in — Allegra's swapVariants. Keyed by the text itself.
+ */
+export const SwapText: React.FC<TextProps & { children: string }> = ({ children, ...rest }) => {
+  const reduce = useReducedMotion();
+  return (
+    <Animated.Text key={children} entering={reduce ? undefined : swapEnter} exiting={reduce ? undefined : swapExit} {...rest}>
+      {children}
+    </Animated.Text>
+  );
+};
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+/**
+ * Two-state glyph (play ↔ pause, heart ↔ heart-outline) that morphs instead of
+ * snapping: the outgoing glyph shrinks and turns away as the incoming one
+ * springs up. One shared value, so rapid toggles retarget mid-flight.
+ */
+export const MorphIcon: React.FC<{
+  on: boolean;
+  onIcon: IconName;
+  offIcon: IconName;
+  size: number;
+  color: string;
+  offStyle?: StyleProp<TextStyle>;
+}> = ({ on, onIcon, offIcon, size, color, offStyle }) => {
+  const reduce = useReducedMotion();
+  const progress = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    progress.value = reduce ? withTiming(on ? 1 : 0, { duration: Motion.duration.instant }) : withSpring(on ? 1 : 0, Motion.spring.tactile);
+  }, [on, reduce, progress]);
+  const onStyle = useAnimatedStyle((): ViewStyle => ({
+    opacity: progress.value,
+    transform: [{ rotate: `${(1 - progress.value) * -45}deg` }, { scale: 0.6 + 0.4 * progress.value }],
+  }));
+  const offAnimated = useAnimatedStyle((): ViewStyle => ({
+    opacity: 1 - progress.value,
+    transform: [{ rotate: `${progress.value * 45}deg` }, { scale: 1 - 0.4 * progress.value }],
+  }));
+  return (
+    <View style={{ width: size, height: size }}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.center, offAnimated]}>
+        <Ionicons name={offIcon} size={size} color={color} style={offStyle} />
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.center, onStyle]}>
+        <Ionicons name={onIcon} size={size} color={color} />
+      </Animated.View>
+    </View>
+  );
+};
+
+/** A glyph that leans in its direction of travel when tapped (skip ◀ ▶). */
+export const NudgeIcon: React.FC<{ name: IconName; size: number; color: string; direction: 1 | -1; trigger: number }> = ({ name, size, color, direction, trigger }) => {
+  const x = useSharedValue(0);
+  useEffect(() => {
+    if (trigger === 0) return;
+    x.value = withSequence(
+      withTiming(direction * 9, { duration: Motion.duration.instant, easing: Motion.ease.decelerate }),
+      withSpring(0, Motion.spring.tactile),
+    );
+  }, [trigger, direction, x]);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+  return (
+    <Animated.View style={style}>
+      <Ionicons name={name} size={size} color={color} />
+    </Animated.View>
+  );
+};
+
+const styles = StyleSheet.create({
+  center: { alignItems: 'center', justifyContent: 'center' },
+});
