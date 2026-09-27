@@ -11,7 +11,7 @@ import { VoiceMicButton } from './VoiceMicButton';
 import { useSettingsStore } from '../store/settingsStore';
 import { TAB_BAR_HEIGHT } from '../constants/layout';
 import { VISIBLE_TABS } from '../navigation/tabs';
-import { MoreMenu, useMoreMenu } from './MoreMenu';
+import { HostedMoreMenu, useMoreMenu } from './MoreMenu';
 import { MorphIcon } from './allegra/motion';
 
 const MIC_WRAPPER_SIZE = 56;
@@ -59,7 +59,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <View style={[styles.outerContainer, more.open && styles.outerOpen]} pointerEvents="box-none">
-      <MoreMenu
+      <HostedMoreMenu
         open={more.open}
         activeKey={more.activeKey}
         anchorBottom={TAB_BAR_HEIGHT + insets.bottom}

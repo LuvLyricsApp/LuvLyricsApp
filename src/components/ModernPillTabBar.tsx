@@ -17,7 +17,7 @@ import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
 import { Glass, Motion, Radius } from '../constants/allegraTheme';
 import { pillBarBottom, VISIBLE_TABS } from '../navigation/tabs';
-import { MoreMenu, useMoreMenu } from './MoreMenu';
+import { HostedMoreMenu, useMoreMenu } from './MoreMenu';
 import { MorphIcon } from './allegra/motion';
 
 const MORE_KEY = '__more__';
@@ -163,7 +163,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
       style={[styles.container, more.open ? { top: 0, bottom: 0, paddingBottom: bottomOffset } : { bottom: bottomOffset }]}
       pointerEvents="box-none"
     >
-      <MoreMenu
+      <HostedMoreMenu
         open={more.open}
         activeKey={more.activeKey}
         anchorBottom={bottomOffset + pill.height}

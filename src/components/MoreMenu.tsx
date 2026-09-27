@@ -25,6 +25,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { create } from 'zustand';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '../utils/haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -263,6 +264,28 @@ const styles = StyleSheet.create({
 });
 
 export default MoreMenu;
+
+// ── Hosting ───────────────────────────────────────────────────────────────
+// The tab bar owns the menu's state, but the mini player pill is mounted at
+// the root after the navigator, so a menu drawn inside the tab bar opened
+// underneath the pill. The tab bar publishes the menu here instead, and
+// MoreMenuHost draws it at the root, after the pill.
+const useHostedMenu = create<{ menu: MoreMenuProps | null }>(() => ({ menu: null }));
+
+/** Drop-in for <MoreMenu> inside a tab bar: renders nothing, publishes to the host. */
+export const HostedMoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBottom, anchorRight, onSelect, onClose }) => {
+  useEffect(() => {
+    useHostedMenu.setState({ menu: { open, activeKey, anchorBottom, anchorRight, onSelect, onClose } });
+  }, [open, activeKey, anchorBottom, anchorRight, onSelect, onClose]);
+  useEffect(() => () => useHostedMenu.setState({ menu: null }), []);
+  return null;
+};
+
+/** Mounted once at the root, after the mini player, so the menu opens over the pill. */
+export const MoreMenuHost: React.FC = () => {
+  const menu = useHostedMenu(s => s.menu);
+  return menu ? <MoreMenu {...menu} /> : null;
+};
 
 type TabState = BottomTabBarProps['state'];
 type TabNavigation = BottomTabBarProps['navigation'];
