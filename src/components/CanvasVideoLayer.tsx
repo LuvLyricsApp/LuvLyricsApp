@@ -9,7 +9,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { requireOptionalNativeModule } from 'expo';
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
@@ -19,6 +19,15 @@ import Animated, {
 import { CanvasArtwork } from '../services/canvas/types';
 import { Motion, Signal } from '../constants/allegraTheme';
 
+// expo-video needs its native module, which Android only gets if it is listed
+// in android/app/src/main/java/expo/modules/ExpoModulesPackageList.kt. A build
+// without it used to throw at import time and leave the whole app on a grey
+// screen; the canvas is decoration, so it now switches itself off instead.
+type ExpoVideo = typeof import('expo-video');
+const video: ExpoVideo | null = requireOptionalNativeModule('ExpoVideo')
+  ? (require('expo-video') as ExpoVideo)
+  : null;
+
 interface CanvasVideoLayerProps {
   canvas: CanvasArtwork | null;
   playing: boolean;
@@ -27,7 +36,8 @@ interface CanvasVideoLayerProps {
   onVisibleChange?: (visible: boolean) => void;
 }
 
-export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = ({
+const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
+  lib,
   canvas,
   playing,
   scrimStrength = 0.6,
@@ -37,7 +47,7 @@ export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = ({
   const opacity = useSharedValue(0);
 
   const source = canvas ? { uri: canvas.url, contentType: canvas.isHls ? ('hls' as const) : ('auto' as const) } : null;
-  const player = useVideoPlayer(source, p => {
+  const player = lib.useVideoPlayer(source, p => {
     p.loop = true;
     p.muted = true;
     // The canvas must never duck, pause or steal focus from the music.
@@ -68,7 +78,7 @@ export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = ({
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]} pointerEvents="none">
       <View style={[StyleSheet.absoluteFill, { backgroundColor: Signal.bgDeep }]} />
-      <VideoView
+      <lib.VideoView
         player={player}
         style={StyleSheet.absoluteFill}
         contentFit="cover"
@@ -91,5 +101,8 @@ export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = ({
     </Animated.View>
   );
 };
+
+export const CanvasVideoLayer: React.FC<CanvasVideoLayerProps> = props =>
+  (video ? <CanvasVideo {...props} lib={video} /> : null);
 
 export default React.memo(CanvasVideoLayer);

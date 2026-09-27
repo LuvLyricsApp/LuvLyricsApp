@@ -115,6 +115,7 @@ unmounts mid-load.
 - Floating glass (menus, sheets, cards) uses `allegra/Frosted` — expo-blur is a flat tint on Android unless `experimentalBlurMethod` is set, which `Frosted` does. Don't put it on always-visible chrome (the tab bar): the Android blur re-renders with every scroll frame
 - Covers never print their title twice: `GeneratedArtwork`'s on-cover label is opt-in (`label`) — only where no title sits beside it
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
+- Android uses a **checked-in** `android/app/src/main/java/expo/modules/ExpoModulesPackageList.kt`, not autolinking. A new Expo package with native code does nothing on Android until its module is added there — missing `expo-video` once made the release APK throw at import and sit on a grey screen. `src/nativeModuleList.test.ts` fails CI when the list falls behind `package.json`. The `Android smoke test` workflow boots the release build on an emulator and publishes a screenshot + logcat to the `smoke-latest` release
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 
 ## Branch naming
@@ -132,7 +133,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 25 suites / 297 tests passing
+node_modules\.bin\jest.cmd                  # expect 26 suites / 298 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

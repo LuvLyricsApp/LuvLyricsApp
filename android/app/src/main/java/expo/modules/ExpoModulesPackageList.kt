@@ -54,6 +54,7 @@ class ExpoModulesPackageList : ModulesProvider {
         expo.modules.sharing.SharingModule::class.java,
         expo.modules.sqlite.SQLiteModule::class.java,
         expo.modules.systemui.SystemUIModule::class.java,
+        expo.modules.video.VideoModule::class.java,
 
         // Local app modules
         com.lyricflow.app.modules.StartupModule::class.java,
