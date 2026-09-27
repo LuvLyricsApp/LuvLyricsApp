@@ -25,6 +25,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
 import { useVoiceSearchStore, VoicePick } from '../store/voiceSearchStore';
 import { usePlayerStore } from '../store/playerStore';
@@ -65,6 +68,7 @@ export const VoiceSearchCard: React.FC = () => {
   const { select, dismiss } = useVoiceSearchStore.getState();
   const reduce = useReducedMotion();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   // The glass takes the colours of the song on the card (or the one playing).
   const shownArt = picks[selected] ? pickArt(picks[selected]) : undefined;
   const playingArt = usePlayerStore(s => s.currentSong?.coverImageUri);
@@ -236,7 +240,17 @@ export const VoiceSearchCard: React.FC = () => {
     <View style={styles.layer} pointerEvents={interactive ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityRole="button" accessibilityLabel="Close">
-          <Frosted radius={0} intensity={28} tint={0.3} edge={false} />
+          {phase === 'listening' ? (
+            // The finger is still on the mic: dim the page but leave the tab
+            // bar clear, so the mic's bloom and level bars stay visible.
+            <LinearGradient
+              colors={['rgba(4, 5, 7, 0.72)', 'rgba(4, 5, 7, 0.55)', 'rgba(4, 5, 7, 0)']}
+              locations={[0, 0.72, 1]}
+              style={[StyleSheet.absoluteFill, { bottom: TAB_BAR_CLEARANCE + insets.bottom }]}
+            />
+          ) : (
+            <Frosted radius={0} intensity={28} tint={0.3} edge={false} />
+          )}
         </Pressable>
       </Animated.View>
 

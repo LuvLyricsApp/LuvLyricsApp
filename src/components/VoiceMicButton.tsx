@@ -1,304 +1,240 @@
-import React, { useEffect, useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, View, Text } from 'react-native';
+/**
+ * The mic in the middle of the tab bar. It answers every stage of a voice
+ * search with its own motion, so a finger on it always knows what's happening:
+ *
+ *   idle       a light disc with the mic glyph
+ *   press      sinks under the finger (spring) + a firm haptic
+ *   listening  blooms into the signal colour and grows slightly; a halo tracks
+ *              the voice level, a slow ring pulses outward, bars dance inside
+ *   thinking   after release, an arc circles the disc while results load
+ *   error      a short shake and a red flash
+ *
+ * Transform and opacity only — colour changes are cross-faded layers, never an
+ * animated backgroundColor. Reduce Motion keeps the state changes, drops the
+ * pulse, spin and shake.
+ */
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  interpolate,
-  Easing,
   cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-import { useVoiceCommands } from '../hooks/useVoiceCommands';
-import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
-import { useSettingsStore } from '../store/settingsStore';
 import { Ionicons } from '@expo/vector-icons';
-
-const BUTTON_SIZE = 56;
-const PRIMARY = '#EDEDED';
-const PULSE_SIZE = BUTTON_SIZE + 28;
+import * as Haptics from 'expo-haptics';
+import { useVoiceCommands } from '../hooks/useVoiceCommands';
+import { useSettingsStore } from '../store/settingsStore';
+import { useVoiceSearchStore } from '../store/voiceSearchStore';
+import { Motion, Signal } from '../constants/allegraTheme';
 
 interface Props {
   style?: object;
   variant?: 'floating' | 'inline';
 }
 
-const INLINE_SIZE = 40;
-
 // Long-press threshold: 600ms feels natural for hold-to-talk
 const LONG_PRESS_MS = 600;
+const BAR_SHAPE = [0.55, 1, 0.75, 0.45];
+const ERROR_RED = '#ff5a4f';
+
+const Bar: React.FC<{ level: number; weight: number; active: boolean; size: number }> = ({ level, weight, active, size }) => {
+  const h = useSharedValue(0.45);
+  useEffect(() => {
+    h.value = withSpring(active ? 0.45 + Math.min(1, level) * 0.55 * weight : 0.45, Motion.spring.tactile);
+  }, [level, weight, active, h]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scaleY: h.value }] }));
+  return <Animated.View style={[styles.bar, { height: size * 0.42, width: Math.max(2.5, size * 0.065) }, style]} />;
+};
 
 export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' }) => {
-  const isInline = variant === 'inline';
-  const { isListening, audioLevel, error, startListening, stopListening } = useVoiceCommands();
-  const isDark = useIsDark();
-  const colors = useThemeColors();
+  const size = variant === 'inline' ? 44 : 56;
+  const { isListening: hookListening, audioLevel, error, startListening, stopListening } = useVoiceCommands();
+  const phase = useVoiceSearchStore(s => s.phase);
   const voiceMode = useSettingsStore(s => s.voiceMode ?? 'tap');
+  const reduce = useReducedMotion();
 
-  const wasListeningOnPressRef = useRef<boolean>(false);
-  const isHoldRef = useRef(false);
-  const errorFlashRef = useRef(false);
-
-  // Pulse ring animation
-  const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0);
-
-  // Button scale on press
-  const pressScale = useSharedValue(1);
-
-  // Audio level bars (4 bars)
-  const bar1 = useSharedValue(0.3);
-  const bar2 = useSharedValue(0.3);
-  const bar3 = useSharedValue(0.3);
-  const bar4 = useSharedValue(0.3);
-
-  useEffect(() => {
-    if (isListening) {
-      pulseScale.value = withRepeat(
-        withSequence(
-          withTiming(1.6, { duration: 800, easing: Easing.out(Easing.ease) }),
-          withTiming(1, { duration: 0 })
-        ),
-        -1,
-        false
-      );
-      pulseOpacity.value = withRepeat(
-        withSequence(
-          withTiming(0.5, { duration: 100 }),
-          withTiming(0, { duration: 700, easing: Easing.out(Easing.ease) })
-        ),
-        -1,
-        false
-      );
-      pressScale.value = withTiming(0.94, { duration: 100 });
-    } else {
-      cancelAnimation(pulseScale);
-      cancelAnimation(pulseOpacity);
-      pulseScale.value = withTiming(1, { duration: 200 });
-      pulseOpacity.value = withTiming(0, { duration: 200 });
-      pressScale.value = withTiming(1, { duration: 150 });
-
-      [bar1, bar2, bar3, bar4].forEach(b => {
-        b.value = withTiming(0.3, { duration: 200 });
-      });
-    }
-  }, [isListening, pulseScale, pulseOpacity, pressScale, bar1, bar2, bar3, bar4]);
-
-  // Flash red briefly on error
-  useEffect(() => {
-    if (!error) return;
-    errorFlashRef.current = true;
-    const t = setTimeout(() => { errorFlashRef.current = false; }, 1200);
-    return () => clearTimeout(t);
-  }, [error]);
-
-  useEffect(() => {
-    if (!isListening) return;
-    const lvl = audioLevel;
-    bar1.value = withTiming(0.3 + lvl * 0.5, { duration: 80 });
-    bar2.value = withTiming(0.3 + lvl * 0.9, { duration: 80 });
-    bar3.value = withTiming(0.3 + lvl * 0.7, { duration: 80 });
-    bar4.value = withTiming(0.3 + lvl * 0.4, { duration: 80 });
-  }, [audioLevel, isListening, bar1, bar2, bar3, bar4]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
-  }));
-
-  const buttonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.value }],
-  }));
-
-  const barStyle1 = useAnimatedStyle(() => ({
-    height: interpolate(bar1.value, [0, 1], [4, 20]),
-  }));
-  const barStyle2 = useAnimatedStyle(() => ({
-    height: interpolate(bar2.value, [0, 1], [4, 20]),
-  }));
-  const barStyle3 = useAnimatedStyle(() => ({
-    height: interpolate(bar3.value, [0, 1], [4, 20]),
-  }));
-  const barStyle4 = useAnimatedStyle(() => ({
-    height: interpolate(bar4.value, [0, 1], [4, 20]),
-  }));
-
-  // Respect voiceMode setting
+  const isListening = hookListening || phase === 'listening';
+  const isThinking = phase === 'searching';
   const isTapMode = voiceMode === 'tap';
 
+  const wasListeningOnPressRef = useRef(false);
+  const isHoldRef = useRef(false);
+
+  // ── Motion values ──────────────────────────────────────────────────────
+  const press = useSharedValue(1);      // finger-down sink
+  const bloom = useSharedValue(0);      // 0 idle → 1 listening (colour + size)
+  const halo = useSharedValue(0);       // live voice level
+  const pulse = useSharedValue(0);      // slow outward ring, 0→1 repeating
+  const spin = useSharedValue(0);       // thinking arc rotation
+  const arc = useSharedValue(0);        // thinking arc visibility
+  const shake = useSharedValue(0);
+  const flash = useSharedValue(0);      // error tint
+
+  useEffect(() => {
+    bloom.value = withSpring(isListening ? 1 : 0, Motion.spring.tactile);
+    if (isListening) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      if (!reduce) {
+        pulse.value = 0;
+        pulse.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) }), -1, false);
+      }
+    } else {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0, { duration: Motion.duration.fast });
+      halo.value = withTiming(0, { duration: Motion.duration.fast });
+    }
+  }, [isListening, reduce, bloom, pulse, halo]);
+
+  useEffect(() => {
+    if (isListening) halo.value = withSpring(Math.min(1, audioLevel), Motion.spring.tactile);
+  }, [audioLevel, isListening, halo]);
+
+  useEffect(() => {
+    arc.value = withTiming(isThinking ? 1 : 0, { duration: Motion.duration.base });
+    if (isThinking && !reduce) {
+      spin.value = 0;
+      spin.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1, false);
+    } else {
+      cancelAnimation(spin);
+    }
+  }, [isThinking, reduce, arc, spin]);
+
+  useEffect(() => {
+    if (!error) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    flash.value = withSequence(withTiming(1, { duration: Motion.duration.instant }), withTiming(0, { duration: 900 }));
+    if (!reduce) {
+      shake.value = withSequence(
+        withTiming(-5, { duration: 45 }), withTiming(5, { duration: 45 }),
+        withTiming(-3, { duration: 45 }), withTiming(0, { duration: 45 }),
+      );
+    }
+  }, [error, reduce, flash, shake]);
+
+  const discStyle = useAnimatedStyle((): ViewStyle => ({
+    transform: [{ translateX: shake.value }, { scale: press.value * (1 + 0.1 * bloom.value) }],
+  }));
+  const idleLayer = useAnimatedStyle(() => ({ opacity: 1 - bloom.value }));
+  const liveLayer = useAnimatedStyle(() => ({ opacity: bloom.value }));
+  const errorLayer = useAnimatedStyle(() => ({ opacity: flash.value }));
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: bloom.value * (0.18 + 0.22 * halo.value),
+    transform: [{ scale: 1 + 0.12 * bloom.value + 0.26 * halo.value }],
+  }));
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: bloom.value * 0.45 * (1 - pulse.value),
+    transform: [{ scale: 1 + 0.4 * pulse.value }],
+  }));
+  const arcStyle = useAnimatedStyle(() => ({
+    opacity: arc.value,
+    transform: [{ rotate: `${spin.value * 360}deg` }],
+  }));
+
+  // ── Press handling (tap-to-toggle or hold-to-talk, per Settings) ──────────
   const onPressIn = useCallback(() => {
+    press.value = withSpring(0.86, Motion.spring.tactile);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     isHoldRef.current = false;
     wasListeningOnPressRef.current = isListening;
     if (!isListening) startListening();
-  }, [isListening, startListening]);
+  }, [isListening, startListening, press]);
 
   const onLongPress = useCallback(() => {
-    if (isTapMode) return; // ignore long press in tap mode
+    if (isTapMode) return;
     isHoldRef.current = true;
   }, [isTapMode]);
 
   const onPressOut = useCallback(() => {
+    press.value = withSpring(1, Motion.spring.tactile);
     if (!isTapMode && isHoldRef.current) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       stopListening();
     }
-    // In tap mode: release does nothing; tap toggles
-  }, [isTapMode, stopListening]);
+  }, [isTapMode, stopListening, press]);
 
   const onPress = useCallback(() => {
-    if (isTapMode) {
-      // Tap toggles: if already listening, stop; if not, start already happened in onPressIn
-      if (wasListeningOnPressRef.current) {
-        stopListening();
-      }
-    }
-    // In hold mode: onPress is suppressed by onLongPress, so this only fires on quick tap.
-    // Quick tap while already listening should also stop (safety valve).
-    if (!isTapMode && wasListeningOnPressRef.current) {
-      stopListening();
-    }
-  }, [isTapMode, stopListening]);
+    // Tap mode: a second tap stops. Hold mode: a quick tap while listening is
+    // the safety valve that stops too.
+    if (wasListeningOnPressRef.current) stopListening();
+  }, [stopListening]);
 
-  // Error state overrides colors briefly
-  const hasError = !!error && !isListening;
-  const bgColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? '#111111' : '#FFFFFF'));
-  const iconColor = isListening ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.75)' : colors.textMuted);
-  const borderColor = isListening ? PRIMARY : (hasError ? '#FF3B30' : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'));
-
-  if (isInline) {
-    const brutalBg = isListening ? '#000000' : (hasError ? '#FF3B30' : '#FFFFFF');
-    const brutalBorder = isListening ? '#FFFFFF' : (hasError ? '#FF3B30' : '#000000');
-    const brutalIcon = isListening ? '#FFFFFF' : '#000000';
-
-    return (
-      <Pressable
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        onPress={onPress}
-        onLongPress={onLongPress}
-        delayLongPress={LONG_PRESS_MS}
-        style={style}
-      >
-        <View style={[styles.inlineButton, { backgroundColor: brutalBg, borderColor: brutalBorder }]}>
-          {isListening ? (
-            <View style={styles.inlineBarsContainer}>
-              <Animated.View style={[styles.inlineBar, barStyle1, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.inlineBar, barStyle2, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.inlineBar, barStyle3, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.inlineBar, barStyle4, { backgroundColor: '#fff' }]} />
-            </View>
-          ) : (
-            <Ionicons name="mic" size={18} color={brutalIcon} />
-          )}
-        </View>
-      </Pressable>
-    );
-  }
+  // Rings are larger than the disc but never change the layout: they sit
+  // centred on it and spill over, so the tab bar keeps its height.
+  const ring = size + 14;
+  const ringBox = { width: ring, height: ring, borderRadius: ring / 2, top: (size - ring) / 2, left: (size - ring) / 2 };
+  const iconSize = Math.round(size * 0.44);
+  const label = isListening
+    ? 'Stop listening'
+    : isTapMode ? 'Voice search. Tap and say a song' : 'Voice search. Hold and say a song';
 
   return (
-    <View style={[styles.wrapper, style]} pointerEvents="box-none">
-      <Animated.View
-        style={[styles.pulse, { borderColor: PRIMARY }, pulseStyle]}
-        pointerEvents="none"
-      />
+    <View style={[styles.wrap, { width: size, height: size }, style]} pointerEvents="box-none">
+      <Animated.View pointerEvents="none" style={[styles.ring, ringBox, pulseStyle]} />
+      <Animated.View pointerEvents="none" style={[styles.halo, ringBox, haloStyle]} />
+      <Animated.View pointerEvents="none" style={[styles.arc, ringBox, arcStyle]} />
+
       <Pressable
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         onPress={onPress}
         onLongPress={onLongPress}
         delayLongPress={LONG_PRESS_MS}
-        android_ripple={null}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ busy: isThinking, expanded: isListening }}
       >
-        <Animated.View
-          style={[
-            styles.button,
-            { backgroundColor: bgColor, borderColor, shadowColor: isListening ? PRIMARY : '#000' },
-            buttonStyle,
-          ]}
-        >
-          {isListening ? (
-            <View style={styles.barsContainer}>
-              <Animated.View style={[styles.bar, barStyle1, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.bar, barStyle2, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.bar, barStyle3, { backgroundColor: '#fff' }]} />
-              <Animated.View style={[styles.bar, barStyle4, { backgroundColor: '#fff' }]} />
-            </View>
-          ) : (
-            <Ionicons name="mic" size={22} color={iconColor} />
-          )}
+        <Animated.View style={[styles.disc, { width: size, height: size, borderRadius: size / 2 }, discStyle]}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.idle, idleLayer]} />
+          <Animated.View style={[StyleSheet.absoluteFill, styles.live, liveLayer]} />
+          <Animated.View style={[StyleSheet.absoluteFill, styles.error, errorLayer]} />
+          <Animated.View style={[styles.glyph, idleLayer]}>
+            <Ionicons name="mic" size={iconSize} color={Signal.bg} />
+          </Animated.View>
+          <Animated.View style={[styles.glyph, styles.bars, liveLayer]}>
+            {BAR_SHAPE.map((w, i) => (
+              <Bar key={i} weight={w} level={audioLevel} active={isListening} size={size} />
+            ))}
+          </Animated.View>
         </Animated.View>
       </Pressable>
-      {hasError && (
-        <Text style={styles.errorLabel} numberOfLines={2}>
-          {error}
-        </Text>
-      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: BUTTON_SIZE + 16,
-    height: BUTTON_SIZE + 16,
-  },
-  pulse: {
+  wrap: { alignItems: 'center', justifyContent: 'center' },
+  ring: {
     position: 'absolute',
-    width: PULSE_SIZE,
-    height: PULSE_SIZE,
-    borderRadius: PULSE_SIZE / 2,
-    borderWidth: 2,
-  },
-  button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
-    borderRadius: BUTTON_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1.5,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 12,
+    borderColor: Signal.wave,
   },
-  barsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: 22,
+  halo: { position: 'absolute', backgroundColor: Signal.wave },
+  // A quarter arc: one bright side of a transparent ring, spun.
+  arc: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderTopColor: Signal.wave,
+    borderRightColor: 'rgba(217, 230, 106, 0.35)',
   },
-  bar: {
-    width: 3,
-    borderRadius: 2,
-  },
-  inlineButton: {
-    width: INLINE_SIZE,
-    height: INLINE_SIZE,
-    borderRadius: INLINE_SIZE / 2,
+  disc: {
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
   },
-  inlineBarsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    height: 16,
-  },
-  inlineBar: {
-    width: 2.5,
-    borderRadius: 1.5,
-  },
-  errorLabel: {
-    position: 'absolute',
-    bottom: -28,
-    fontSize: 9,
-    color: '#FF3B30',
-    textAlign: 'center',
-    width: 120,
-  },
+  idle: { backgroundColor: Signal.ink },
+  live: { backgroundColor: Signal.wave },
+  error: { backgroundColor: ERROR_RED },
+  glyph: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  bars: { flexDirection: 'row', gap: 3 },
+  bar: { borderRadius: 2, backgroundColor: Signal.waveInk },
 });
 
 export default VoiceMicButton;
