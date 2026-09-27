@@ -23,7 +23,6 @@ import { MorphIcon } from './allegra/motion';
 const MORE_KEY = '__more__';
 
 const MIC_WRAPPER_SIZE = 56;
-const INDICATOR_W = 62;
 
 /** The selected icon gives a small lift — acknowledges the tap, then settles. */
 const TabIcon: React.FC<{ focused: boolean; children: React.ReactNode }> = ({ focused, children }) => {
@@ -63,44 +62,15 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const more = useMoreMenu(state, navigation);
   const moreActive = more.open || more.activeKey !== null;
 
-  // Glass highlight that springs between tabs. Positions are measured, and it
-  // moves by translateX only (never width) — Allegra's transform-only rule.
-  const reduceMotion = useReducedMotion();
-  const [groupX, setGroupX] = useState({ left: 0, right: 0 });
-  const [tabCenters, setTabCenters] = useState<Record<string, number>>({});
-  const indicatorX = useSharedValue(0);
-  const indicatorOpacity = useSharedValue(0);
-  // Three everyday tabs, the mic, then ••• for everything else. On a screen
-  // from the menu (or while it's open) the highlight sits on •••.
+  // Three everyday tabs, the mic, then ••• for everything else. The selected
+  // tab is marked by a bright icon and label only — no pill behind it, as in
+  // Apple Music and Spotify. On a screen from the menu (or while it's open)
+  // ••• is the bright one.
   const routes = state.routes.filter(r => VISIBLE_TABS.has(r.name));
   const splitAt = Math.ceil(routes.length / 2);
   const leftRoutes = routes.slice(0, splitAt);
   const rightRoutes = routes.slice(splitAt);
   const activeKey = state.routes[state.index]?.key;
-  const highlightKey = moreActive ? MORE_KEY : activeKey;
-  const highlightOnLeft = leftRoutes.some(r => r.key === highlightKey);
-  const activeCenter = highlightKey !== undefined && tabCenters[highlightKey] !== undefined
-    ? (highlightOnLeft ? groupX.left : groupX.right) + tabCenters[highlightKey]
-    : null;
-
-  useEffect(() => {
-    if (activeCenter === null) {
-      indicatorOpacity.value = withTiming(0, { duration: Motion.duration.fast });
-      return;
-    }
-    const target = activeCenter - INDICATOR_W / 2;
-    if (indicatorOpacity.value === 0 || reduceMotion) {
-      indicatorX.value = target;
-      indicatorOpacity.value = withTiming(1, { duration: Motion.duration.base });
-    } else {
-      indicatorX.value = withSpring(target, Motion.spring.sheet);
-    }
-  }, [activeCenter, reduceMotion, indicatorX, indicatorOpacity]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    opacity: indicatorOpacity.value,
-    transform: [{ translateX: indicatorX.value }],
-  }));
 
   const activeIconColor = isDark ? '#FFFFFF' : colors.textPrimary;
   const inactiveIconColor = isDark ? 'rgba(255,255,255,0.45)' : colors.textMuted;
@@ -152,11 +122,6 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
         accessibilityRole="tab"
         accessibilityState={{ selected: isFocused }}
         accessibilityLabel={label}
-        onLayout={e => {
-          const { x, width } = e.nativeEvent.layout;
-          const center = x + width / 2;
-          setTabCenters(prev => (prev[route.key] === center ? prev : { ...prev, [route.key]: center }));
-        }}
         style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
       >
         <TabIcon focused={isFocused}>
@@ -173,12 +138,6 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
     );
   };
 
-  const measureCenter = (key: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
-    const { x, width } = e.nativeEvent.layout;
-    const center = x + width / 2;
-    setTabCenters(prev => (prev[key] === center ? prev : { ...prev, [key]: center }));
-  };
-
   const moreButton = (
     <Pressable
       key={MORE_KEY}
@@ -186,7 +145,6 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
       accessibilityRole="button"
       accessibilityState={{ expanded: more.open, selected: moreActive }}
       accessibilityLabel="More"
-      onLayout={measureCenter(MORE_KEY)}
       style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
     >
       <MorphIcon
@@ -253,13 +211,11 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
         <BlurView intensity={60} tint={isDark ? 'dark' : 'light'} style={styles.blur}>
           <View style={styles.tabsRow}>
-            <Animated.View pointerEvents="none" style={[styles.indicator, indicatorStyle]} />
             {/* Left tabs */}
             {/* Each side is weighted by its tab count so an odd number of tabs
                 still spaces every icon evenly around the centre mic. */}
             <View
               style={[styles.tabGroup, { flex: leftRoutes.length }]}
-              onLayout={e => { const x = e.nativeEvent.layout.x; setGroupX(g => (g.left === x ? g : { ...g, left: x })); }}
             >
               {leftRoutes.map(renderTab)}
             </View>
@@ -274,7 +230,6 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
             {/* Right tabs */}
             <View
               style={[styles.tabGroup, { flex: rightRoutes.length + 1 }]}
-              onLayout={e => { const x = e.nativeEvent.layout.x; setGroupX(g => (g.right === x ? g : { ...g, right: x })); }}
             >
               {rightRoutes.map(renderTab)}
               {moreButton}
@@ -351,17 +306,6 @@ const styles = StyleSheet.create({
   },
   tabPressed: {
     transform: [{ scale: 0.92 }],
-  },
-  indicator: {
-    position: 'absolute',
-    left: 0,
-    top: 6,
-    bottom: 6,
-    width: INDICATOR_W,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.09)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
   },
   glassHighlight: {
     position: 'absolute',
