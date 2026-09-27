@@ -240,9 +240,9 @@ export const VoiceSearchCard: React.FC = () => {
     <View style={styles.layer} pointerEvents={interactive ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityRole="button" accessibilityLabel="Close">
-          {phase === 'listening' ? (
-            // The finger is still on the mic: dim the page but leave the tab
-            // bar clear, so the mic's bloom and level bars stay visible.
+          {phase === 'listening' || phase === 'searching' ? (
+            // Listening and searching are the mic's to show (bloom, then the
+            // spinning arc): dim the page but leave the tab bar clear.
             <LinearGradient
               colors={['rgba(4, 5, 7, 0.72)', 'rgba(4, 5, 7, 0.55)', 'rgba(4, 5, 7, 0)']}
               locations={[0, 0.72, 1]}
