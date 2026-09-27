@@ -31,7 +31,7 @@ class ExpoModulesPackageList : ModulesProvider {
     }
 
     // expo-video's VideoModule is marked @UnstableReactNativeAPI; referencing
-    // it needs an explicit opt-in (Expo's generated list does the same).
+    // it needs an explicit opt-in or the Kotlin compile fails.
     @OptIn(com.facebook.react.common.annotations.UnstableReactNativeAPI::class)
     override fun getModulesList(): List<Class<out Module>> = listOf(
         // Auto-linked expo modules

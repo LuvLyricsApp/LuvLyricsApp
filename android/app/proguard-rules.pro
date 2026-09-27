@@ -48,4 +48,10 @@
 -dontwarn com.google.android.gms.internal.mlkit_**
 -dontwarn com.google.android.gms.vision.**
 
+# react-native-zeroconf (Desktop Bridge LAN discovery) picks its DNS-SD backend
+# by class name, so R8 renaming it breaks discovery in release builds only:
+# "ClassNotFoundException: com.github.druk.dnssd.AppleDNSSD".
+-keep class com.github.druk.** { *; }
+-keep class com.balthazargronon.RCTZeroconf.** { *; }
+
 # Add any project specific keep options here:
