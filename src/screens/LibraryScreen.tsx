@@ -7,7 +7,7 @@
  * The root of the Library tab; Playlists sit behind the header button.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,6 +43,9 @@ const sorters: Record<SortMode, (a: Song, b: Song) => number> = {
 };
 
 const LibraryScreen: React.FC = () => {
+  // A smaller sleeve on narrow phones (320pt) leaves the buttons room.
+  const { width: screenW } = useWindowDimensions();
+  const sleeveSize = screenW < 360 ? 92 : 112;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const fetchSongs = useSongsStore(s => s.fetchSongs);
@@ -143,7 +146,7 @@ const LibraryScreen: React.FC = () => {
             artwork={stageArt}
             title={stageSong?.title ?? 'Library'}
             artist={stageSong?.artist}
-            size={112}
+            size={sleeveSize}
             playing={false}
             onPress={() => play(0)}
             label="Play your library"
@@ -286,7 +289,8 @@ const styles = StyleSheet.create({
   heroMeta: { flex: 1, minWidth: 0 },
   meta: { fontWeight: '600', fontSize: 16, color: Signal.ink },
   metaSoft: { fontWeight: '400', fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  // Wraps on narrow phones instead of clipping "Shuffle" off the edge.
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   filterRow: { paddingHorizontal: Space.md, marginTop: Space.lg },
   filterField: {
     flexDirection: 'row',

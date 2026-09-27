@@ -4,6 +4,7 @@
  * cards — square covers for songs, albums and playlists, round photos for
  * artists.
  */
+import { sentenceCase } from '../../utils/sentenceCase';
 import React, { memo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,7 +58,7 @@ Card.displayName = 'Card';
 export const ShelfHeader: React.FC<{ title: string; strapline?: string; onMore?: () => void }> = ({ title, strapline, onMore }) => (
   <View style={styles.header}>
     <View style={styles.flex}>
-      {strapline ? <Text style={styles.strapline} numberOfLines={1}>{strapline}</Text> : null}
+      {strapline ? <Text style={styles.strapline} numberOfLines={1}>{sentenceCase(strapline)}</Text> : null}
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
     </View>
     {onMore ? (
