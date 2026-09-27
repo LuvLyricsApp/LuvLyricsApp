@@ -17,8 +17,12 @@ import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
 import StreamScreen from '../screens/StreamScreen';
 import DownloadsScreen from '../screens/DownloadsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
+
+
 const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
 
 /**
@@ -83,6 +87,8 @@ export const TabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       id="MainTabs"
+      // Back from Settings / the downloader returns to the tab you came from.
+      backBehavior="history"
       tabBar={navBarStyle === 'modern-pill' ? renderModernPillTabBar : renderCustomTabBar}
       screenOptions={{
         headerShown: false,
@@ -96,6 +102,8 @@ export const TabNavigator: React.FC = () => {
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
       <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
+      <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarLabel: 'Downloader' }} />
     </Tab.Navigator>
   );
 };

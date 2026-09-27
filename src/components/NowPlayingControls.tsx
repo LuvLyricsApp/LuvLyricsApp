@@ -9,7 +9,7 @@
  * chartreuse action color; liked state wears coral.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
+import { View, Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,14 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TimelineScrubber from './TimelineScrubber';
 import { MorphIcon, NudgeIcon, SwapText, Tactile } from './allegra/motion';
 import { Glass, PlayerType, Radius, Signal, Space } from '../constants/allegraTheme';
-import { CanvasSource } from '../services/canvas/types';
-
-const CANVAS_LABEL: Record<CanvasSource, string> = {
-  EchoCanvas: 'Echo',
-  ArtistVideo: 'ArchiveTune',
-  Tidal: 'Tidal',
-  AppleMusic: 'Apple Music',
-};
 
 interface NowPlayingControlsProps {
   animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
@@ -51,8 +43,6 @@ interface NowPlayingControlsProps {
   durationSV: SharedValue<number>;
   onSeek: (seconds: number) => void;
   showLyrics?: boolean;
-  /** Set while a motion canvas is on screen; shown as a small source chip. */
-  canvasSource?: CanvasSource | null;
   /** Opens the player menu; receives the press event for menu anchoring. */
   onMorePress?: (event: GestureResponderEvent) => void;
 }
@@ -84,7 +74,6 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   durationSV,
   onSeek,
   showLyrics = true,
-  canvasSource,
   onMorePress,
 }) => {
   const insets = useSafeAreaInsets();
@@ -103,12 +92,6 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
       <LinearGradient colors={scrim} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
 
       <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, Space.md) + Space.xs }]}>
-        {canvasSource ? (
-          <View style={styles.canvasChip} accessibilityLabel={`Motion artwork from ${CANVAS_LABEL[canvasSource]}`}>
-            <View style={styles.canvasDot} />
-            <Text style={styles.canvasChipText}>Canvas · {CANVAS_LABEL[canvasSource]}</Text>
-          </View>
-        ) : null}
 
         <View style={styles.metaRow}>
           <View style={styles.metaText}>
@@ -217,30 +200,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Space.lg,
-  },
-  canvasChip: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    backgroundColor: Glass.fill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
-    marginBottom: Space.sm,
-  },
-  canvasDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Signal.wave,
-  },
-  canvasChipText: {
-    ...PlayerType.meta,
-    fontSize: 11,
-    color: Signal.inkSoft,
   },
   metaRow: {
     flexDirection: 'row',

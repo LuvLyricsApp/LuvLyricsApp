@@ -67,8 +67,7 @@ export const Space = {
 } as const;
 
 /** Apple-Music-style type ramp for the player. */
-// Inter faces carry their weight in the family name, so no fontWeight here
-// (Android would otherwise synthesise a second, faux-bold pass).
+// Weights only — the face (SF Pro) is resolved per platform; see constants/fonts.ts.
 export const PlayerType = {
   title: { fontWeight: '600', fontSize: 22 },
   artist: { fontWeight: '400', fontSize: 18 },

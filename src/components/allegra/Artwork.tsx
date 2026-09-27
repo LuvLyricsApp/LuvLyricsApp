@@ -20,14 +20,19 @@ interface GeneratedArtworkProps {
   title: string;
   artist?: string;
   size: number;
+  /**
+   * Print the title and artist on the cover. Off by default: a cover almost
+   * always sits beside its title, and printing it twice reads as a placeholder.
+   */
+  label?: boolean;
 }
 
-export const GeneratedArtwork: React.FC<GeneratedArtworkProps> = React.memo(({ title, artist, size }) => {
+export const GeneratedArtwork: React.FC<GeneratedArtworkProps> = React.memo(({ title, artist, size, label = false }) => {
   const seed = `${title}|${artist ?? ''}`;
   const [base, mid, spark] = useMemo(() => duotoneFor(seed), [seed]);
   const variant = hashString(seed + '#v') % 3;
   const glyph = monogramOf(title);
-  const showLabel = size >= 120;
+  const showLabel = label && size >= 120;
   const id = `g${hashString(seed).toString(36)}`;
 
   return (

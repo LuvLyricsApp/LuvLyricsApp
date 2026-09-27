@@ -1,9 +1,9 @@
 /**
  * Luvs Screen - Full-screen immersive TikTok/Instagram-style feed
  *
- * The tab bar and the mini player are both suppressed for this route (see
- * TabNavigator + RootNavigator), so the feed genuinely owns the screen and exits
- * through its own back button.
+ * The bottom bar floats over the feed like any tab (Reels / TikTok style); only
+ * the mini player is suppressed here (see RootNavigator), because Luvs runs its
+ * own audio pool.
  *
  * On Android the paging is handled by LuvsPagerView, a native ViewPager2. iOS keeps
  * the paging FlatList — see the fallback branch at the bottom.
@@ -66,7 +66,6 @@ const LUV_HEIGHT = SCREEN_HEIGHT;
 const SKIP_THRESHOLD_SECONDS = 3;
 
 const LuvsScreen: React.FC = () => {
-  const navigation = useNavigation();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isFocused = useIsFocused();
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
@@ -366,16 +365,6 @@ const LuvsScreen: React.FC = () => {
     }
   }, [isPlaying, silenceMainPlayer]);
 
-  const handleGoBack = useCallback(() => {
-    // The tab bar is hidden on this route, so this button is the only way out —
-    // fall back to Home when there is no tab history to pop.
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home' as never);
-    }
-  }, [navigation]);
-
   const renderCard = useCallback(
     (item: UnifiedSong, index: number) => {
       const isActive = index === currentIndex;
@@ -506,20 +495,7 @@ const LuvsScreen: React.FC = () => {
       />
 
       <View style={[styles.topBar, { top: insets.top + 12 }]} pointerEvents="box-none">
-        <Pressable
-          style={styles.iconButton}
-          onPress={handleGoBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </Pressable>
-
-        {/* Centred title — absolutely centred so uneven button groups can't shift it */}
-        <View style={styles.titleWrap} pointerEvents="none">
-          <Text style={styles.title}>Luvs</Text>
-        </View>
+        <Text style={styles.title} accessibilityRole="header">Luvs</Text>
 
         <View style={styles.topBarRight}>
           <Pressable
@@ -601,14 +577,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  titleWrap: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: {
     fontWeight: '700',
-    fontSize: 17,
+    fontSize: 28,
     color: '#fff',
   },
   badge: {

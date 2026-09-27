@@ -410,7 +410,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                     }
                                     keyExtractor={item => item.id}
                                     numColumns={2}
-                                    contentContainerStyle={{ paddingBottom: 100 }}
+                                    contentContainerStyle={{ paddingBottom: 140 }}
                                     renderItem={({ item }) => {
                                         if (!item.result) {
                                             return (
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     closeTabBtn: { marginLeft: 5 },
     bulkTitleContainer: { paddingHorizontal: 16, marginBottom: 16 },
     content: { flex: 1 },
-    gridContent: { padding: 12, paddingBottom: 120 },
+    gridContent: { padding: 12, paddingBottom: 140 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     statusText: { color: '#666', marginTop: 16, fontSize: 13 },
     emptyText: { color: '#444', marginTop: 16, fontSize: 16 },

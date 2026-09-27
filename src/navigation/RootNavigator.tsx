@@ -14,8 +14,6 @@ import { navigationRef } from '../utils/navigationService';
 import TabNavigator from './TabNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
@@ -75,10 +73,6 @@ export const RootNavigator: React.FC = () => {
             component={AddEditLyricsScreen}
           />
           <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-          />
-          <Stack.Screen
             name="CreatePlaylist"
             component={CreatePlaylistModal}
             options={{
@@ -93,10 +87,6 @@ export const RootNavigator: React.FC = () => {
               presentation: 'transparentModal',
               animation: 'slide_from_bottom',
             }}
-          />
-          <Stack.Screen
-            name="AudioDownloader"
-            component={AudioDownloaderScreen}
           />
           <Stack.Screen
             name="YoutubeBrowser"

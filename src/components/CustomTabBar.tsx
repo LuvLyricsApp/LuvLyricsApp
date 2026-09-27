@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceMicButton } from './VoiceMicButton';
 import { useSettingsStore } from '../store/settingsStore';
 import { TAB_BAR_HEIGHT } from '../constants/layout';
+import { VISIBLE_TABS } from '../navigation/tabs';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -20,13 +21,15 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const micEnabled = useSettingsStore(s => s.micEnabled);
-  const midpoint = Math.ceil(state.routes.length / 2);
-  const leftRoutes = state.routes.slice(0, midpoint);
-  const rightRoutes = state.routes.slice(midpoint);
+  const routes = state.routes.filter(r => VISIBLE_TABS.has(r.name));
+  const activeKey = state.routes[state.index]?.key;
+  const midpoint = Math.ceil(routes.length / 2);
+  const leftRoutes = routes.slice(0, midpoint);
+  const rightRoutes = routes.slice(midpoint);
 
-  const renderTab = (route: typeof state.routes[0], index: number, offset = 0) => {
+  const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = state.index === index + offset;
+    const isFocused = route.key === activeKey;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -59,7 +62,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
-            {leftRoutes.map((r, i) => renderTab(r, i, 0))}
+            {leftRoutes.map(renderTab)}
           </View>
 
           {/* Center mic button — inline, inside the bar */}
@@ -71,7 +74,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
           {/* Right tabs */}
           <View style={styles.tabGroup}>
-            {rightRoutes.map((r, i) => renderTab(r, i, midpoint))}
+            {rightRoutes.map(renderTab)}
           </View>
         </View>
       </View>

@@ -35,6 +35,7 @@ import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
 import Artwork from './allegra/Artwork';
 import { duotoneFor } from './allegra/artworkSeed';
+import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 /** Shared with the Luvs header so its buttons sit on the same edge as the cover. */
@@ -374,7 +375,8 @@ export const LuvCard = React.memo<LuvCardProps>(
     // One column, one gutter. Everything below the header is sized from the
     // real screen and safe areas, so nothing overlaps on small or tall phones.
     const contentTop = insets.top + HEADER_CLEARANCE;
-    const contentBottom = insets.bottom + 18;
+    // The pill bar floats over the feed; keep the actions clear of it.
+    const contentBottom = insets.bottom + TAB_BAR_CLEARANCE;
     const artSize = Math.round(Math.max(
       160,
       Math.min(SCREEN_WIDTH - GUTTER * 2, 420, luvHeight - contentTop - contentBottom - BOTTOM_BLOCK - 28),

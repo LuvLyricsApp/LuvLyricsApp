@@ -232,7 +232,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           durationSV={durationSV}
           onSeek={handleScrub}
           showLyrics={showLyrics}
-          canvasSource={canvasVisible ? canvas?.source : null}
           onMorePress={handleMenuPress}
         />
       </View>

@@ -22,7 +22,7 @@ export const MosaicCover: React.FC<MosaicCoverProps> = ({ songs, size, name }) =
   if (songs.length === 0) {
     return (
       <View style={frame}>
-        <GeneratedArtwork title={name || 'New playlist'} size={size} />
+        <GeneratedArtwork title={name || 'New playlist'} size={size} label />
       </View>
     );
   }
