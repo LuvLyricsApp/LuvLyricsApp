@@ -20,6 +20,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import ArtistScreen from '../screens/ArtistScreen';
 import CollectionScreen from '../screens/CollectionScreen';
+import { SCREEN_BG, stackContentStyle } from './theme';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -33,7 +34,7 @@ const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
 const LibraryStackScreen: React.FC = () => (
   <LibraryStack.Navigator
     id="LibraryStack"
-    screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+    screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: stackContentStyle }}
   >
     <LibraryStack.Screen name="LibraryHome" component={LibraryScreen} />
     <LibraryStack.Screen name="Playlists" component={PlaylistsScreen} />
@@ -50,7 +51,7 @@ const BrowseStack = createNativeStackNavigator<BrowseStackParamList>();
  * artist or album its own screen instead of replacing the last one.
  */
 const BrowseStackScreen: React.FC = () => (
-  <BrowseStack.Navigator id="BrowseStack" screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+  <BrowseStack.Navigator id="BrowseStack" screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: stackContentStyle }}>
     <BrowseStack.Screen name="Artist" component={ArtistScreen} getId={({ params }) => params?.browseId ?? params?.name} />
     <BrowseStack.Screen name="Collection" component={CollectionScreen} getId={({ params }) => params?.browseId} />
   </BrowseStack.Navigator>
@@ -103,6 +104,10 @@ export const TabNavigator: React.FC = () => {
       tabBar={navBarStyle === 'modern-pill' ? renderModernPillTabBar : renderCustomTabBar}
       screenOptions={{
         headerShown: false,
+        // Pages cross-fade over the dark room instead of cutting (or flashing
+        // the light default behind a screen that's still mounting).
+        animation: 'fade',
+        sceneStyle: { backgroundColor: SCREEN_BG },
         tabBarActiveTintColor: activeTint,
         tabBarInactiveTintColor: inactiveTint,
         tabBarShowLabel: navBarStyle === 'classic',

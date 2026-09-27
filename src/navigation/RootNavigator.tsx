@@ -9,6 +9,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { navigationRef } from '../utils/navigationService';
+import { navTheme, SCREEN_BG, stackContentStyle } from './theme';
 
 // Import navigators and screens
 import TabNavigator from './TabNavigator';
@@ -46,17 +47,19 @@ export const RootNavigator: React.FC = () => {
   return (
     <NavigationContainer
       ref={navigationRef}
+      theme={navTheme}
       onStateChange={() => {
         const route = navigationRef.getCurrentRoute();
         setCurrentRoute(route?.name);
       }}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: SCREEN_BG }}>
         <Stack.Navigator
           id="RootStack"
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_bottom',
+            contentStyle: stackContentStyle,
           }}
         >
           <Stack.Screen name="Main" component={TabNavigator} />
