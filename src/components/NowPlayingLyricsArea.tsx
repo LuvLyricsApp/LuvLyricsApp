@@ -10,7 +10,7 @@ type ProcessedLyric = { timestamp: number; text: string };
 
 const HEADER_CLEARANCE = 28;
 /** The compact controls (no volume row) stacked at the bottom. */
-const CONTROLS_CLEARANCE = 330;
+const CONTROLS_CLEARANCE = 372;
 
 interface NowPlayingLyricsAreaProps {
   showLyrics: boolean;

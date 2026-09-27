@@ -13,11 +13,11 @@
  * shows a floating artwork card instead (NowPlayingLyricsArea).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import AppleBackdrop, { heroHeight } from './player/AppleBackdrop';
+import AppleBackdrop, { heroHeight, usePlayerFrame } from './player/AppleBackdrop';
 import GlowBackground from './player/GlowBackground';
 import { useGlowColors } from './player/useGlowColors';
 import { useArtworkPalette } from './allegra/useArtworkPalette';
@@ -49,7 +49,8 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   playing = false,
   onCanvasVisibleChange,
 }) => {
-  const { width, height } = useWindowDimensions();
+  const { frame, onLayout } = usePlayerFrame();
+  const { width, height } = frame;
   const style = useSettingsStore(s => s.playerBackground);
   const appleInspired = useSettingsStore(s => s.appleMusicInspired);
   const palette = useArtworkPalette(coverImageUri, gradientColors);
@@ -84,12 +85,12 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   }, [style, appleInspired, showLyrics, glowOn, heroOn, canvas]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
       {style !== 'glow' ? (
         // The cover stays under the canvas: the canvas fades in over it, and
         // when the canvas fades out (song change, loop seam) the cover is what
         // shows through — never an empty gap.
-        <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} />
+        <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} />
       ) : null}
 
       {canvas || canvasShown ? (

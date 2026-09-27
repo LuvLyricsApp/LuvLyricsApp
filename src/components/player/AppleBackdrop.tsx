@@ -11,7 +11,7 @@
  * while a song plays.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Dimensions, LayoutChangeEvent, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   Blur,
   Canvas,
@@ -31,6 +31,9 @@ import { AuraPalette } from '../allegra/palette';
 
 interface AppleBackdropProps {
   uri?: string | null;
+  /** The player's real size. On Android edge-to-edge the window height leaves
+   *  out the navigation bar, so drawing to it left a dark strip at the bottom. */
+  frame?: { width: number; height: number };
   palette: AuraPalette;
   /** The full-bleed cover at the top (hidden behind lyrics or a canvas video). */
   showHero: boolean;
@@ -58,7 +61,8 @@ const Layer: React.FC<{
 }> = ({ image, width, height, heroH, hero }) => (
   <Group>
     <SkiaImage image={image} x={-BLEED} y={-BLEED} width={width + BLEED * 2} height={height + BLEED * 2} fit="cover">
-      <Blur blur={BLUR} />
+      {/* clamp: a decal blur fades to transparent near the image's edges. */}
+      <Blur blur={BLUR} mode="clamp" />
     </SkiaImage>
     <Group opacity={hero}>
       <Mask
@@ -74,8 +78,24 @@ const Layer: React.FC<{
   </Group>
 );
 
-const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero }) => {
-  const { width, height } = useWindowDimensions();
+/** The player's full size: the screen, not the window (see `frame`). */
+export const usePlayerFrame = () => {
+  const win = useWindowDimensions();
+  const [frame, setFrame] = useState(() => ({
+    width: win.width,
+    height: Math.max(win.height, Dimensions.get('screen').height),
+  }));
+  const onLayout = React.useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) setFrame(f => (f.width === width && f.height === height ? f : { width, height }));
+  }, []);
+  return { frame, onLayout };
+};
+
+const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, frame }) => {
+  const win = useWindowDimensions();
+  const width = frame?.width ?? win.width;
+  const height = frame?.height ?? win.height;
   const heroH = heroHeight(width, height);
   const image = useImage(uri ?? undefined);
 

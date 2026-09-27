@@ -61,6 +61,8 @@ interface NowPlayingControlsProps {
 
 const INK = '#ffffff';
 const INK_SOFT = 'rgba(255,255,255,0.62)';
+/** Echo's secondary text on the player: near white, not grey. */
+const INK_META = 'rgba(255,255,255,0.86)';
 
 /** Motion is felt as well as seen: every transport tap gets a haptic tick. */
 const tick = (kind: 'light' | 'medium' | 'success') => {
@@ -70,15 +72,15 @@ const tick = (kind: 'light' | 'medium' | 'success') => {
   run.catch(() => {});
 };
 
-/** Elapsed on the left, remaining on the right; follows the finger while scrubbing. */
+/** Elapsed on the left, the song's length on the right (Echo); follows the finger while scrubbing. */
 const TimeLabels: React.FC<{ display: DerivedValue<number>; durationSV: SharedValue<number> }> = ({ display, durationSV }) => {
   const [elapsed, setElapsed] = useState('0:00');
-  const [remaining, setRemaining] = useState('-0:00');
+  const [remaining, setRemaining] = useState('0:00');
   useAnimatedReaction(
     () => {
       const d = durationSV.value;
       const t = display.value * d;
-      return `${formatTimeSV(t)}|-${formatTimeSV(Math.max(0, d - t))}`;
+      return `${formatTimeSV(t)}|${formatTimeSV(d)}`;
     },
     (next, prev) => {
       if (next === prev) return;
@@ -170,7 +172,8 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
       {/* Only a whisper of shade — enough for white text over a bright canvas video. */}
       <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
 
-      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 12) + 6 }]}>
+      {/* Echo keeps the bottom row a clear step above the system bar. */}
+      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
         <View style={styles.metaRow}>
           <Pressable style={styles.metaText} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
             <View style={styles.swapLine}>
@@ -206,6 +209,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         <AppleSlider
           progress={progress}
           onCommit={seek}
+          height={10}
           accessibilityLabel="Song position"
           style={styles.scrubber}
           renderBelow={display => <TimeLabels display={display} durationSV={durationSV} />}
@@ -285,25 +289,27 @@ const styles = StyleSheet.create({
   swapLine: { height: 30, overflow: 'hidden' },
   swapLineSmall: { height: 24, overflow: 'hidden' },
   title: { ...PlayerType.title, color: INK, fontWeight: '700' },
-  artist: { ...PlayerType.artist, color: INK_SOFT },
+  artist: { ...PlayerType.artist, color: INK_META },
   roundGlass: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  scrubber: { marginTop: 18 },
-  timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
-  time: { fontWeight: '600', fontSize: 12, fontVariant: ['tabular-nums'], color: INK_SOFT },
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', marginTop: 14 },
+  // Echo's rhythm: 24 between the title and the bar, 24 under the times,
+  // ~30 between the transport and the bottom row.
+  scrubber: { marginTop: 24 },
+  timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 },
+  time: { fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'], color: INK_META },
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', marginTop: 18 },
   transportBtn: { width: 76, height: 72, alignItems: 'center', justifyContent: 'center' },
   // The play triangle's optical centre sits left of its box.
   playNudge: { marginLeft: 5 },
   volumeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   volumeSlider: { flex: 1 },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26 },
   footerBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   footerBtnOn: { backgroundColor: 'rgba(255,255,255,0.9)' },
   segment: { flexDirection: 'row', alignItems: 'center', height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.14)', overflow: 'hidden' },
