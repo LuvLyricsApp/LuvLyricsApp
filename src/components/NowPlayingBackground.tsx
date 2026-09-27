@@ -14,8 +14,6 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import AppleBackdrop, { heroHeight, usePlayerFrame } from './player/AppleBackdrop';
 import GlowBackground from './player/GlowBackground';
@@ -37,9 +35,6 @@ interface NowPlayingBackgroundProps {
 }
 
 const CROSSFADE_MS = 600;
-// Echo's hero mask (AppleBackdrop's HERO_MASK_*), as alpha for MaskedView.
-const MASK_COLORS = ['rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0)'] as const;
-const MASK_LOCATIONS = [0, 0.75, 0.92, 1] as const;
 
 const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   coverImageUri,
@@ -80,6 +75,13 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   }, [canvasAllowed, onCanvasVisibleChange]);
 
   const heroH = heroHeight(width, height);
+
+  // The veil comes and goes with the video, so the still cover is never shaded twice.
+  const veil = useSharedValue(0);
+  useEffect(() => {
+    veil.value = withTiming(canvasShown ? 1 : 0, { duration: CROSSFADE_MS });
+  }, [canvasShown, veil]);
+  const veilStyle = useAnimatedStyle(() => ({ opacity: veil.value }));
   useEffect(() => {
     diag('player', `background ${style}, apple inspired ${appleInspired}, lyrics ${showLyrics}, glow ${glowOn}, hero ${heroOn}, canvas ${canvas ? canvas.source : 'none'}`);
   }, [style, appleInspired, showLyrics, glowOn, heroOn, canvas]);
@@ -94,21 +96,20 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
       ) : null}
 
       {canvas || canvasShown ? (
-        // The canvas plays inside the hero and dissolves exactly like the cover.
+        // The canvas plays across the hero; the veil over it paints the blurred
+        // room back in through the hero's dissolve, so it melts like the cover.
         // It stays mounted while leaving, so CanvasVideoLayer can fade it out
         // (lyrics opened, song changed) instead of cutting it.
-        <MaskedView
-          style={[styles.hero, { height: heroH }]}
-          maskElement={
-            <LinearGradient
-              colors={MASK_COLORS}
-              locations={MASK_LOCATIONS}
-              style={StyleSheet.absoluteFill}
-            />
-          }
-        >
-          <CanvasVideoLayer canvas={canvasAllowed ? canvas : null} playing={playing && canvasAllowed} onVisibleChange={onVisibleChange} scrimStrength={0} />
-        </MaskedView>
+        <>
+          <View style={[styles.hero, { height: heroH }]}>
+            <CanvasVideoLayer canvas={canvasAllowed ? canvas : null} playing={playing && canvasAllowed} onVisibleChange={onVisibleChange} scrimStrength={0} />
+          </View>
+          {style !== 'glow' ? (
+            <Animated.View style={[StyleSheet.absoluteFill, veilStyle]} pointerEvents="none">
+              <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} veil />
+            </Animated.View>
+          ) : null}
+        </>
       ) : null}
 
       {style !== 'apple' ? (

@@ -34,6 +34,13 @@ interface AppleBackdropProps {
   /** The player's real size. On Android edge-to-edge the window height leaves
    *  out the navigation bar, so drawing to it left a dark strip at the bottom. */
   frame?: { width: number; height: number };
+  /**
+   * Veil mode: drawn *over* the canvas video, across the hero only. It paints
+   * the blurred room back in through the inverse of the hero mask, so the
+   * video dissolves exactly like the still cover. (MaskedView can't mask a
+   * hardware video texture on Android — the video ended in a hard edge.)
+   */
+  veil?: boolean;
   palette: AuraPalette;
   /** The full-bleed cover at the top (hidden behind lyrics or a canvas video). */
   showHero: boolean;
@@ -52,19 +59,24 @@ export const heroHeight = (_width: number, height: number): number => Math.round
 export const HERO_MASK_POSITIONS = [0, 0.75, 0.92, 1];
 export const HERO_MASK_ALPHAS = [1, 1, 0.4, 0];
 
+/** The inverse of the hero mask: where the veil lets the room back in. */
+const VEIL_ALPHAS = HERO_MASK_ALPHAS.map(a => 1 - a);
+
 const Layer: React.FC<{
   image: SkImage;
   width: number;
   height: number;
   heroH: number;
   hero: DerivedValue<number>;
-}> = ({ image, width, height, heroH, hero }) => (
+  /** Just the blurred room, no sharp hero (the veil). */
+  roomOnly?: boolean;
+}> = ({ image, width, height, heroH, hero, roomOnly = false }) => (
   <Group>
     <SkiaImage image={image} x={-BLEED} y={-BLEED} width={width + BLEED * 2} height={height + BLEED * 2} fit="cover">
       {/* clamp: a decal blur fades to transparent near the image's edges. */}
       <Blur blur={BLUR} mode="clamp" />
     </SkiaImage>
-    <Group opacity={hero}>
+    {roomOnly ? null : <Group opacity={hero}>
       <Mask
         mask={(
           <Rect x={0} y={0} width={width} height={heroH}>
@@ -74,7 +86,7 @@ const Layer: React.FC<{
       >
         <SkiaImage image={image} x={0} y={0} width={width} height={heroH} fit="cover" />
       </Mask>
-    </Group>
+    </Group>}
   </Group>
 );
 
@@ -92,7 +104,7 @@ export const usePlayerFrame = () => {
   return { frame, onLayout };
 };
 
-const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, frame }) => {
+const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, frame, veil = false }) => {
   const win = useWindowDimensions();
   const width = frame?.width ?? win.width;
   const height = frame?.height ?? win.height;
@@ -118,27 +130,60 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
   const heroOpacity = useDerivedValue(() => hero.value);
   const fadeOpacity = useDerivedValue(() => fade.value);
 
+  const room = (
+    <>
+      {/* Until the cover decodes (or if it can't), the song's own colours. */}
+      <Rect x={0} y={0} width={width} height={height}>
+        <LinearGradient start={vec(0, 0)} end={vec(width, height)} colors={[palette.primary, palette.secondary, palette.tertiary]} />
+      </Rect>
+      <Fill color="rgba(0,0,0,0.35)" />
+      {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} /> : null}
+      {layers.next ? (
+        <Group opacity={fadeOpacity}>
+          <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} />
+        </Group>
+      ) : null}
+    </>
+  );
+  // Echo: black 5% at the top to 40% at the bottom, so white text reads.
+  const shade = (
+    <Rect x={0} y={0} width={width} height={height}>
+      <LinearGradient start={vec(0, 0)} end={vec(0, height)} colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.4)']} />
+    </Rect>
+  );
+
+  if (veil) {
+    return (
+      <View style={[styles.veil, { height: heroH }]} pointerEvents="none">
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Mask
+            mask={(
+              <Rect x={0} y={0} width={width} height={heroH}>
+                <LinearGradient start={vec(0, 0)} end={vec(0, heroH)} positions={HERO_MASK_POSITIONS} colors={VEIL_ALPHAS.map(a => `rgba(0,0,0,${a})`)} />
+              </Rect>
+            )}
+          >
+            {room}
+          </Mask>
+          {/* The same shade the still cover sits under, over the video too. */}
+          {shade}
+        </Canvas>
+      </View>
+    );
+  }
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Canvas style={StyleSheet.absoluteFill}>
-        {/* Until the cover decodes (or if it can't), the song's own colours. */}
-        <Rect x={0} y={0} width={width} height={height}>
-          <LinearGradient start={vec(0, 0)} end={vec(width, height)} colors={[palette.primary, palette.secondary, palette.tertiary]} />
-        </Rect>
-        <Fill color="rgba(0,0,0,0.35)" />
-        {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} /> : null}
-        {layers.next ? (
-          <Group opacity={fadeOpacity}>
-            <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} />
-          </Group>
-        ) : null}
-        {/* Echo: black 5% at the top to 40% at the bottom, so white text reads. */}
-        <Rect x={0} y={0} width={width} height={height}>
-          <LinearGradient start={vec(0, 0)} end={vec(0, height)} colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.4)']} />
-        </Rect>
+        {room}
+        {shade}
       </Canvas>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  veil: { position: 'absolute', top: 0, left: 0, right: 0 },
+});
 
 export default React.memo(AppleBackdrop);
