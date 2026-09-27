@@ -157,6 +157,8 @@ interface SynchronizedLyricsProps {
   fadeColor?: string;
   /** Android-only: soft-dissolve lyric text at the top/bottom edges (px). */
   edgeFade?: number;
+  /** Mirrors the list's scroll offset, so the player sheet knows when the lines sit at the top. */
+  scrollOffset?: SharedValue<number>;
 }
 
 export interface SynchronizedLyricsRef {
@@ -177,6 +179,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   topSpacerHeight = SCREEN_HEIGHT * 0.4,
   bottomSpacerHeight = SCREEN_HEIGHT * 0.4,
   edgeFade = 0,
+  scrollOffset,
 }, ref) => {
   // Animated ref — required for the scrollTo worklet
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -317,6 +320,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     onScroll: (e) => {
       'worklet';
       scrollYSV.value = e.contentOffset.y;
+      if (scrollOffset) scrollOffset.value = e.contentOffset.y;
     },
     onBeginDrag: () => {
       'worklet';

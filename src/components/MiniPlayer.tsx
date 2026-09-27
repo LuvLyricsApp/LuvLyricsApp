@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
 import PillPlayer from './PillPlayer';
+import { openPlayerSheet } from '../navigation/playerSheet';
 import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -872,10 +873,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // half-height sheet that sat the lyrics at the bottom of the screen.
   const onBarPress = useCallback(() => openNowPlayingRef.current(), []);
 
-  const openNowPlaying = useCallback(() => {
+  // `velocity`: a swipe up on the pill hands its speed to the sheet.
+  const openNowPlaying = useCallback((velocity?: number) => {
     if (currentSong) {
       setMiniPlayerHidden(true);
-      navigation.navigate('NowPlaying', { songId: currentSong.id });
+      openPlayerSheet(currentSong.id, typeof velocity === 'number' ? velocity : 0);
       expansionProgress.value = withSpring(0);
       lyricExpansionProgress.value = withSpring(0);
       fullExpansionProgress.value = withSpring(0);
@@ -1132,7 +1134,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 <GestureDetector gesture={panGesture}>
                     <View style={styles.expandedTopRow}>
                         {/* Rotating Vinyl */}
-                        <Pressable onPress={openNowPlaying} style={styles.vinylMargin}>
+                        <Pressable onPress={onBarPress} style={styles.vinylMargin}>
                              <RotatingVinyl 
                                 imageUri={currentSong.coverImageUri} 
                                 size={64} 
@@ -1249,7 +1251,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         artist={currentSong.artist || ''}
                         coverImageUri={currentSong.coverImageUri}
                         isIsland={isIsland}
-                        onPress={openNowPlaying}
+                        onPress={onBarPress}
                         onBodyPress={onBarPress}
                     />
                     <PlaybackControls
@@ -1282,7 +1284,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             artist={currentSong.artist || ''}
                             coverImageUri={currentSong.coverImageUri}
                             isIsland={isIsland}
-                            onPress={openNowPlaying}
+                            onPress={onBarPress}
                             onBodyPress={onBarPress}
                         />
                         {/* Like the currently playing song without leaving the bar. */}

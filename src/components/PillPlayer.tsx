@@ -43,13 +43,13 @@ import GlowBackground from './player/GlowBackground';
 import { useGlowColors } from './player/useGlowColors';
 import { useSettingsStore } from '../store/settingsStore';
 
-export const PILL_PLAYER_HEIGHT = 60;
-const DISC = 46;
+export const PILL_PLAYER_HEIGHT = 54;
+const DISC = 40;
 const RING = DISC + 8;
 const RING_STROKE = 2.5;
 const RING_R = (RING - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
-const COOKIE = 44;
+const COOKIE = 40;
 const SPIN_MS = 14000;
 const SPIN = !isLowEndDevice();
 
@@ -77,7 +77,8 @@ interface PillPlayerProps {
   playing: boolean;
   /** Distance from the screen bottom (clears the tab bar). */
   bottom: number;
-  onOpen: () => void;
+  /** `velocity`: upward swipe speed in px/s, carried into the player sheet. */
+  onOpen: (velocity?: number) => void;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -162,7 +163,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
       const horizontal = Math.abs(e.translationX) > Math.abs(e.translationY);
       if (horizontal && (e.translationX < -60 || e.velocityX < -600)) runOnJS(next)();
       else if (horizontal && (e.translationX > 60 || e.velocityX > 600)) runOnJS(previous)();
-      else if (!horizontal && (e.translationY < -36 || e.velocityY < -500)) runOnJS(onOpen)();
+      else if (!horizontal && (e.translationY < -36 || e.velocityY < -500)) runOnJS(onOpen)(Math.max(0, -e.velocityY));
       dragX.value = withSpring(0, Motion.spring.tactile);
       dragY.value = withSpring(0, Motion.spring.tactile);
     });
@@ -176,7 +177,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
           </View>
         ) : null}
         <Pressable
-          onPress={onOpen}
+          onPress={() => onOpen()}
           style={styles.row}
           accessibilityRole="button"
           accessibilityLabel={`Now playing: ${title}. Open player`}
@@ -209,7 +210,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
           </View>
 
           <Tactile onPress={previous} hitSlop={8} pressScale={0.85} accessibilityRole="button" accessibilityLabel="Previous" style={styles.skip}>
-            <NudgeIcon name="play-skip-back" size={20} color="#fff" direction={-1} trigger={backNudge} />
+            <NudgeIcon name="play-skip-back" size={18} color="#fff" direction={-1} trigger={backNudge} />
           </Tactile>
 
           <Tactile
@@ -222,11 +223,11 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
             <Svg width={COOKIE} height={COOKIE} style={StyleSheet.absoluteFill}>
               <Path d={COOKIE_PATH} fill="#ffffff" />
             </Svg>
-            <MorphIcon on={playing} onIcon="pause" offIcon="play" size={22} color="#15151a" offStyle={styles.playNudge} />
+            <MorphIcon on={playing} onIcon="pause" offIcon="play" size={20} color="#15151a" offStyle={styles.playNudge} />
           </Tactile>
 
           <Tactile onPress={next} hitSlop={8} pressScale={0.85} accessibilityRole="button" accessibilityLabel="Next" style={styles.skip}>
-            <NudgeIcon name="play-skip-forward" size={20} color="#fff" direction={1} trigger={nextNudge} />
+            <NudgeIcon name="play-skip-forward" size={18} color="#fff" direction={1} trigger={nextNudge} />
           </Tactile>
         </Pressable>
       </Animated.View>
@@ -255,11 +256,11 @@ const styles = StyleSheet.create({
   disc: { width: DISC, height: DISC, borderRadius: DISC / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   discArt: { position: 'absolute', width: DISC, height: DISC },
   // The record's centre hole.
-  spindle: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  spindle: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
   meta: { flex: 1, marginLeft: 10, marginRight: 4, justifyContent: 'center' },
-  title: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  artist: { color: 'rgba(255,255,255,0.68)', fontSize: 13, marginTop: 1 },
-  skip: { width: 34, height: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  artist: { color: 'rgba(255,255,255,0.68)', fontSize: 12, marginTop: 1 },
+  skip: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center' },
   cookie: { width: COOKIE, height: COOKIE, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
   playNudge: { marginLeft: 2 },
 });

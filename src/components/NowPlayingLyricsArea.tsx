@@ -23,6 +23,7 @@ interface NowPlayingLyricsAreaProps {
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
   coverImageUri?: string;
   songArtist?: string;
+  scrollOffset?: SharedValue<number>;
 }
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
@@ -36,6 +37,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   flatListRef,
   coverImageUri,
   songArtist,
+  scrollOffset,
 }) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -66,6 +68,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
         activeLinePosition={0.3}
         topSpacerHeight={24}
         edgeFade={56}
+        scrollOffset={scrollOffset}
         isUserScrolling={isUserScrollingRef.current}
         onScrollStateChange={(isScrolling) => {
           isUserScrollingRef.current = isScrolling;

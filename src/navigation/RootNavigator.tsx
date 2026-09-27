@@ -16,6 +16,7 @@ import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
+import { MoreMenuHost } from '../components/MoreMenu';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
 import { VoiceSearchCard } from '../components/VoiceSearchCard';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
@@ -23,6 +24,7 @@ import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 import { useStreamSession } from '../hooks/useStreamSession';
 import { useCoverArtBackfill } from '../hooks/useCoverArtBackfill';
 import { useDeepLinks } from '../hooks/useDeepLinks';
+import { useWidgetLinks, useWidgetSync } from '../widget/useWidgetSync';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -31,6 +33,9 @@ export const RootNavigator: React.FC = () => {
   useStreamSession();
   useCoverArtBackfill();
   useDeepLinks();
+  // Home-screen widgets: keep them current, and answer their taps.
+  useWidgetSync();
+  useWidgetLinks();
 
   // The mini player sits above the tab bar on every tab/screen — except Luvs,
   // a full-bleed reels feed running its own audio pool. The bar used to paint over
@@ -57,8 +62,12 @@ export const RootNavigator: React.FC = () => {
           <Stack.Screen
             name="NowPlaying"
             component={NowPlayingScreen}
+            // The sheet animates itself (navigation/playerSheet.ts): it rises
+            // from the pill and follows a drag down from anywhere.
             options={{
-              presentation: 'fullScreenModal',
+              presentation: 'transparentModal',
+              animation: 'none',
+              gestureEnabled: false,
             }}
           />
           <Stack.Screen
@@ -93,6 +102,8 @@ export const RootNavigator: React.FC = () => {
         
         {/* Mini player pill above the tab bar, on every screen but Luvs. */}
         {showMiniPlayer && <MiniPlayer />}
+        {/* After the pill, so the ••• menu opens over it. */}
+        <MoreMenuHost />
         <BackgroundDownloader />
         {/* Hold the mic, say a song: the answer appears here, over everything. */}
         <VoiceSearchCard />
