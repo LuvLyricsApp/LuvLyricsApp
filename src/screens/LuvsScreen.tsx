@@ -249,7 +249,7 @@ const LuvsScreen: React.FC = () => {
         luvsEngine.recordInteraction(interaction);
 
         if (__DEV__) {
-          const verb = skipped ? '⏭️ Skipped' : '👀 Watched';
+          const verb = skipped ? 'Skipped' : 'Watched';
           console.log(`[Luvs] ${verb}: ${prevSong.title} (${watchDuration.toFixed(1)}s)`);
         }
       }
@@ -330,7 +330,7 @@ const LuvsScreen: React.FC = () => {
   const handleSharePress = useCallback(async (song: UnifiedSong) => {
     try {
       await Share.share({
-        message: `🎵 Check out "${song.title}" by ${song.artist || 'Unknown Artist'}!`,
+        message: song.artist ? `${song.title} by ${song.artist}` : song.title,
       });
     } catch {
       if (__DEV__) console.log('Share cancelled');

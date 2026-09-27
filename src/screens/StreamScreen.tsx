@@ -37,7 +37,6 @@ import { BlurView } from 'expo-blur';
 import { Fonts } from '../constants/fonts';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
-import { accentInk } from '../components/allegra/palette';
 import { RiseIn } from '../components/allegra/motion';
 import {
   ChartRow,
@@ -73,7 +72,7 @@ const MOODS = [
   { label: 'Energy', note: 'Workout & pre-game', tint: '#ee6b5f', icon: 'flash' as const, query: 'workout hits' },
   { label: 'Romance', note: 'Slow and close', tint: '#e0679b', icon: 'heart' as const, query: 'romantic hits' },
   { label: 'Focus', note: 'Instrumental flow', tint: '#c4dd74', icon: 'leaf' as const, query: 'instrumental focus' },
-  { label: 'Party', note: 'Turn it up', tint: '#ffb347', icon: 'sparkles' as const, query: 'party hits' },
+  { label: 'Party', note: 'Turn it up', tint: '#ffb347', icon: 'disc' as const, query: 'party hits' },
   { label: 'Heartbreak', note: 'Feel it all', tint: '#a18ec2', icon: 'rainy' as const, query: 'sad songs' },
 ];
 
@@ -209,7 +208,6 @@ const StreamScreen: React.FC = () => {
       ? { title: pickedForYou.title, artist: pickedForYou.artist, artwork: pickedForYou.highResArt, live: false }
       : null;
   const palette = useArtworkPalette(stage?.artwork);
-  const eyebrowInk = accentInk(palette);
   const railSongs = feed ? (feed.keepListening.length > 0 ? feed.keepListening : feed.quickPicks.slice(CHART_LENGTH)) : [];
 
   // ── Scroll-linked spotlight: drifts up slower than content and dims ────────
@@ -237,9 +235,7 @@ const StreamScreen: React.FC = () => {
   const hero = (
     <Animated.View style={[styles.spotlight, { paddingTop: insets.top + ISLAND_CLEARANCE }, heroStyle]}>
       <SpotlightWash artwork={stage?.artwork} />
-      <Eyebrow accent={eyebrowInk} icon="radio">{greeting()}</Eyebrow>
-      <Text style={styles.h1}>{history.length > 0 ? 'Welcome back' : 'Your music, all in one place'}</Text>
-      <Text style={styles.lede}>Stream anything. Radio picks what's next, lyrics follow along, and one tap keeps it offline.</Text>
+      <Text style={styles.h1}>{greeting()}</Text>
 
       {stage ? (
         <View style={styles.now}>
@@ -353,7 +349,12 @@ const StreamScreen: React.FC = () => {
   if (searchActive) {
     body = (
       <RiseIn>
-        <SectionHeading eyebrow={searching ? 'Searching' : `${results?.length ?? 0} results`} title={`“${query.trim()}”`} action="Clear" onAction={clearSearch} />
+        <SectionHeading
+          title={`“${query.trim()}”`}
+          subtitle={searching ? 'Searching…' : `${results?.length ?? 0} ${results?.length === 1 ? 'result' : 'results'}`}
+          action="Clear"
+          onAction={clearSearch}
+        />
         {searching ? <ActivityIndicator color={Signal.wave} style={styles.spinner} /> : null}
         {!searching && results?.length === 0 ? (
           <Text style={styles.empty}>Nothing streamable for that. Try the artist name or a different spelling.</Text>
@@ -378,7 +379,7 @@ const StreamScreen: React.FC = () => {
         <Ionicons name="cloud-offline-outline" size={28} color={Signal.inkMuted} />
         <Text style={styles.emptyTitle}>Can't reach the catalog</Text>
         <Text style={styles.emptyBody}>Check your connection and pull down to try again. Your downloads still play offline.</Text>
-        <PrimaryButton label="Open Downloads" icon="download-outline" onPress={openDownloads} />
+        <PrimaryButton label="Open downloads" icon="download-outline" onPress={openDownloads} />
       </RiseIn>
     );
   } else {
@@ -389,9 +390,8 @@ const StreamScreen: React.FC = () => {
           <View>
             <RiseIn index={1}>
             <SectionHeading
-              eyebrow={feed.coldStart ? 'Trending now' : 'Radio from your favourites'}
-              accent={eyebrowInk}
               title="Quick picks"
+              subtitle={feed.coldStart ? 'Trending now' : 'Radio from your favourites'}
               action="Play all"
               onAction={() => play(feed.quickPicks, 0)}
             />
@@ -402,13 +402,13 @@ const StreamScreen: React.FC = () => {
 
         {feed.dailyDiscover.length > 0 ? (
           <RiseIn index={2}>
-            <SectionHeading eyebrow="Made for you" accent={eyebrowInk} title="Daily discover" />
+            <SectionHeading title="Daily discover" subtitle="New songs that follow ones you play" />
             {tileShelf('discover', feed.dailyDiscover.map(d => d.recommendation), (_s, i) => `After ${feed.dailyDiscover[i].seed.title}`)}
           </RiseIn>
         ) : null}
 
         <RiseIn index={3}>
-          <SectionHeading eyebrow="Tap a room" accent={eyebrowInk} title="Moods" />
+          <SectionHeading title="Moods" />
           <View style={styles.moodGrid}>
             {MOODS.map(m => (
               <View key={m.label} style={styles.moodCell}>
@@ -420,14 +420,14 @@ const StreamScreen: React.FC = () => {
 
         {feed.similar.map((shelf, i) => (
           <RiseIn key={shelf.artist} index={4 + i}>
-            <SectionHeading eyebrow="Similar to" accent={eyebrowInk} title={shelf.artist} action="Play" onAction={() => play(shelf.songs, 0)} />
+            <SectionHeading title={`More like ${shelf.artist}`} action="Play" onAction={() => play(shelf.songs, 0)} />
             {tileShelf(`similar-${shelf.artist}`, shelf.songs)}
           </RiseIn>
         ))}
 
         {feed.forgottenFavorites.length > 0 ? (
           <RiseIn index={6}>
-            <SectionHeading eyebrow="From your downloads" accent={eyebrowInk} title="Forgotten favorites" action="See all" onAction={openDownloads} />
+            <SectionHeading title="Forgotten favourites" subtitle="From your downloads" action="See all" onAction={openDownloads} />
             <FlatList
               horizontal
               data={feed.forgottenFavorites}
@@ -489,14 +489,6 @@ const styles = StyleSheet.create({
     letterSpacing: -1.4,
     color: Signal.ink,
     marginTop: 2,
-  },
-  lede: {
-    fontFamily: Fonts.interRegular,
-    fontSize: 14.5,
-    lineHeight: 21,
-    color: Signal.inkMuted,
-    marginTop: 10,
-    maxWidth: 340,
   },
   now: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, marginTop: Space.lg + 4 },
   nowMeta: { flex: 1, minWidth: 0 },

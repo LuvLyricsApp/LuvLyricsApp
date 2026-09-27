@@ -204,7 +204,7 @@ export const PlaylistDetailScreen: React.FC = () => {
          }
       } else {
          addToScanQueue(song);
-         setToast({ visible: true, message: `Added to Magic Search: "${song.title}"`, type: 'success' });
+         setToast({ visible: true, message: `Finding lyrics for ${song.title}`, type: 'success' });
       }
   }, [scanQueue, addToScanQueue]);
 

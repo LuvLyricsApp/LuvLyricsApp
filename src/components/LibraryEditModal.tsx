@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   container: { backgroundColor: '#1E1E1E', borderRadius: 20, padding: 24, width: '100%', maxWidth: 340 },
   heading: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 20, textAlign: 'center' },
-  label: { color: '#aaa', marginBottom: 8, fontSize: 12, textTransform: 'uppercase' },
+  label: { color: '#aaa', marginBottom: 8, fontSize: 13, fontWeight: '600' },
   input: { backgroundColor: '#333', color: '#fff', borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 16 },
   buttonRow: { flexDirection: 'row', gap: 12 },
   cancelBtn: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#333', alignItems: 'center' },

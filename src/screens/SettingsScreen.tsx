@@ -661,7 +661,7 @@ const SettingsScreen: React.FC<Props> = () => {
           <Text style={[styles.quickHint, { color: colors.textMuted }]}>Hold any shortcut to customise</Text>
 
           {/* ── Section: Personalization ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PERSONALIZATION</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Personalisation</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow icon="moon-outline" iconColor="#A78BFA" label="Appearance" onPress={() => setActiveSheet('appearance')} />
             <MenuRow icon="play-circle-outline" iconColor="#34C759" label="Playback" onPress={() => setActiveSheet('playback')} />
@@ -671,7 +671,7 @@ const SettingsScreen: React.FC<Props> = () => {
           </View>
 
           {/* ── Section: System ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SYSTEM</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>System</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow
               icon="desktop-outline" iconColor="#0A84FF" label="Desktop Connect"
@@ -683,7 +683,7 @@ const SettingsScreen: React.FC<Props> = () => {
           </View>
 
           {/* ── Section: Tools ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TOOLS</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Tools</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow icon="download-outline" iconColor="#A78BFA" label="Export Library" onPress={handleExport} />
             <MenuRow icon="cloud-upload-outline" iconColor="#F472B6" label="Import Backup" onPress={handleImport} />
@@ -1196,14 +1196,14 @@ const styles = StyleSheet.create({
   quickHint: { fontSize: 11, textAlign: 'center', marginBottom: 24, opacity: 0.7 },
 
   // Pin picker
-  pinSectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginTop: 12, marginBottom: 4, marginLeft: 2 },
+  pinSectionLabel: { fontSize: 11, fontWeight: '600', marginTop: 12, marginBottom: 4, marginLeft: 2 },
   pinPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   pinPickerLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
   pinPickerUsed: { fontSize: 12, marginRight: 4 },
 
   // Section label
   sectionLabel: {
-    fontSize: 12, fontWeight: '600', letterSpacing: 0.6,
+    fontSize: 13, fontWeight: '600',
     marginBottom: 8, marginLeft: 4,
   },
 

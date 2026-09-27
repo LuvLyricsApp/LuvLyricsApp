@@ -103,5 +103,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   metaText: { color: '#888', fontSize: 11 },
   providerBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  providerText: { color: '#fff', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
+  providerText: { color: '#fff', fontSize: 11, fontWeight: '600' },
 });

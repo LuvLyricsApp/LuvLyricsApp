@@ -106,7 +106,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         {canvasSource ? (
           <View style={styles.canvasChip} accessibilityLabel={`Motion artwork from ${CANVAS_LABEL[canvasSource]}`}>
             <View style={styles.canvasDot} />
-            <Text style={styles.canvasChipText}>CANVAS · {CANVAS_LABEL[canvasSource].toUpperCase()}</Text>
+            <Text style={styles.canvasChipText}>Canvas · {CANVAS_LABEL[canvasSource]}</Text>
           </View>
         ) : null}
 
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   canvasChipText: {
     ...PlayerType.meta,
-    fontSize: 9,
+    fontSize: 11,
     color: Signal.inkSoft,
   },
   metaRow: {

@@ -18,7 +18,7 @@ const SearchRecentSearches: React.FC<SearchRecentSearchesProps> = ({ searches, o
   return (
     <ScrollView contentContainerStyle={styles.recentSearchesContainer}>
       {searches.length > 0 && (
-        <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Recent Searches</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Recent searches</Text>
       )}
       {searches.map((item, index) => (
         <Pressable
@@ -44,7 +44,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 12,
-    letterSpacing: 0.5,
   },
   recentItem: {
     flexDirection: 'row',

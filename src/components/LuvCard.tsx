@@ -497,8 +497,8 @@ export const LuvCard = React.memo<LuvCardProps>(
               />
               <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
               <ActionBtn
-                icon="sparkles"
-                label={isMagicActive ? 'Tuning…' : 'Similar'}
+                icon="radio-outline"
+                label={isMagicActive ? 'Finding…' : 'Similar'}
                 iconColor={isMagicActive ? Signal.wave : Signal.ink}
                 labelColor={isMagicActive ? Signal.wave : undefined}
                 onPress={handleMagic}

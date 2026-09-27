@@ -13,9 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
-import { accentInk } from '../components/allegra/palette';
 import { RiseIn } from '../components/allegra/motion';
-import { Eyebrow, GlassButton, PrimaryButton, SectionHeading, Sleeve } from '../components/allegra/home';
+import { GlassButton, PrimaryButton, SectionHeading, Sleeve } from '../components/allegra/home';
 import { Fonts } from '../constants/fonts';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { TrackRow } from '../components/stream/StreamItems';
@@ -61,7 +60,6 @@ const DownloadsScreen: React.FC = () => {
   const stageSong = downloaded.find(s => s.coverImageUri) ?? downloaded[0];
   const stageArt = currentCover ?? stageSong?.coverImageUri;
   const palette = useArtworkPalette(stageArt);
-  const eyebrowInk = accentInk(palette);
 
   const active = useMemo(() => queue.filter(q => q.status !== 'completed'), [queue]);
   const doneCount = queue.length - active.length;
@@ -113,7 +111,6 @@ const DownloadsScreen: React.FC = () => {
       </View>
 
       <RiseIn style={styles.hero}>
-        <Eyebrow accent={eyebrowInk} icon="phone-portrait-outline">On this device</Eyebrow>
         <Text style={styles.title}>Downloads</Text>
         <View style={styles.heroRow}>
           <Sleeve
@@ -142,9 +139,8 @@ const DownloadsScreen: React.FC = () => {
       {active.length > 0 ? (
         <>
           <SectionHeading
-            eyebrow={`${active.length} in progress`}
-            accent={eyebrowInk}
             title="Downloading"
+            subtitle={`${active.length} in progress`}
             action={doneCount > 0 ? 'Clear done' : undefined}
             onAction={doneCount > 0 ? clearCompleted : undefined}
           />

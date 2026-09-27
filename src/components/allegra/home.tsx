@@ -3,6 +3,9 @@
  * original in apps/web/src/styles/app.css:
  *
  *   Eyebrow / SectionHeading → .eyebrow, .section-heading
+ *
+ * Labels stay in sentence case in the body font. Monospace capitals with wide
+ * tracking read as generated UI, not as a music app.
  *   Spotlight                → .home-spotlight (+ -wash, ::after veil)
  *   Sleeve                   → .home-stage__sleeve / __cover / __play
  *   QuickCard                → .home-quick-card (rail)
@@ -12,7 +15,7 @@
  *   PrimaryButton/GlassButton→ .btn-primary / .btn-glass
  */
 import React, { useState } from 'react';
-import { LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Blur, Canvas, Image as SkiaImage, LinearGradient as SkiaLinearGradient, Mask, Rect, useImage, vec } from '@shopify/react-native-skia';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,31 +24,27 @@ import { Glass, Radius, Signal, Space } from '../../constants/allegraTheme';
 import { Tactile } from './motion';
 import Artwork from './Artwork';
 
-const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // ─── Type ──────────────────────────────────────────────────────────────────
 
-export const Eyebrow: React.FC<{ children: React.ReactNode; accent?: string; icon?: IconName }> = ({ children, accent, icon }) => (
-  <View style={styles.eyebrowRow}>
-    {icon ? <Ionicons name={icon} size={12} color={Signal.wave} /> : null}
-    <Text style={[styles.eyebrow, accent ? { color: accent } : null]} numberOfLines={1}>
-      {typeof children === 'string' ? children.toUpperCase() : children}
-    </Text>
-  </View>
+export const Eyebrow: React.FC<{ children: React.ReactNode; accent?: string }> = ({ children, accent }) => (
+  <Text style={[styles.eyebrow, accent ? { color: accent } : null]} numberOfLines={1}>
+    {children}
+  </Text>
 );
 
+/** Title first, then an optional plain-language line under it — the way Apple Music and Spotify head a shelf. */
 export const SectionHeading: React.FC<{
   title: string;
-  eyebrow?: string;
-  accent?: string;
+  subtitle?: string;
   action?: string;
   onAction?: () => void;
-}> = ({ title, eyebrow, accent, action, onAction }) => (
+}> = ({ title, subtitle, action, onAction }) => (
   <View style={styles.sectionHeading}>
     <View style={styles.flex}>
-      {eyebrow ? <Eyebrow accent={accent}>{eyebrow}</Eyebrow> : null}
       <Text style={styles.h2} numberOfLines={1}>{title}</Text>
+      {subtitle ? <Text style={styles.sectionSub} numberOfLines={1}>{subtitle}</Text> : null}
     </View>
     {action && onAction ? (
       <Tactile onPress={onAction} accessibilityRole="button" style={styles.shelfLink}>
@@ -187,7 +186,7 @@ export const Tile: React.FC<{
     </Tactile>
     <View style={styles.tileMeta}>
       <View style={styles.flex}>
-        {eyebrow ? <Text style={styles.tileEyebrow} numberOfLines={1}>{eyebrow.toUpperCase()}</Text> : null}
+        {eyebrow ? <Text style={styles.tileEyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
         <Text style={[styles.tileTitle, isCurrent && { color: Signal.wave }]} numberOfLines={1}>{title}</Text>
         {subtitle ? <Text style={styles.tileSub} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
@@ -251,11 +250,10 @@ export const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   fill: { width: '100%', height: '100%' },
   disabled: { opacity: 0.4 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  eyebrow: { fontFamily: MONO, fontSize: 11, fontWeight: '500', letterSpacing: 0.9, color: Signal.inkFaint },
+  eyebrow: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkMuted, marginBottom: 4 },
   sectionHeading: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: Space.md,
     paddingHorizontal: Space.lg - 4,
@@ -263,6 +261,7 @@ export const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   h2: { fontFamily: Fonts.interBold, fontSize: 21, letterSpacing: -0.5, color: Signal.ink },
+  sectionSub: { fontFamily: Fonts.interRegular, fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
   shelfLink: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 6, paddingLeft: 10 },
   shelfLinkText: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkSoft },
 
@@ -378,7 +377,7 @@ export const styles = StyleSheet.create({
     backgroundColor: Signal.wave,
   },
   tileMeta: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 10 },
-  tileEyebrow: { fontFamily: MONO, fontSize: 9.5, letterSpacing: 0.7, color: Signal.wave, marginBottom: 3 },
+  tileEyebrow: { fontFamily: Fonts.interMedium, fontSize: 12, color: Signal.inkMuted, marginBottom: 2 },
   tileTitle: { fontFamily: Fonts.interSemiBold, fontSize: 14, color: Signal.ink },
   tileSub: { fontFamily: Fonts.interRegular, fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
   tileAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
@@ -391,7 +390,7 @@ export const styles = StyleSheet.create({
   },
   chartRowCurrent: { backgroundColor: 'rgba(217, 230, 106, 0.07)' },
   chartMain: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingLeft: 6, paddingRight: 6 },
-  rank: { width: 26, fontFamily: MONO, fontSize: 16, fontWeight: '500', color: Signal.inkFaint, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  rank: { width: 26, fontFamily: Fonts.interSemiBold, fontSize: 15, color: Signal.inkFaint, textAlign: 'right', fontVariant: ['tabular-nums'] },
   chartArt: { width: 48, height: 48, borderRadius: 10, overflow: 'hidden', backgroundColor: Signal.bgSubtle },
   chartPlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.32)' },
   chartTitle: { fontFamily: Fonts.interSemiBold, fontSize: 15, color: Signal.ink },

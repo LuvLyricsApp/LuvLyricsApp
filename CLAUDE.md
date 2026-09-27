@@ -107,6 +107,7 @@ unmounts mid-load.
 - After changing the queue under a playing track, call `prepareNextInQueue()` — Media3 may have staged the old "next" for gapless advance
 - Fonts in `assets/fonts/` must be real font binaries — the Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto. Inter is the `@expo-google-fonts/inter` build (OFL, `Inter-OFL.txt`)
 - Motion: springs for anything a finger can interrupt, 200–400ms for state changes, 40ms list staggers, max two moving effects per screen, transform/opacity only. Primitives live in `components/allegra/motion.tsx` (`RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`) — reuse them instead of hand-rolling
+- UI copy is sentence case ("Good morning", "Now playing"), never all caps. No `textTransform: 'uppercase'`, no positive `letterSpacing` on labels, no monospace as decoration, no emoji in UI strings, no sparkle icons or "magic" wording — these read as generated UI. Shelves use `SectionHeading` title + optional plain `subtitle`, not an eyebrow over every heading
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 

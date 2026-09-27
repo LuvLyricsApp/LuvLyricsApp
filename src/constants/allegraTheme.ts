@@ -73,7 +73,7 @@ export const Space = {
 export const PlayerType = {
   title: { fontFamily: Fonts.interBold, fontSize: 22, letterSpacing: -0.5 },
   artist: { fontFamily: Fonts.interMedium, fontSize: 18, letterSpacing: -0.2 },
-  meta: { fontFamily: Fonts.interSemiBold, fontSize: 11, letterSpacing: 0.9 },
+  meta: { fontFamily: Fonts.interSemiBold, fontSize: 11, letterSpacing: 0 },
   time: { fontFamily: Fonts.interSemiBold, fontSize: 12, fontVariant: ['tabular-nums' as const] },
 } as const;
 

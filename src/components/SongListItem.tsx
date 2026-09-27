@@ -46,7 +46,7 @@ export const SongListItem = React.memo(({ song, onPress, onLongPress, addToScanQ
       <Pressable style={styles.swipeAction} onPress={handleSwipeActionPress}>
         <RNAnimated.View style={[StyleSheet.absoluteFill, styles.swipeInnerContainer, { opacity }]}>
           <View style={styles.swipeIconContainer}>
-            <Ionicons name="sparkles" size={24} color={colors.primary} />
+            <Ionicons name="document-text-outline" size={24} color={colors.primary} accessibilityLabel="Find lyrics" />
           </View>
         </RNAnimated.View>
       </Pressable>
