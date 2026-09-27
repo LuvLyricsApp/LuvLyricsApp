@@ -12,6 +12,7 @@ import {
   Pressable,
   TouchableWithoutFeedback,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,7 +71,11 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
             styles.menuContent,
             anchorPosition ? {
               position: 'absolute',
-              top: anchorPosition.y,
+              // Tapped in the lower half: open upward from the tap, so a
+              // button near the bottom never pushes the menu off screen.
+              ...(anchorPosition.y > Dimensions.get('window').height / 2
+                ? { bottom: Dimensions.get('window').height - anchorPosition.y + 8 }
+                : { top: anchorPosition.y }),
               right: anchorPosition.x > 200 ? 16 : undefined, // Align right if tapped on right side
               left: anchorPosition.x <= 200 ? 16 : undefined,
               width: 280, // Slightly wider for safer text fitting

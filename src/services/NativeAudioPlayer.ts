@@ -10,6 +10,9 @@ type MainPlayerNative = {
   seekTo: (seconds: number) => void;
   updateMetadata: (metadata: PlayerMetadata) => void;
   destroy: () => void;
+  getVolume?: () => number;
+  setVolume?: (level: number) => void;
+  openOutputSwitcher?: () => boolean;
   addListener: (event: string, cb: (data: any) => void) => { remove: () => void };
 };
 
@@ -73,8 +76,25 @@ export const NativeAudioPlayer = {
     MainPlayerModule.destroy();
   },
 
+  /** System media volume, 0..1 (null where the platform has no control). */
+  getVolume(): number | null {
+    if (!this.isAvailable() || !MainPlayerModule?.getVolume) return null;
+    try { return MainPlayerModule.getVolume(); } catch { return null; }
+  },
+
+  setVolume(level: number) {
+    if (!this.isAvailable() || !MainPlayerModule?.setVolume) return;
+    try { MainPlayerModule.setVolume(Math.max(0, Math.min(1, level))); } catch { /* no volume control */ }
+  },
+
+  /** Opens the system output picker (speaker / Bluetooth / cast). */
+  openOutputSwitcher(): boolean {
+    if (!this.isAvailable() || !MainPlayerModule?.openOutputSwitcher) return false;
+    try { return MainPlayerModule.openOutputSwitcher(); } catch { return false; }
+  },
+
   addListener(
-    eventName: 'onPlaybackStatus' | 'onRemoteCommand' | 'onTrackAdvanced',
+    eventName: 'onPlaybackStatus' | 'onRemoteCommand' | 'onTrackAdvanced' | 'onVolumeChanged',
     callback: (data: any) => void,
   ) {
     if (!this.isAvailable()) return EMPTY_SUB;

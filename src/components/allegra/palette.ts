@@ -122,3 +122,12 @@ export const accentInk = (p: AuraPalette): string => {
   const mix = (c: number) => (c * 0.62 + 0.38) * 255;
   return toHex(mix(r), mix(g), mix(b));
 };
+
+/**
+ * A calm mid-dark tone of the cover for small chrome (the mini player pill):
+ * the cover's hue, desaturated, at a fixed lightness so white text always reads.
+ */
+export const pillTint = (hex: string): string => {
+  const { hue, sat } = hexToHsl(hex);
+  return hslToHex(hue, Math.min(0.3, Math.max(0.12, sat * 0.45)), 0.3);
+};

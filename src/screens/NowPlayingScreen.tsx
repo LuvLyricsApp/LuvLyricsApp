@@ -11,17 +11,16 @@ import NowPlayingBackground from '../components/NowPlayingBackground';
 import NowPlayingHeader from '../components/NowPlayingHeader';
 import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
-import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigationService';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
+import { PlayerSheet, QueueList, SleepTimerList } from '../components/player/PlayerSheet';
+import { sleepLabel, useSleepTimerStore } from '../store/sleepTimerStore';
 
 const { GestureDetector } = GestureHandler;
 
 type Props = RootStackScreenProps<'NowPlaying'>;
 
 const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
-  const colors = useThemeColors();
-  const isDark = useIsDark();
   const { songId } = route.params;
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
 
@@ -48,27 +47,20 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     showLyrics,
     setShowLyrics,
     panGesture,
-    blob1Style,
-    blob2Style,
-    blob3Style,
     processedLyrics,
     isLinear,
     flatListRef,
     getActiveLyricIndex,
-    playButtonStyle,
     togglePlay,
     skipForward,
     skipBackward,
     handleScrub,
     handleLyricTap,
     gradientColors,
-    isDynamicTheme,
     updateCurrentSong,
     addRecentArt,
     autoHideControls,
     setAutoHideControls,
-    animateBackground,
-    setAnimateBackground,
     storePlaying,
     toggleLike,
     isUserScrolling,
@@ -76,11 +68,24 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   } = useNowPlayingLogic(songId);
 
   const canvas = useCanvasArtwork(currentSong);
-  const [canvasVisible, setCanvasVisible] = React.useState(false);
 
-  const menuOptions = React.useMemo(() => [
+  const [sheet, setSheet] = React.useState<'queue' | 'timer' | null>(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
+
+  // The sleep timer's remaining time, refreshed while it runs.
+  const sleepEndsAt = useSleepTimerStore(s => s.endsAt);
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    if (!sleepEndsAt) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, [sleepEndsAt]);
+  const sleepText = sleepEndsAt ? sleepLabel(sleepEndsAt, now) : null;
+
+  const menuOptions = React.useMemo<React.ComponentProps<typeof NowPlayingHeader>['menuOptions']>(() => [
     {
-      label: showLyrics ? 'Hide Lyrics' : 'Show Lyrics',
+      label: showLyrics ? 'Hide lyrics' : 'Show lyrics',
       icon: showLyrics ? 'eye-off-outline' : 'eye-outline',
       onPress: () => {
         setMenuVisible(false);
@@ -88,7 +93,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     },
     {
-      label: 'Go to Current Lyric',
+      label: 'Go to current lyric',
       icon: 'locate-outline',
       onPress: () => {
         setMenuVisible(false);
@@ -103,7 +108,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     },
     {
-      label: 'Edit Lyrics',
+      label: 'Edit lyrics',
       icon: 'create-outline',
       onPress: () => {
         setMenuVisible(false);
@@ -111,7 +116,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     },
     {
-      label: 'Sync Lyrics',
+      label: 'Sync lyrics',
       icon: 'timer-outline',
       onPress: () => {
         setMenuVisible(false);
@@ -119,7 +124,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     },
     {
-      label: autoHideControls ? 'Disable Auto-Hide' : 'Enable Auto-Hide',
+      label: autoHideControls ? 'Keep controls visible' : 'Hide controls when idle',
       icon: autoHideControls ? 'eye-outline' : 'eye-off-outline',
       onPress: () => {
         setMenuVisible(false);
@@ -127,14 +132,14 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     },
     {
-      label: animateBackground ? 'Disable Animation' : 'Enable Animation',
-      icon: animateBackground ? 'contrast-outline' : 'contrast',
+      label: 'Change cover',
+      icon: 'image-outline',
       onPress: () => {
         setMenuVisible(false);
-        setAnimateBackground(!animateBackground);
+        setShowCoverSearch(true);
       }
-    }
-  ], [showLyrics, setShowLyrics, getActiveLyricIndex, isLinear, currentSong?.id, autoHideControls, setAutoHideControls, animateBackground, setAnimateBackground, flatListRef, setMenuVisible, navigation]);
+    },
+  ], [showLyrics, setShowLyrics, getActiveLyricIndex, isLinear, currentSong?.id, autoHideControls, setAutoHideControls, setShowCoverSearch, flatListRef, setMenuVisible, navigation]);
 
   const handleCoverSelect = useCallback(async (uri: string) => {
     setShowCoverSearch(false);
@@ -153,35 +158,23 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <GestureDetector gesture={panGesture}>
-      <View style={[styles.container, { backgroundColor: isDark ? '#000' : colors.background }]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#000' : colors.background }]} />
-
+      <View style={styles.container}>
         <NowPlayingBackground
-          isDynamicTheme={isDynamicTheme}
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
-          animateBackground={animateBackground}
-          blob1Style={blob1Style}
-          blob2Style={blob2Style}
-          blob3Style={blob3Style}
-          isDark={isDark}
+          showLyrics={showLyrics}
           canvas={canvas}
           playing={storePlaying}
-          onCanvasVisibleChange={setCanvasVisible}
         />
 
         <NowPlayingHeader
           animatedStyle={animatedStyle}
           controlsVisible={controlsVisible}
           onGoBack={() => safeGoBack(navigation)}
-          onMenuPress={handleMenuPress}
           menuVisible={menuVisible}
           onMenuClose={() => setMenuVisible(false)}
           menuAnchor={menuAnchor}
           menuOptions={menuOptions}
-          currentSongTitle={currentSong?.title}
-          colors={colors}
-          isDark={isDark}
         />
 
         <CoverArtSearchScreen
@@ -198,31 +191,19 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             currentTime={positionSV}
             onLyricPress={handleLyricTap}
             songTitle={currentSong?.title}
-            songArtist={currentSong?.artist}
-            songId={currentSong?.id}
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}
-            coverImageUri={currentSong?.coverImageUri}
-            storePlaying={storePlaying}
-            isDark={isDark}
-            colors={colors}
-            onCoverLongPress={() => setShowCoverSearch(true)}
-            canvasVisible={canvasVisible}
           />
         </View>
 
         <NowPlayingControls
           animatedStyle={animatedStyle}
           controlsVisible={controlsVisible}
-          isDark={isDark}
-          colors={colors}
-          coverImageUri={currentSong?.coverImageUri}
           storePlaying={storePlaying}
           currentSongTitle={currentSong?.title}
           currentSongArtist={currentSong?.artist}
           isCurrentSongLiked={isCurrentSongLiked}
-          playButtonStyle={playButtonStyle}
           onTogglePlay={togglePlay}
           onSkipForward={skipForward}
           onSkipBackward={skipBackward}
@@ -232,8 +213,19 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           durationSV={durationSV}
           onSeek={handleScrub}
           showLyrics={showLyrics}
+          compact={showLyrics}
           onMorePress={handleMenuPress}
+          onOpenQueue={() => setSheet('queue')}
+          onOpenTimer={() => setSheet('timer')}
+          sleepLabel={sleepText}
         />
+
+        <PlayerSheet visible={sheet === 'queue'} title="Playing next" onClose={closeSheet}>
+          <QueueList onPicked={closeSheet} />
+        </PlayerSheet>
+        <PlayerSheet visible={sheet === 'timer'} title="Sleep timer" onClose={closeSheet}>
+          <SleepTimerList onPicked={closeSheet} />
+        </PlayerSheet>
       </View>
     </GestureDetector>
   );
@@ -242,7 +234,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0b0b0f',
   },
   contentArea: {
     flex: 1,

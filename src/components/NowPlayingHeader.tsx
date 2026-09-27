@@ -1,111 +1,44 @@
+/**
+ * Apple Music has no header bar on Now Playing — just a grabber at the top.
+ * Tap it (or swipe the screen down) to go back. The player menu opens from
+ * the ••• beside the title, and is anchored here.
+ */
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomMenu from './CustomMenu';
 
 interface NowPlayingHeaderProps {
-  animatedStyle: any;
+  animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
   controlsVisible: boolean;
   onGoBack: () => void;
-  onMenuPress: (event: any) => void;
   menuVisible: boolean;
   onMenuClose: () => void;
   menuAnchor?: { x: number; y: number };
-  menuOptions: any[];
-  currentSongTitle?: string;
-  colors: {
-    textPrimary: string;
-    textSecondary: string;
-  };
-  isDark: boolean;
+  menuOptions: React.ComponentProps<typeof CustomMenu>['options'];
 }
 
 const NowPlayingHeader: React.FC<NowPlayingHeaderProps> = ({
-  animatedStyle,
-  controlsVisible,
-  onGoBack,
-  onMenuPress,
-  menuVisible,
-  onMenuClose,
-  menuAnchor,
-  menuOptions,
-  currentSongTitle,
-  colors,
-  isDark,
+  animatedStyle, controlsVisible, onGoBack, menuVisible, onMenuClose, menuAnchor, menuOptions,
 }) => {
+  const insets = useSafeAreaInsets();
   return (
-    <Animated.View style={[styles.headerContainer, animatedStyle]} pointerEvents={controlsVisible ? 'auto' : 'none'}>
-      <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.blurContainer}>
-        <SafeAreaView edges={['top']} style={styles.headerContent}>
-          <Pressable onPress={onGoBack} style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-            <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
-          </Pressable>
-
-          <View style={{ alignItems: 'center', flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>Now playing</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{currentSongTitle}</Text>
-          </View>
-
-          <View style={styles.headerRight}>
-            <CustomMenu
-              visible={menuVisible}
-              onClose={onMenuClose}
-              anchorPosition={menuAnchor}
-              options={menuOptions}
-            />
-            <Pressable onPress={onMenuPress} style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-              <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </BlurView>
+    <Animated.View
+      style={[styles.container, { paddingTop: insets.top + 6 }, animatedStyle]}
+      pointerEvents={controlsVisible ? 'box-none' : 'none'}
+    >
+      <Pressable onPress={onGoBack} hitSlop={{ top: 12, bottom: 12, left: 40, right: 40 }} accessibilityRole="button" accessibilityLabel="Close player">
+        <View style={styles.grabber} />
+      </Pressable>
+      <CustomMenu visible={menuVisible} onClose={onMenuClose} anchorPosition={menuAnchor} options={menuOptions} />
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    overflow: 'hidden',
-  },
-  blurContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(10,10,10,0.3)',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    paddingTop: Platform.OS === 'android' ? 20 : 0,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    maxWidth: '60%',
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerButton: {
-    padding: 8,
-    borderRadius: 20,
-  },
+  container: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', zIndex: 20 },
+  grabber: { width: 38, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.55)', marginVertical: 6 },
 });
 
 export default React.memo(NowPlayingHeader);

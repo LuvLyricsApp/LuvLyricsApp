@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
+import PillPlayer from './PillPlayer';
 import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -961,6 +962,23 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const tabChromeH = pillMode
     ? pillBarTop(insets.bottom) + PILL_STACK_GAP
     : TAB_BAR_HEIGHT + insets.bottom;
+
+  // The pill nav gets Echo Music's compact pill; the classic bar keeps the old UI.
+  if (pillMode) {
+    return (
+      <PillPlayer
+        title={currentSong.title}
+        artist={currentSong.artist}
+        coverImageUri={currentSong.coverImageUri}
+        playing={storePlaying}
+        bottom={tabChromeH}
+        onOpen={openNowPlaying}
+        onTogglePlay={togglePlay}
+        onNext={skipForward}
+        onPrevious={skipBackward}
+      />
+    );
+  }
 
   const classicShellStyle = [
     styles.container,

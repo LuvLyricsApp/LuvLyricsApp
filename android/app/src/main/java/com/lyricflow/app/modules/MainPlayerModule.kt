@@ -1,7 +1,14 @@
 package com.lyricflow.app.modules
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import android.media.MediaRouter2
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -20,11 +27,22 @@ private const val META_MAX = 500
 
 class MainPlayerModule : Module() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var volumeReceiver: BroadcastReceiver? = null
+
+    private fun audioManager(): AudioManager? =
+        appContext.reactContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    /** Media volume as 0..1. */
+    private fun mediaVolume(): Double {
+        val am = audioManager() ?: return 0.0
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max
+    }
 
     override fun definition() = ModuleDefinition {
         Name("MainPlayer")
 
-        Events("onPlaybackStatus", "onRemoteCommand", "onTrackAdvanced")
+        Events("onPlaybackStatus", "onRemoteCommand", "onTrackAdvanced", "onVolumeChanged")
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
@@ -46,7 +64,70 @@ class MainPlayerModule : Module() {
             }
         }
 
+        // Hardware volume keys move the Now Playing volume slider too.
+        OnStartObserving {
+            val context = appContext.reactContext ?: return@OnStartObserving
+            if (volumeReceiver != null) return@OnStartObserving
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: Intent?) {
+                    if (intent?.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) != AudioManager.STREAM_MUSIC) return
+                    sendEvent("onVolumeChanged", mapOf("volume" to mediaVolume()))
+                }
+            }
+            val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.registerReceiver(receiver, filter)
+            }
+            volumeReceiver = receiver
+        }
+
+        OnStopObserving {
+            volumeReceiver?.let { r -> runCatching { appContext.reactContext?.unregisterReceiver(r) } }
+            volumeReceiver = null
+        }
+
+        Function("getVolume") { mediaVolume() }
+
+        Function("setVolume") { level: Double ->
+            val am = audioManager() ?: return@Function null
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            val index = (level.coerceIn(0.0, 1.0) * max).toInt()
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0)
+            null
+        }
+
+        /**
+         * The system's "play on" picker (speaker, Bluetooth, cast). Android 14+
+         * has a public API; 11–13 open the Settings media-output panel; older
+         * versions fall back to Bluetooth settings.
+         */
+        Function("openOutputSwitcher") {
+            val context = appContext.reactContext ?: return@Function false
+            try {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    MediaRouter2.getInstance(context).showSystemOutputSwitcher()
+                } else {
+                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Intent("com.android.settings.panel.action.MEDIA_OUTPUT")
+                            .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", context.packageName)
+                    } else {
+                        Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                    }
+                    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+                true
+            } catch (_: Exception) {
+                runCatching {
+                    context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.isSuccess
+            }
+        }
+
         OnDestroy {
+            volumeReceiver?.let { r -> runCatching { appContext.reactContext?.unregisterReceiver(r) } }
+            volumeReceiver = null
             PlayerBridge.onStatusUpdate = null
             PlayerBridge.onRemoteCommand = null
             PlayerBridge.onTrackAdvanced = null

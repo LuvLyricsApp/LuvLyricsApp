@@ -1,0 +1,117 @@
+/**
+ * Apple Music's Now Playing backdrop, drawn once with Skia.
+ *
+ *   - The cover, heavily blurred, fills the screen: the room takes the
+ *     song's colours.
+ *   - The sharp cover runs full-bleed across the top and dissolves into that
+ *     blur through a real alpha mask — no hard edge, no dark band.
+ *   - A new song cross-fades over the old one.
+ *
+ * Nothing here animates per frame except those fades, so it costs nothing
+ * while a song plays.
+ */
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Blur,
+  Canvas,
+  Fill,
+  Group,
+  Image as SkiaImage,
+  LinearGradient,
+  Mask,
+  Rect,
+  SkImage,
+  useImage,
+  vec,
+} from '@shopify/react-native-skia';
+import { DerivedValue, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Motion } from '../../constants/allegraTheme';
+import { AuraPalette } from '../allegra/palette';
+
+interface AppleBackdropProps {
+  uri?: string | null;
+  palette: AuraPalette;
+  /** The full-bleed cover at the top (hidden behind lyrics or a canvas video). */
+  showHero: boolean;
+}
+
+const BLUR = 42;
+const BLEED = 80;
+
+/** Hero height: full width and then some, like the reference (about 60% of the screen). */
+export const heroHeight = (width: number, height: number): number => Math.max(width * 1.12, height * 0.6);
+
+const Layer: React.FC<{
+  image: SkImage;
+  width: number;
+  height: number;
+  heroH: number;
+  hero: DerivedValue<number>;
+}> = ({ image, width, height, heroH, hero }) => (
+  <Group>
+    <SkiaImage image={image} x={-BLEED} y={-BLEED} width={width + BLEED * 2} height={height + BLEED * 2} fit="cover">
+      <Blur blur={BLUR} />
+    </SkiaImage>
+    <Group opacity={hero}>
+      <Mask
+        mask={(
+          <Rect x={0} y={0} width={width} height={heroH}>
+            <LinearGradient start={vec(0, heroH * 0.52)} end={vec(0, heroH)} colors={['#000000ff', '#00000000']} />
+          </Rect>
+        )}
+      >
+        <SkiaImage image={image} x={0} y={0} width={width} height={heroH} fit="cover" />
+      </Mask>
+    </Group>
+  </Group>
+);
+
+const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero }) => {
+  const { width, height } = useWindowDimensions();
+  const heroH = heroHeight(width, height);
+  const image = useImage(uri ?? undefined);
+
+  // Keep the previous cover underneath while the new one fades in.
+  const [layers, setLayers] = useState<{ prev: SkImage | null; next: SkImage | null }>({ prev: null, next: null });
+  const lastUri = useRef<string | null | undefined>(undefined);
+  const fade = useSharedValue(1);
+  useEffect(() => {
+    if (!image || lastUri.current === uri) return;
+    lastUri.current = uri;
+    setLayers(l => ({ prev: l.next, next: image }));
+    fade.value = 0;
+    fade.value = withTiming(1, { duration: Motion.duration.cinematic, easing: Motion.ease.standard });
+  }, [image, uri, fade]);
+
+  const hero = useSharedValue(showHero ? 1 : 0);
+  useEffect(() => {
+    hero.value = withTiming(showHero ? 1 : 0, { duration: Motion.duration.slow, easing: Motion.ease.standard });
+  }, [showHero, hero]);
+  const heroOpacity = useDerivedValue(() => hero.value);
+  const fadeOpacity = useDerivedValue(() => fade.value);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Canvas style={StyleSheet.absoluteFill}>
+        {/* Until the cover decodes (or if it can't), the song's own colours. */}
+        <Rect x={0} y={0} width={width} height={height}>
+          <LinearGradient start={vec(0, 0)} end={vec(width, height)} colors={[palette.primary, palette.secondary, palette.tertiary]} />
+        </Rect>
+        <Fill color="rgba(0,0,0,0.35)" />
+        {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} /> : null}
+        {layers.next ? (
+          <Group opacity={fadeOpacity}>
+            <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} />
+          </Group>
+        ) : null}
+        {/* Apple keeps the blurred room a touch dark so white text always reads. */}
+        <Rect x={0} y={0} width={width} height={height}>
+          <LinearGradient start={vec(0, 0)} end={vec(0, height)} positions={[0, 0.45, 1]} colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']} />
+        </Rect>
+      </Canvas>
+    </View>
+  );
+};
+
+export default React.memo(AppleBackdrop);

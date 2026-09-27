@@ -1,37 +1,24 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { SharedValue } from 'react-native-reanimated';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
-import AppleArtworkStage from './AppleArtworkStage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// Theme context used via props
+
 type ProcessedLyric = { timestamp: number; text: string };
 
-const { width } = Dimensions.get('window');
-const HEADER_CLEARANCE = 56;
-const CONTROLS_CLEARANCE = 250;
+const HEADER_CLEARANCE = 28;
+/** The compact controls (no volume row) stacked at the bottom. */
+const CONTROLS_CLEARANCE = 330;
 
 interface NowPlayingLyricsAreaProps {
   showLyrics: boolean;
   processedLyrics: ProcessedLyric[];
-  currentTime: any;
+  currentTime: SharedValue<number>;
   onLyricPress: (timestamp: number) => void;
   songTitle?: string;
-  songArtist?: string;
-  /** Changes on every track change; drives the artwork transition. */
-  songId?: string;
   isUserScrollingRef: React.MutableRefObject<boolean>;
   scrollTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
-  coverImageUri?: string;
-  storePlaying: boolean;
-  isDark: boolean;
-  colors: {
-    cardHover: string;
-    textMuted: string;
-  };
-  onCoverLongPress: () => void;
-  /** A motion canvas fills the screen: step the artwork aside so it shows. */
-  canvasVisible?: boolean;
 }
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
@@ -40,34 +27,13 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   currentTime,
   onLyricPress,
   songTitle,
-  songArtist,
-  songId,
   isUserScrollingRef,
   scrollTimeoutRef,
   flatListRef,
-  coverImageUri,
-  storePlaying,
-  onCoverLongPress,
-  canvasVisible = false,
 }) => {
   const insets = useSafeAreaInsets();
-  if (!showLyrics) {
-    return (
-      <View style={styles.artworkContainer}>
-        {canvasVisible ? null : (
-          <AppleArtworkStage
-            uri={coverImageUri}
-            title={songTitle ?? 'Untitled'}
-            artist={songArtist}
-            songKey={songId ?? songTitle ?? 'song'}
-            size={width - 64}
-            playing={storePlaying}
-            onLongPress={onCoverLongPress}
-          />
-        )}
-      </View>
-    );
-  }
+  // The cover itself is drawn full-bleed by the backdrop (AppleBackdrop).
+  if (!showLyrics) return null;
 
   // Apple Music's lyrics view: the lines own the space between the header and
   // the controls, and the sung line rides a third of the way down — not in
@@ -105,12 +71,6 @@ const styles = StyleSheet.create({
     flex: 1,
     // The controls (meta, scrubber, transport) float over the bottom.
     marginBottom: CONTROLS_CLEARANCE,
-  },
-  artworkContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 260,
   },
 });
 
