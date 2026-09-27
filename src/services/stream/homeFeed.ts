@@ -7,16 +7,17 @@
  *   Similar to <artist>— more from the artists you return to
  *   Forgotten favorites— downloaded songs you loved but haven't played lately
  *
- * Echo resolves its radio through YouTube Music's related endpoint; LuvLyrics
- * uses the catalog providers it already streams from (Saavn radio, Gaana
- * fallback via searchMusic). Sources are injected so this stays pure/testable.
+ * Radio comes from `recommend` — YouTube Music's automix (as in Echo) resolved
+ * to catalog audio, with Saavn radio as fallback (see recommend.ts). Sources
+ * are injected so this stays pure/testable.
  */
 import { Song, UnifiedSong } from '../../types/song';
 import { dedupeStreamable, isOnDevice, streamIdFor } from './streamSong';
 
 export interface FeedSources {
   searchMusic: (query: string) => Promise<UnifiedSong[]>;
-  getRecommendations: (providerSongId: string) => Promise<UnifiedSong[]>;
+  /** Songs to play after `seed`, already resolved to something streamable. */
+  recommend: (seed: UnifiedSong) => Promise<UnifiedSong[]>;
 }
 
 export interface FeedHistoryEntry {
@@ -131,7 +132,7 @@ export async function buildHomeFeed(input: FeedInput, sources: FeedSources): Pro
     };
   }
 
-  const radios = await Promise.all(seeds.map(seed => sources.getRecommendations(seed.id).catch(() => [])));
+  const radios = await Promise.all(seeds.map(seed => sources.recommend(seed).catch(() => [])));
 
   // Quick picks: interleave the radios so no single seed dominates, then shuffle.
   const interleaved: UnifiedSong[] = [];

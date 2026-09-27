@@ -94,6 +94,25 @@ URLs directly through the normal player queue:
   left (Echo's autoplay).
 - Liking a streamed song downloads it into the library.
 
+### Recommendations: Echo's logic, catalog audio (`recommend.ts`)
+
+Echo gets its radio and "related" songs from YouTube Music, and LuvLyrics now
+does the same. `src/services/ytmusic/` is a port of Echo's InnerTube WEB_REMIX
+client (the music.youtube.com web client's own requests). It covers songs
+search, `next` (following the automix endpoint for the endless mix) and the
+Related tab, using Echo's renderer parsers. It is **metadata only**. For each
+seed:
+
+1. Find the seed on YouTube Music (title + artist + duration match).
+2. Take its automix radio, or Related if there is no mix.
+3. Resolve every track to a Saavn/Gaana song (`resolver.ts`: normalised title,
+   artist overlap, duration within 8 s). Anything that doesn't match confidently
+   is skipped.
+4. If fewer than 3 tracks resolve, or YouTube Music is unreachable, fall back
+   to Saavn's own radio.
+
+Both the home feed and queue autoplay use this.
+
 ### Home feed (`homeFeed.ts`)
 
 This ports the section structure of Echo's `HomeViewModel`:

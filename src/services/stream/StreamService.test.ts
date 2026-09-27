@@ -24,8 +24,8 @@ jest.mock('../../store/downloadQueueStore', () => ({
   useDownloadQueueStore: { getState: () => ({ addToQueue: mockAddToQueue }) },
 }));
 const mockGetRecommendations = jest.fn();
-jest.mock('../MultiSourceSearchService', () => ({
-  getRecommendations: (id: string) => mockGetRecommendations(id),
+jest.mock('./recommend', () => ({
+  recommendFor: (seed: { id: string }) => mockGetRecommendations(seed.id),
 }));
 const mockFetchLyrics = jest.fn();
 jest.mock('../LyricaService', () => ({

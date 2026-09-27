@@ -113,7 +113,7 @@ describe('buildHomeFeed', () => {
   };
   const sources = (overrides: Partial<FeedSources> = {}): FeedSources => ({
     searchMusic: jest.fn(async (q: string) => (q === 'Artist A' ? [track('s1'), track('s2'), track('s3'), track('x', 'X', 'Other')] : [])),
-    getRecommendations: jest.fn(async (id: string) => radio[id] ?? []),
+    recommend: jest.fn(async (seed: UnifiedSong) => radio[seed.id] ?? []),
     ...overrides,
   });
 
@@ -143,7 +143,7 @@ describe('buildHomeFeed', () => {
       { localSongs: [local('1', { title: 'Local hit', playCount: 9 })], history: [], now: NOW, random: noShuffle },
       src,
     );
-    expect(src.getRecommendations).toHaveBeenCalledWith('seed1');
+    expect(src.recommend).toHaveBeenCalledWith(expect.objectContaining({ id: 'seed1' }));
     expect(feed.quickPicks.length).toBeGreaterThan(0);
   });
 
@@ -158,7 +158,7 @@ describe('buildHomeFeed', () => {
   it('survives every provider failing', async () => {
     const failing: FeedSources = {
       searchMusic: jest.fn(async () => { throw new Error('offline'); }),
-      getRecommendations: jest.fn(async () => { throw new Error('offline'); }),
+      recommend: jest.fn(async () => { throw new Error('offline'); }),
     };
     const feed = await buildHomeFeed(
       { localSongs: [], history: [{ song: track('seed1'), plays: 1, playedAt: NOW }], now: NOW, random: noShuffle },

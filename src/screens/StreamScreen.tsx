@@ -28,7 +28,8 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { ArtworkCard, SectionHeader, ShimmerBlock, TrackRow } from '../components/stream/StreamItems';
-import { getRecommendations, searchMusic } from '../services/MultiSourceSearchService';
+import { searchMusic } from '../services/MultiSourceSearchService';
+import { recommendFor } from '../services/stream/recommend';
 import { buildHomeFeed, HomeFeed } from '../services/stream/homeFeed';
 import { StreamService } from '../services/stream/StreamService';
 import { streamIdFor } from '../services/stream/streamSong';
@@ -90,7 +91,7 @@ const StreamScreen: React.FC = () => {
   const loadFeed = useCallback(async () => {
     const next = await buildHomeFeed(
       { localSongs: localRef.current, history: historyRef.current, languages: preferred },
-      { searchMusic: q => searchMusic(q), getRecommendations },
+      { searchMusic: q => searchMusic(q), recommend: seed => recommendFor(seed, 12) },
     ).catch(() => null);
     setFeed(next);
   }, [preferred]);

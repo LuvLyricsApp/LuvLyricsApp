@@ -25,13 +25,13 @@ export const buildUrl = (base: string, params: Record<string, string | number | 
   return `${base}${base.includes('?') ? '&' : '?'}${query}`;
 };
 
-const request = async (url: string, options: RequestOptions): Promise<Response | null> => {
+const request = async (url: string, options: RequestOptions, init: { method?: string; body?: string } = {}): Promise<Response | null> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const onOuterAbort = () => controller.abort();
   options.signal?.addEventListener('abort', onOuterAbort);
   try {
-    const res = await fetch(url, { headers: options.headers, signal: controller.signal });
+    const res = await fetch(url, { ...init, headers: options.headers, signal: controller.signal });
     return res.ok ? res : null;
   } catch {
     return null;
@@ -46,6 +46,20 @@ export const fetchJson = async <T>(url: string, options: RequestOptions = {}): P
     ...options,
     headers: { Accept: 'application/json', ...options.headers },
   });
+  if (!res) return null;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+};
+
+export const postJson = async <T>(url: string, body: unknown, options: RequestOptions = {}): Promise<T | null> => {
+  const res = await request(
+    url,
+    { ...options, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...options.headers } },
+    { method: 'POST', body: JSON.stringify(body) },
+  );
   if (!res) return null;
   try {
     return (await res.json()) as T;

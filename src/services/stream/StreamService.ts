@@ -4,19 +4,19 @@
  * a streaming session alive the way Echo Music does:
  *
  *   - synced lyrics are fetched for the playing stream song (Echo cascade),
- *   - the queue auto-extends with radio before it runs out ("autoplay"),
+ *   - the queue auto-extends before it runs out ("autoplay") with YouTube
+ *     Music's automix for the song, resolved to catalog audio (recommend.ts),
  *   - every stream is recorded to seed the home feed.
  */
 import { prepareNextInQueue, usePlayerStore } from '../../store/playerStore';
 import { useStreamHistoryStore } from '../../store/streamHistoryStore';
 import { useDownloadQueueStore } from '../../store/downloadQueueStore';
 import { UnifiedSong } from '../../types/song';
-import { getRecommendations } from '../MultiSourceSearchService';
+import { recommendFor } from './recommend';
 import { lyricaService } from '../LyricaService';
 import {
   dedupeStreamable,
   isStreamSongId,
-  parseStreamId,
   STREAM_QUEUE_ID,
   toStreamSong,
 } from './streamSong';
@@ -117,16 +117,16 @@ async function extendRadio(streamId: string): Promise<void> {
   const idx = queue.findIndex(s => s.id === streamId);
   if (idx < 0 || queue.length - 1 - idx > RADIO_THRESHOLD) return;
 
-  const parsed = parseStreamId(streamId);
-  // Saavn is the provider with a radio endpoint; other sources just end the queue.
-  if (!parsed || parsed.source !== 'saavn') return;
+  const seed = catalog.get(streamId);
+  if (!seed) return;
 
   radioInFlight = true;
   try {
-    const recs = await getRecommendations(parsed.providerId);
+    const recs = await recommendFor(seed);
     const latest = usePlayerStore.getState();
     if (!latest.playlistQueue || latest.currentPlaylistId !== STREAM_QUEUE_ID) return;
-    const fresh = dedupeStreamable(recs, latest.playlistQueue.map(s => s.id));
+    const queued = latest.playlistQueue.flatMap(s => [s.id, `${s.title.trim().toLowerCase()}|${(s.artist ?? '').trim().toLowerCase()}`]);
+    const fresh = dedupeStreamable(recs, queued);
     if (fresh.length === 0) return;
     remember(fresh);
     latest.updateQueue([...latest.playlistQueue, ...fresh.map(s => toStreamSong(s))]);
