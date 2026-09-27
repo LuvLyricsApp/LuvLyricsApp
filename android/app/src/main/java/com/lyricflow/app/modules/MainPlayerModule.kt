@@ -135,7 +135,14 @@ class MainPlayerModule : Module() {
         }
 
         Function("play") {
-            PlayerBridge.getPlayer()?.let { player -> mainHandler.post { player.play() } }
+            PlayerBridge.getPlayer()?.let { player ->
+                mainHandler.post {
+                    // After a stream error the player sits idle; play() alone
+                    // would do nothing, so re-prepare at the same position.
+                    if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) player.prepare()
+                    player.play()
+                }
+            }
         }
 
         Function("pause") {

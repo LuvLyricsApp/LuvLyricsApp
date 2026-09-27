@@ -60,11 +60,17 @@ export const LyricsLine: React.FC<LyricsLineProps> = memo(({
         ? 0.4
         : Math.max(0.5 - dist * 0.05, 0.2);
 
+    const color = isActive ? colorCurrent : isPrevious ? colorPrevious : colorUpcoming;
+    // Every line's style re-runs on each line change. Lines well away from the
+    // sung one are already at rest, so give them plain values instead of
+    // starting ~60 springs and timings at once — that burst was a dropped frame.
+    if (dist > 6) return { transform: [{ translateY: 6 }], opacity: targetOpacity, color };
+
     // translateY: inactive lines sit 6px below, active line springs up to natural position.
     return {
       transform: [{ translateY: withSpring(isActive ? 0 : 6, { damping: 20, stiffness: 260, mass: 0.7 }) }],
       opacity: withTiming(targetOpacity, { duration: 180, easing: Easing.out(Easing.quad) }),
-      color: isActive ? colorCurrent : isPrevious ? colorPrevious : colorUpcoming,
+      color,
     };
   });
 

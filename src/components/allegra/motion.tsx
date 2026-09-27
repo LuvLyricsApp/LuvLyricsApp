@@ -22,8 +22,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
+import { isLowEndDevice } from '../../utils/performanceTier';
 
 const STAGGER_MS = 40;
+const LOW_END = isLowEndDevice();
 
 const riseIn = (delay: number) => (_values: EntryAnimationsValues) => {
   'worklet';
@@ -48,9 +50,10 @@ const fadeIn = (delay: number) => (_values: EntryAnimationsValues) => {
 /** Wrap a section so it rises out of the light when it first appears. */
 export const RiseIn: React.FC<{ index?: number; style?: StyleProp<ViewStyle>; children: React.ReactNode }> = ({ index = 0, style, children }) => {
   const reduce = useReducedMotion();
-  const delay = Math.min(index, 10) * STAGGER_MS;
+  // Low-end phones fade, with a shorter cascade: one cheap animation per item.
+  const delay = Math.min(index, LOW_END ? 4 : 10) * STAGGER_MS;
   return (
-    <Animated.View entering={reduce ? fadeIn(delay) : riseIn(delay)} style={style}>
+    <Animated.View entering={reduce || LOW_END ? fadeIn(delay) : riseIn(delay)} style={style}>
       {children}
     </Animated.View>
   );

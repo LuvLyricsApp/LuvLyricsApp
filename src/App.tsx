@@ -34,6 +34,8 @@ const LOADER_BARS = [
   { initH: 10, max: 38, min: 6,  dur: 630 },
 ];
 
+const LOADER_MAX = 52;
+
 const BAR_COLORS = [
   'rgba(255,255,255,0.35)',
   'rgba(255,255,255,0.6)',
@@ -43,14 +45,16 @@ const BAR_COLORS = [
 ];
 
 const MusicLoader: React.FC = () => {
-  const anims = React.useRef(LOADER_BARS.map(b => new Animated.Value(b.initH))).current;
+  // Bars are fixed 52pt tall and scale on Y via the native driver: the loader
+  // runs while JS is busiest (boot), so it must not need the JS thread.
+  const anims = React.useRef(LOADER_BARS.map(b => new Animated.Value(b.initH / LOADER_MAX))).current;
 
   useEffect(() => {
     const loops = LOADER_BARS.map((cfg, i) =>
       Animated.loop(
         Animated.sequence([
-          Animated.timing(anims[i], { toValue: cfg.max, duration: cfg.dur, useNativeDriver: false }),
-          Animated.timing(anims[i], { toValue: cfg.min, duration: cfg.dur, useNativeDriver: false }),
+          Animated.timing(anims[i], { toValue: cfg.max / LOADER_MAX, duration: cfg.dur, useNativeDriver: true }),
+          Animated.timing(anims[i], { toValue: cfg.min / LOADER_MAX, duration: cfg.dur, useNativeDriver: true }),
         ])
       )
     );
@@ -62,7 +66,7 @@ const MusicLoader: React.FC = () => {
     <View style={loaderStyles.bars}>
       {anims.map((anim, i) => (
         <View key={i} style={loaderStyles.barTrack}>
-          <Animated.View style={[loaderStyles.bar, { height: anim, backgroundColor: BAR_COLORS[i] }]} />
+          <Animated.View style={[loaderStyles.bar, { transform: [{ scaleY: anim }], backgroundColor: BAR_COLORS[i] }]} />
         </View>
       ))}
     </View>
@@ -72,7 +76,7 @@ const MusicLoader: React.FC = () => {
 const loaderStyles = StyleSheet.create({
   bars:     { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 56 },
   barTrack: { height: 56, justifyContent: 'flex-end' },
-  bar:      { width: 6, borderRadius: 3 },
+  bar:      { width: 6, height: LOADER_MAX, borderRadius: 3, transformOrigin: 'bottom' },
 });
 
 // ─── App ──────────────────────────────────────────────────────────────────────

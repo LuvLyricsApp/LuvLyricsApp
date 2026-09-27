@@ -7,11 +7,11 @@
  * as Allegra leaves it out. Decorative only: pointer-transparent, paused when
  * the screen isn't focused, frozen on one frame under Reduce Motion.
  *
- * Rendered at half resolution and scaled up — the field is soft by design, and
- * that quarters the fragment cost on low-end phones.
+ * Rendered at about one device pixel per point and scaled up — the field is
+ * soft by design, and that keeps the fragment cost flat across screen densities.
  */
 import React, { useEffect, useMemo } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { PixelRatio, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
 import {
   useDerivedValue,
@@ -22,6 +22,7 @@ import {
 } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
 import { AuraPalette, hexToRgb } from './palette';
+import { isLowEndDevice } from '../../utils/performanceTier';
 
 const SKSL = `
 uniform float2 uResolution;
@@ -133,8 +134,17 @@ half4 main(float2 fragCoord) {
 const effect = Skia.RuntimeEffect.Make(SKSL);
 if (!effect && __DEV__) console.warn('[MusicFlowField] SkSL failed to compile');
 
-/** Canvas renders at this fraction of the view, then scales up. */
-const RENDER_SCALE = 0.5;
+const LOW_END = isLowEndDevice();
+
+/**
+ * Canvas renders at this fraction of the view, then scales up. Skia draws at
+ * the screen's pixel density, so a fixed fraction cost 2.25x more on a 3x
+ * phone than a 2x one. Budget device pixels per point instead: about one
+ * (0.6 on low-end phones) — the field is soft, so nobody sees the difference.
+ */
+const RENDER_SCALE = Math.min(0.5, (LOW_END ? 0.6 : 1) / PixelRatio.get());
+/** Low-end phones draw the field at 30fps; the motion is slow enough to hide it. */
+const FRAME_S = LOW_END ? 1 / 30 : 0;
 
 export type AuraMood = 'energy' | 'chill' | 'different' | 'surprise';
 const MOOD_VALUE: Record<AuraMood, number> = { energy: 0.2, chill: 1.0, different: 2.0, surprise: 3.0 };
@@ -184,15 +194,26 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
     shownEnergy.value = withTiming(energy, { duration: Motion.duration.cinematic * 2, easing: Motion.ease.standard });
   }, [energy, shownEnergy]);
 
+  const pending = useSharedValue(0);
   const frame = useFrameCallback(info => {
     'worklet';
     // Clamped step: a stall or a trip to the background never makes time leap.
-    const dt = Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
+    pending.value += Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
+    if (pending.value < FRAME_S) return; // no uniform write = no redraw this frame
+    const dt = Math.min(pending.value, 0.066);
+    pending.value = 0;
     clock.value += dt;
     // Time-based easing: the colour glides over ~1.5s at 60Hz and 120Hz alike.
-    const k = 1 - Math.exp(-dt * 2.2);
-    const next = colors.value.slice();
+    // Once it has arrived, stop rewriting it (no per-frame array churn).
     const goal = targetColors.value;
+    const current = colors.value;
+    let moving = false;
+    for (let i = 0; i < goal.length; i++) {
+      if (Math.abs(goal[i] - current[i]) > 0.002) { moving = true; break; }
+    }
+    if (!moving) return;
+    const k = 1 - Math.exp(-dt * 2.2);
+    const next = current.slice();
     for (let i = 0; i < next.length; i++) next[i] += (goal[i] - next[i]) * k;
     colors.value = next;
   }, false);

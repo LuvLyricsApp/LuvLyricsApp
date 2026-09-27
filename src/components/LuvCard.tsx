@@ -47,6 +47,7 @@ const HEADER_CLEARANCE = 72;
 const BOTTOM_BLOCK = 58 + 14 + 46 + 18 + 72;
 
 // ─── Equalizer bars ──────────────────────────────────────────────────────────
+const EQ_MAX = 15;
 const EqBars = ({ active }: { active: boolean }) => {
   const h1 = useSharedValue(3);
   const h2 = useSharedValue(3);
@@ -82,9 +83,10 @@ const EqBars = ({ active }: { active: boolean }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  const s1 = useAnimatedStyle(() => ({ height: h1.value }));
-  const s2 = useAnimatedStyle(() => ({ height: h2.value }));
-  const s3 = useAnimatedStyle(() => ({ height: h3.value }));
+  // Heights drive scaleY on fixed 15pt bars — transform only, no per-frame layout.
+  const s1 = useAnimatedStyle(() => ({ transform: [{ scaleY: h1.value / EQ_MAX }] }));
+  const s2 = useAnimatedStyle(() => ({ transform: [{ scaleY: h2.value / EQ_MAX }] }));
+  const s3 = useAnimatedStyle(() => ({ transform: [{ scaleY: h3.value / EQ_MAX }] }));
 
   return (
     <View style={styles.eqWrap}>
@@ -665,10 +667,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 2,
-    height: 14,
+    height: EQ_MAX,
   },
   eqBar: {
     width: 3,
+    height: EQ_MAX,
+    transformOrigin: 'bottom',
     backgroundColor: Signal.wave,
     borderRadius: 2,
   },

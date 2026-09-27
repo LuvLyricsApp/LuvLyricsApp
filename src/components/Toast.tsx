@@ -122,7 +122,7 @@ export const Toast: React.FC<ToastProps> = ({
           toValue: 0,
           duration: holdMs,
           easing: Easing.linear,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]);
       animRef.current = anim;
@@ -206,10 +206,9 @@ export const Toast: React.FC<ToastProps> = ({
               styles.progressFill,
               {
                 backgroundColor: accent,
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
+                // scaleX on the native driver: the countdown keeps moving even
+                // while JS is busy, and never re-runs layout.
+                transform: [{ scaleX: progress }],
               },
             ]}
           />
@@ -266,6 +265,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   progressFill: {
+    width: '100%',
     height: '100%',
+    transformOrigin: 'left',
   },
 });

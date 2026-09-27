@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DynamicAura from './allegra/DynamicAura';
@@ -56,12 +56,22 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   canvas = null,
   playing = false,
   onCanvasVisibleChange,
+  animateBackground,
   ...ambientProps
-}) => (
-  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    <Ambient {...ambientProps} playing={playing} />
-    <CanvasVideoLayer canvas={canvas} playing={playing} onVisibleChange={onCanvasVisibleChange} />
-  </View>
-);
+}) => {
+  // The canvas video covers the whole field; rendering the shader under it
+  // doubled the per-frame work for nothing.
+  const [canvasShown, setCanvasShown] = useState(false);
+  const onVisibleChange = useCallback((visible: boolean) => {
+    setCanvasShown(visible);
+    onCanvasVisibleChange?.(visible);
+  }, [onCanvasVisibleChange]);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Ambient {...ambientProps} animateBackground={animateBackground && !canvasShown} playing={playing} />
+      <CanvasVideoLayer canvas={canvas} playing={playing} onVisibleChange={onVisibleChange} />
+    </View>
+  );
+};
 
 export default React.memo(NowPlayingBackground);

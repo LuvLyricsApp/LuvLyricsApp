@@ -18,6 +18,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import MusicFlowField, { AuraMood } from './MusicFlowField';
 import { AuraPalette } from './palette';
 import { Motion } from '../../constants/allegraTheme';
+import { isLowEndDevice } from '../../utils/performanceTier';
+
+const LOW_END = isLowEndDevice();
 
 interface DynamicAuraProps {
   palette: AuraPalette;
@@ -72,7 +75,8 @@ export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = fal
       </Svg>
 
       <Animated.View style={[StyleSheet.absoluteFill, fieldStyle]}>
-        <MusicFlowField palette={palette} energy={playing ? 0.72 : 0.12} mood={mood} paused={!active} width={width} height={height} />
+        {/* Low-end phones let the field rest while music is paused. */}
+        <MusicFlowField palette={palette} energy={playing ? 0.72 : 0.12} mood={mood} paused={!active || (LOW_END && !playing)} width={width} height={height} />
       </Animated.View>
 
       <LinearGradient
