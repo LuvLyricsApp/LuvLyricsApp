@@ -38,6 +38,8 @@ import { duotoneFor } from './allegra/artworkSeed';
 import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+/** The backdrop is decoded this small, blurred, then scaled up — instant on any phone. */
+const BACKDROP_PX = 36;
 /** Shared with the Luvs header so its buttons sit on the same edge as the cover. */
 export const LUVS_GUTTER = 24;
 const GUTTER = LUVS_GUTTER;
@@ -395,14 +397,24 @@ export const LuvCard = React.memo<LuvCardProps>(
       >
         <Pressable style={[StyleSheet.absoluteFill, styles.pressable]} onPress={handleTap}>
           {/* Full-screen blurred bg — or, with no cover, the song's own duotone
-              (the same one its generated artwork uses) so the card is never black. */}
+              (the same one its generated artwork uses) so the card is never black.
+              Every mounted card carries its blur from the start. It used to blur
+              only once active, so the next card slid in sharp and fogged over
+              1–2s later while Android blurred a full-resolution bitmap on the CPU.
+              Now a tiny copy is decoded (resizeMethod) and blurred, which is
+              instant, then scaled up — plus a dark frost over it. */}
           {song.highResArt ? (
-            <Image
-              source={{ uri: song.highResArt }}
-              style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: luvHeight }]}
-              blurRadius={isActive ? 45 : 0}
-              resizeMode="cover"
-            />
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Image
+                source={{ uri: song.highResArt }}
+                style={[styles.backdrop, { transform: [{ scale: Math.max(SCREEN_WIDTH, luvHeight) / BACKDROP_PX }] }]}
+                blurRadius={6}
+                resizeMode="cover"
+                resizeMethod="resize"
+                fadeDuration={0}
+              />
+              <View style={styles.backdropTint} />
+            </View>
           ) : (
             <LinearGradient
               colors={[duotone[0], duotone[1], duotone[0]]}
@@ -526,6 +538,19 @@ export const LuvCard = React.memo<LuvCardProps>(
 );
 
 const styles = StyleSheet.create({
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: BACKDROP_PX,
+    height: BACKDROP_PX,
+    transformOrigin: 'top left',
+    opacity: 0.9,
+  },
+  backdropTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(7, 8, 11, 0.5)',
+  },
   card: {
     width: SCREEN_WIDTH,
     backgroundColor: '#000',
