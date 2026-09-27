@@ -55,7 +55,6 @@ import { StreamService } from '../services/stream/StreamService';
 import { streamIdFor } from '../services/stream/streamSong';
 import { hookOffsetSeconds } from '../services/luvsHook';
 import { useSettingsStore } from '../store/settingsStore';
-import { Fonts } from '../constants/fonts';
 import { Signal } from '../constants/allegraTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -608,9 +607,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
     fontSize: 17,
-    letterSpacing: -0.3,
     color: '#fff',
   },
   badge: {
@@ -628,7 +626,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#fff',
     fontSize: 10,
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
   },
   loadingContainer: {
     position: 'absolute',

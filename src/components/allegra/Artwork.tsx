@@ -11,7 +11,6 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Fonts } from '../../constants/fonts';
 import { Motion } from '../../constants/allegraTheme';
 import { duotoneFor, hashString, monogramOf } from './artworkSeed';
 
@@ -133,7 +132,7 @@ const styles = StyleSheet.create({
   frame: { overflow: 'hidden' },
   monogram: {
     position: 'absolute',
-    fontFamily: Fonts.interBlack,
+    fontWeight: '900',
     letterSpacing: -4,
     opacity: 0.28,
   },
@@ -144,12 +143,11 @@ const styles = StyleSheet.create({
     top: 0,
   },
   labelTitle: {
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
     color: '#f4f1ea',
-    letterSpacing: -0.4,
   },
   labelArtist: {
-    fontFamily: Fonts.interMedium,
+    fontWeight: '500',
     color: 'rgba(244, 241, 234, 0.72)',
     marginTop: 3,
   },

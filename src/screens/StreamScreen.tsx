@@ -34,7 +34,6 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
 import { BlurIntensity, Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { BlurView } from 'expo-blur';
-import { Fonts } from '../constants/fonts';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import { RiseIn } from '../components/allegra/motion';
@@ -483,17 +482,16 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg,
   },
   h1: {
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
     fontSize: 34,
     lineHeight: 36,
-    letterSpacing: -1.4,
     color: Signal.ink,
     marginTop: 2,
   },
   now: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, marginTop: Space.lg + 4 },
   nowMeta: { flex: 1, minWidth: 0 },
-  nowTitle: { fontFamily: Fonts.interBold, fontSize: 20, lineHeight: 24, letterSpacing: -0.5, color: Signal.ink },
-  nowArtist: { fontFamily: Fonts.interMedium, fontSize: 14, color: Signal.inkMuted, marginTop: 2 },
+  nowTitle: { fontWeight: '700', fontSize: 20, lineHeight: 24, color: Signal.ink },
+  nowArtist: { fontWeight: '500', fontSize: 14, color: Signal.inkMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 14 },
   search: {
     flexDirection: 'row',
@@ -507,7 +505,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Glass.hairlineStrong,
   },
-  searchInput: { flex: 1, color: Signal.ink, fontSize: 16, fontFamily: Fonts.interRegular, paddingVertical: 0 },
+  searchInput: { flex: 1, color: Signal.ink, fontSize: 16, fontWeight: '400', paddingVertical: 0 },
   rail: { marginTop: Space.md, marginHorizontal: -(Space.lg - 4) },
   railContent: { paddingHorizontal: Space.lg - 4, gap: 10 },
   shelf: { paddingHorizontal: Space.lg - 4, gap: Space.md },
@@ -530,10 +528,10 @@ const styles = StyleSheet.create({
   },
   compact: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
   compactScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10, 11, 14, 0.45)' },
-  compactTitle: { fontFamily: Fonts.interBold, fontSize: 17, letterSpacing: -0.3, color: Signal.ink, paddingHorizontal: Space.lg - 4 },
+  compactTitle: { fontWeight: '700', fontSize: 17, color: Signal.ink, paddingHorizontal: Space.lg - 4 },
   compactRule: { position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: Glass.hairline },
-  emptyTitle: { fontFamily: Fonts.interBold, fontSize: 18, color: Signal.ink },
-  emptyBody: { fontFamily: Fonts.interRegular, fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
+  emptyTitle: { fontWeight: '700', fontSize: 18, color: Signal.ink },
+  emptyBody: { fontWeight: '400', fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
 });
 
 export default StreamScreen;

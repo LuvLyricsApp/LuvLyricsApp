@@ -33,7 +33,6 @@ import { luvsEngine } from '../services/luvsEngine';
 import CanvasVideoLayer from './CanvasVideoLayer';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
-import { Fonts } from '../constants/fonts';
 import Artwork from './allegra/Artwork';
 import { duotoneFor } from './allegra/artworkSeed';
 
@@ -583,10 +582,9 @@ const styles = StyleSheet.create({
   },
   songTexts: { flex: 1, minWidth: 0 },
   songTitle: {
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
     fontSize: 24,
     lineHeight: 29,
-    letterSpacing: -0.6,
     color: Signal.ink,
   },
   artistRow: {
@@ -597,7 +595,7 @@ const styles = StyleSheet.create({
   },
   songArtist: {
     flex: 1,
-    fontFamily: Fonts.interMedium,
+    fontWeight: '500',
     fontSize: 15,
     color: 'rgba(244, 241, 234, 0.72)',
   },
@@ -613,7 +611,7 @@ const styles = StyleSheet.create({
   playFullPressed: { transform: [{ scale: 0.95 }] },
   playFullGlyph: { marginLeft: 1 },
   playFullText: {
-    fontFamily: Fonts.interSemiBold,
+    fontWeight: '600',
     fontSize: 14,
     color: Signal.waveInk,
   },
@@ -647,7 +645,7 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     marginTop: 7,
-    fontFamily: Fonts.interSemiBold,
+    fontWeight: '600',
     fontSize: 11.5,
     color: 'rgba(244, 241, 234, 0.82)',
   },

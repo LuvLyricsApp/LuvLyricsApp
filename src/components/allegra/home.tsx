@@ -19,7 +19,6 @@ import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Blur, Canvas, Image as SkiaImage, LinearGradient as SkiaLinearGradient, Mask, Rect, useImage, vec } from '@shopify/react-native-skia';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Fonts } from '../../constants/fonts';
 import { Glass, Radius, Signal, Space } from '../../constants/allegraTheme';
 import { Tactile } from './motion';
 import Artwork from './Artwork';
@@ -250,7 +249,7 @@ export const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   fill: { width: '100%', height: '100%' },
   disabled: { opacity: 0.4 },
-  eyebrow: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkMuted, marginBottom: 4 },
+  eyebrow: { fontWeight: '600', fontSize: 13, color: Signal.inkMuted, marginBottom: 4 },
   sectionHeading: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -260,10 +259,10 @@ export const styles = StyleSheet.create({
     marginTop: Space.xl + 4,
     marginBottom: Space.sm,
   },
-  h2: { fontFamily: Fonts.interBold, fontSize: 21, letterSpacing: -0.5, color: Signal.ink },
-  sectionSub: { fontFamily: Fonts.interRegular, fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
+  h2: { fontWeight: '700', fontSize: 22, color: Signal.ink },
+  sectionSub: { fontWeight: '400', fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
   shelfLink: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 6, paddingLeft: 10 },
-  shelfLinkText: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkSoft },
+  shelfLinkText: { fontWeight: '600', fontSize: 13, color: Signal.inkSoft },
 
   btn: {
     flexDirection: 'row',
@@ -289,7 +288,7 @@ export const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Glass.hairlineStrong,
   },
-  btnText: { fontFamily: Fonts.interSemiBold, fontSize: 15, letterSpacing: -0.1 },
+  btnText: { fontWeight: '600', fontSize: 15 },
 
 
   plate: {
@@ -341,8 +340,8 @@ export const styles = StyleSheet.create({
   },
   quickArt: { width: 64, height: 64 },
   quickCopy: { flex: 1, minWidth: 0 },
-  quickTitle: { fontFamily: Fonts.interSemiBold, fontSize: 14, color: Signal.ink },
-  quickSub: { fontFamily: Fonts.interRegular, fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
+  quickTitle: { fontWeight: '600', fontSize: 14, color: Signal.ink },
+  quickSub: { fontWeight: '400', fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
   quickPlay: {
     width: 28,
     height: 28,
@@ -377,9 +376,9 @@ export const styles = StyleSheet.create({
     backgroundColor: Signal.wave,
   },
   tileMeta: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 10 },
-  tileEyebrow: { fontFamily: Fonts.interMedium, fontSize: 12, color: Signal.inkMuted, marginBottom: 2 },
-  tileTitle: { fontFamily: Fonts.interSemiBold, fontSize: 14, color: Signal.ink },
-  tileSub: { fontFamily: Fonts.interRegular, fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
+  tileEyebrow: { fontWeight: '500', fontSize: 12, color: Signal.inkMuted, marginBottom: 2 },
+  tileTitle: { fontWeight: '600', fontSize: 14, color: Signal.ink },
+  tileSub: { fontWeight: '400', fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
   tileAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 
   chartRow: {
@@ -390,11 +389,11 @@ export const styles = StyleSheet.create({
   },
   chartRowCurrent: { backgroundColor: 'rgba(217, 230, 106, 0.07)' },
   chartMain: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingLeft: 6, paddingRight: 6 },
-  rank: { width: 26, fontFamily: Fonts.interSemiBold, fontSize: 15, color: Signal.inkFaint, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  rank: { width: 26, fontWeight: '600', fontSize: 15, color: Signal.inkFaint, textAlign: 'right', fontVariant: ['tabular-nums'] },
   chartArt: { width: 48, height: 48, borderRadius: 10, overflow: 'hidden', backgroundColor: Signal.bgSubtle },
   chartPlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.32)' },
-  chartTitle: { fontFamily: Fonts.interSemiBold, fontSize: 15, color: Signal.ink },
-  chartSub: { fontFamily: Fonts.interRegular, fontSize: 12.5, color: Signal.inkMuted, marginTop: 2 },
+  chartTitle: { fontWeight: '600', fontSize: 15, color: Signal.ink },
+  chartSub: { fontWeight: '400', fontSize: 12.5, color: Signal.inkMuted, marginTop: 2 },
   chartAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
   mood: {
@@ -415,6 +414,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moodLabel: { fontFamily: Fonts.interBold, fontSize: 17, letterSpacing: -0.3, color: Signal.ink },
-  moodNote: { fontFamily: Fonts.interRegular, fontSize: 12, color: 'rgba(244, 241, 234, 0.72)', marginTop: 2 },
+  moodLabel: { fontWeight: '700', fontSize: 17, color: Signal.ink },
+  moodNote: { fontWeight: '400', fontSize: 12, color: 'rgba(244, 241, 234, 0.72)', marginTop: 2 },
 });

@@ -15,7 +15,6 @@ import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import { RiseIn } from '../components/allegra/motion';
 import { GlassButton, PrimaryButton, SectionHeading, Sleeve } from '../components/allegra/home';
-import { Fonts } from '../constants/fonts';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { TrackRow } from '../components/stream/StreamItems';
 import { useSongsStore } from '../store/songsStore';
@@ -232,11 +231,11 @@ const styles = StyleSheet.create({
     borderColor: Glass.hairline,
   },
   hero: { paddingHorizontal: Space.md + 4, marginTop: Space.md },
-  title: { fontFamily: Fonts.interBold, fontSize: 34, lineHeight: 38, letterSpacing: -1.4, color: Signal.ink },
+  title: { fontWeight: '700', fontSize: 34, lineHeight: 38, color: Signal.ink },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, marginTop: Space.lg },
   heroMeta: { flex: 1, minWidth: 0 },
-  meta: { fontFamily: Fonts.interSemiBold, fontSize: 16, color: Signal.ink },
-  metaSoft: { fontFamily: Fonts.interRegular, fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
+  meta: { fontWeight: '600', fontSize: 16, color: Signal.ink },
+  metaSoft: { fontWeight: '400', fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 14 },
   filterRow: { paddingHorizontal: Space.md, marginTop: Space.lg },
   filterField: {
@@ -250,7 +249,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Glass.hairline,
   },
-  filterInput: { flex: 1, color: Signal.ink, fontSize: 15, fontFamily: Fonts.interRegular, paddingVertical: 0 },
+  filterInput: { flex: 1, color: Signal.ink, fontSize: 15, fontWeight: '400', paddingVertical: 0 },
   chips: { flexDirection: 'row', gap: Space.xs, paddingHorizontal: Space.md, marginTop: Space.sm, marginBottom: Space.xs },
   chip: {
     height: 32,
@@ -262,7 +261,7 @@ const styles = StyleSheet.create({
     borderColor: Glass.hairline,
   },
   chipActive: { backgroundColor: Signal.wave, borderColor: Signal.wave },
-  chipText: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkSoft },
+  chipText: { fontWeight: '600', fontSize: 13, color: Signal.inkSoft },
   chipTextActive: { color: Signal.waveInk },
   emptyCard: {
     marginHorizontal: Space.md,
@@ -275,8 +274,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
-  emptyTitle: { fontFamily: Fonts.interBold, fontSize: 18, color: Signal.ink },
-  emptyBody: { fontFamily: Fonts.interRegular, fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
+  emptyTitle: { fontWeight: '700', fontSize: 18, color: Signal.ink },
+  emptyBody: { fontWeight: '400', fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
 });
 
 export default DownloadsScreen;

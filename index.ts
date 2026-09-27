@@ -1,3 +1,5 @@
+// Must stay first: wraps Text before any module captures it (Android SF Pro).
+import './src/theme/appleTypography';
 import * as Sentry from '@sentry/react-native';
 import { registerRootComponent } from 'expo';
 import React from 'react';

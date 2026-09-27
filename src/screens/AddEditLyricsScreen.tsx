@@ -784,7 +784,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   saveButton: {
     backgroundColor: '#fff',

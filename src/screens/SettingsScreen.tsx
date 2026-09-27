@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16 },
 
   // Screen title
-  screenTitle: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: 12, marginBottom: 20 },
+  screenTitle: { fontSize: 34, fontWeight: '700', marginTop: 12, marginBottom: 20 },
 
   // Profile card
   profileCard: {
@@ -1173,11 +1173,11 @@ const styles = StyleSheet.create({
   },
   profileRight: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
-  profileName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+  profileName: { fontSize: 18, fontWeight: '700' },
   profileSub: { fontSize: 12, marginBottom: 12 },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: 0 },
   statItem: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 17, fontWeight: '700', letterSpacing: -0.4 },
+  statNumber: { fontSize: 17, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 1 },
   statDivider: { width: 1, height: 28, opacity: 0.5 },
 

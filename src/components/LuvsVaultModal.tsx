@@ -203,7 +203,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 26,
     fontWeight: '800',
-    letterSpacing: -0.5,
   },
   closeButton: {
     width: 36,
@@ -309,6 +308,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
 });

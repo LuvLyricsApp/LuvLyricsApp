@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   defaultThumbnail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   thumbnail: { flex: 1 },
   info: { gap: 2, marginTop: 8 },
-  title: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
+  title: { fontSize: 14, fontWeight: '700' },
   subtitle: { fontSize: 12 },
   duration: { fontSize: 11, marginTop: 2 },
   heartButton: { position: 'absolute', top: 8, right: 8, zIndex: 5 },

@@ -14,7 +14,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Glass, Motion, Radius, Signal, Space } from '../../constants/allegraTheme';
-import { Fonts } from '../../constants/fonts';
 import Artwork from '../allegra/Artwork';
 
 const formatDuration = (seconds?: number): string => {
@@ -145,13 +144,12 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
-    fontFamily: Fonts.interSemiBold,
+    fontWeight: '600',
     fontSize: 16,
     color: Signal.ink,
-    letterSpacing: -0.2,
   },
   rowMeta: {
-    fontFamily: Fonts.interRegular,
+    fontWeight: '400',
     fontSize: 13,
     color: Signal.inkMuted,
     marginTop: 2,

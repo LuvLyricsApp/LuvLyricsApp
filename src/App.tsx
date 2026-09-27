@@ -21,7 +21,7 @@ import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { getPreloadedData } from './services/NativeStartup';
 import { ensureSearchIndex } from './services/NativeSearch';
-import { INTER_FONT_MAP, SF_FONT_MAP } from './constants/fonts';
+import { SF_FONT_MAP } from './constants/fonts';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
 
@@ -103,7 +103,6 @@ const App: React.FC = () => {
             }),
             Font.loadAsync({
               ...Ionicons.font,
-              ...INTER_FONT_MAP,
               ...SF_FONT_MAP,
             }),
           ]);
@@ -254,13 +253,11 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '800',
     color: '#fff',
-    letterSpacing: -0.8,
     marginBottom: 6,
   },
   loadingSubtitle: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 0.2,
   },
   errorText: {
     fontSize: 20,

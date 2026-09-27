@@ -13,7 +13,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^react-native$': '<rootDir>/node_modules/react-native/jest/setup.js',
-    '\\.(jpg|jpeg|png|gif|mp3|wav|mp4)$': '<rootDir>/scripts/ci/__mocks__/fileMock.js',
+    '\\.(jpg|jpeg|png|gif|mp3|wav|mp4|otf|ttf)$': '<rootDir>/scripts/ci/__mocks__/fileMock.js',
   },
   globals: {
     __DEV__: false,

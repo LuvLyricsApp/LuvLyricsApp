@@ -105,7 +105,8 @@ unmounts mid-load.
 - Streamed songs are transient `Song`s with a `stream:<source>:<id>` id and a remote `audioUri` — never write them to SQLite. Liking one downloads it (`songsStore.toggleLike` routes to `StreamService.save`)
 - `src/services/ytmusic/` is metadata only (search / next / related). Never add stream-URL extraction, client spoofing or PoToken code there — audio always comes from the catalog providers via `resolver.ts`
 - After changing the queue under a playing track, call `prepareNextInQueue()` — Media3 may have staged the old "next" for gapless advance
-- Fonts in `assets/fonts/` must be real font binaries — the Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto. Inter is the `@expo-google-fonts/inter` build (OFL, `Inter-OFL.txt`)
+- Type is SF Pro everywhere (Apple Music's face). Styles set only `fontWeight` (and `fontSize`) — never a `fontFamily` for UI text, and no `letterSpacing` (iOS applies Apple's tracking itself; Android gets it from `sfTracking`). iOS uses the system font, which is SF Pro. Android maps the final weight to a bundled SF Pro Text face in `src/theme/appleTypography.ts`, imported first in `index.ts` — keep it first. Only Regular/Semibold/Bold ship: 500 renders Regular, 800+ Bold. The OTFs are Apple-licensed for personal builds only, not a Play Store release
+- Fonts in `assets/fonts/` must be real font binaries — the old Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto
 - Motion: springs for anything a finger can interrupt, 200–400ms for state changes, 40ms list staggers, max two moving effects per screen, transform/opacity only. Primitives live in `components/allegra/motion.tsx` (`RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`) — reuse them instead of hand-rolling
 - UI copy is sentence case ("Good morning", "Now playing"), never all caps. No `textTransform: 'uppercase'`, no positive `letterSpacing` on labels, no monospace as decoration, no emoji in UI strings, no sparkle icons or "magic" wording — these read as generated UI. Shelves use `SectionHeading` title + optional plain `subtitle`, not an eyebrow over every heading
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
@@ -126,7 +127,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 23 suites / 273 tests passing
+node_modules\.bin\jest.cmd                  # expect 24 suites / 280 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

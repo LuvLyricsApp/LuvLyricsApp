@@ -178,7 +178,7 @@ favorites". The Dynamic Island mini player now shows on Stream as well as Home.
 - **Designed fallback:** `GeneratedArtwork` builds a cover from the song
   itself: a duotone from Allegra's colour family (picked by hashing the title
   and artist, so a song always gets the same one), an oversized monogram, faint
-  vinyl grooves, and the title and artist set in Inter. Empty playlists get one
+  vinyl grooves, and the title and artist set in SF Pro. Empty playlists get one
   made from the playlist name. The Luvs card uses the same duotone as its
   background.
 - **Backfill:** a few seconds after launch, `useCoverArtBackfill` looks up
