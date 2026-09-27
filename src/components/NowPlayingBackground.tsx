@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated from 'react-native-reanimated';
-import { AuroraHeader } from './AuroraHeader';
+import DynamicAura from './allegra/DynamicAura';
+import { useArtworkPalette } from './allegra/useArtworkPalette';
+import CanvasVideoLayer from './CanvasVideoLayer';
+import { CanvasArtwork } from '../services/canvas/types';
 
 interface NowPlayingBackgroundProps {
   isDynamicTheme: boolean;
@@ -13,58 +15,30 @@ interface NowPlayingBackgroundProps {
   blob2Style: any;
   blob3Style: any;
   isDark: boolean;
+  /** Motion canvas; drawn over the ambient layer once its first frame lands. */
+  canvas?: CanvasArtwork | null;
+  playing?: boolean;
+  onCanvasVisibleChange?: (visible: boolean) => void;
 }
 
-const { width } = Dimensions.get('window');
+type AmbientProps = Omit<NowPlayingBackgroundProps, 'canvas' | 'playing' | 'onCanvasVisibleChange'>;
 
-const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
-  isDynamicTheme,
+/**
+ * Artwork-aware ambient field. Dark mode runs Allegra's live aura (reeded-glass
+ * light columns tinted by the cover); it stays underneath as the canvas's
+ * fallback. Light mode keeps a soft gradient.
+ */
+const Ambient: React.FC<AmbientProps & { playing: boolean }> = ({
   coverImageUri,
   gradientColors,
   animateBackground,
-  blob1Style,
-  blob2Style,
-  blob3Style,
   isDark,
+  playing,
 }) => {
-  if (isDynamicTheme && coverImageUri) {
-    // One blurred base image + three tinted Animated.Views (no extra URI loads/blurs).
-    // Blobs use gradientColors for tint so they still react to album art palette.
-    const blobColor0 = gradientColors[0] ?? 'rgba(80,40,120,0.5)';
-    const blobColor1 = gradientColors[1] ?? gradientColors[0] ?? 'rgba(40,80,160,0.45)';
-
-    return (
-      <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
-        <Image
-          source={{ uri: coverImageUri }}
-          style={[StyleSheet.absoluteFill, { opacity: 0.35 }]}
-          blurRadius={120}
-          resizeMode="cover"
-        />
-        <Animated.View
-          style={[
-            { position: 'absolute', top: -width * 0.5, left: -width * 0.5, width: width * 2, height: width * 2, borderRadius: width, backgroundColor: blobColor0, opacity: 0.45 },
-            blob1Style,
-          ]}
-        />
-        <Animated.View
-          style={[
-            { position: 'absolute', bottom: -width * 0.5, right: -width * 0.5, width: width * 2, height: width * 2, borderRadius: width, backgroundColor: blobColor1, opacity: 0.4 },
-            blob2Style,
-          ]}
-        />
-        <Animated.View
-          style={[
-            { position: 'absolute', top: 0, left: 0, width: width * 1.8, height: width * 1.8, borderRadius: width, backgroundColor: blobColor0, opacity: 0.3 },
-            blob3Style,
-          ]}
-        />
-      </View>
-    );
-  }
+  const palette = useArtworkPalette(coverImageUri, gradientColors);
 
   if (isDark) {
-    return <AuroraHeader colors={gradientColors} animated={animateBackground} />;
+    return <DynamicAura palette={palette} playing={playing} active={animateBackground} />;
   }
 
   /* Light mode fallback: soft gradient so the screen never looks empty */
@@ -77,5 +51,17 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
     </View>
   );
 };
+
+const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
+  canvas = null,
+  playing = false,
+  onCanvasVisibleChange,
+  ...ambientProps
+}) => (
+  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Ambient {...ambientProps} playing={playing} />
+    <CanvasVideoLayer canvas={canvas} playing={playing} onVisibleChange={onCanvasVisibleChange} />
+  </View>
+);
 
 export default React.memo(NowPlayingBackground);

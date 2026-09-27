@@ -13,6 +13,7 @@ import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigationService';
+import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 
 const { GestureDetector } = GestureHandler;
 
@@ -73,6 +74,9 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     isUserScrolling,
     scrollTimeoutRef,
   } = useNowPlayingLogic(songId);
+
+  const canvas = useCanvasArtwork(currentSong);
+  const [canvasVisible, setCanvasVisible] = React.useState(false);
 
   const menuOptions = React.useMemo(() => [
     {
@@ -161,6 +165,9 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           blob2Style={blob2Style}
           blob3Style={blob3Style}
           isDark={isDark}
+          canvas={canvas}
+          playing={storePlaying}
+          onCanvasVisibleChange={setCanvasVisible}
         />
 
         <NowPlayingHeader
@@ -191,6 +198,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             currentTime={positionSV}
             onLyricPress={handleLyricTap}
             songTitle={currentSong?.title}
+            songArtist={currentSong?.artist}
+            songId={currentSong?.id}
             isUserScrollingRef={isUserScrolling}
             scrollTimeoutRef={scrollTimeoutRef}
             flatListRef={flatListRef}
@@ -199,6 +208,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             isDark={isDark}
             colors={colors}
             onCoverLongPress={() => setShowCoverSearch(true)}
+            canvasVisible={canvasVisible}
           />
         </View>
 
@@ -221,6 +231,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           positionSV={positionSV}
           durationSV={durationSV}
           onSeek={handleScrub}
+          showLyrics={showLyrics}
+          onMorePress={handleMenuPress}
         />
       </View>
     </GestureDetector>

@@ -21,7 +21,7 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { RootStackScreenProps } from '../types/navigation';
+import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
@@ -330,7 +330,7 @@ const PINNABLE_ITEMS: Record<PinId, {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-type Props = RootStackScreenProps<'Settings'>;
+type Props = TabScreenProps<'Settings'>;
 
 const SettingsScreen: React.FC<Props> = () => {
   const insets = useSafeAreaInsets();
@@ -661,7 +661,7 @@ const SettingsScreen: React.FC<Props> = () => {
           <Text style={[styles.quickHint, { color: colors.textMuted }]}>Hold any shortcut to customise</Text>
 
           {/* ── Section: Personalization ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PERSONALIZATION</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Personalisation</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow icon="moon-outline" iconColor="#A78BFA" label="Appearance" onPress={() => setActiveSheet('appearance')} />
             <MenuRow icon="play-circle-outline" iconColor="#34C759" label="Playback" onPress={() => setActiveSheet('playback')} />
@@ -671,7 +671,7 @@ const SettingsScreen: React.FC<Props> = () => {
           </View>
 
           {/* ── Section: System ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SYSTEM</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>System</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow
               icon="desktop-outline" iconColor="#0A84FF" label="Desktop Connect"
@@ -683,7 +683,7 @@ const SettingsScreen: React.FC<Props> = () => {
           </View>
 
           {/* ── Section: Tools ── */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TOOLS</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Tools</Text>
           <View style={[styles.menuGroup, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <MenuRow icon="download-outline" iconColor="#A78BFA" label="Export Library" onPress={handleExport} />
             <MenuRow icon="cloud-upload-outline" iconColor="#F472B6" label="Import Backup" onPress={handleImport} />
@@ -731,11 +731,61 @@ const SettingsScreen: React.FC<Props> = () => {
             </Text>
           </View>
         )}
+        <SettingsRowSwitch icon="film-outline" label="Canvas: Motion Artwork" value={settings.canvasEnabled} onToggle={settings.setCanvasEnabled} />
+        {settings.canvasEnabled && (
+          <View style={styles.apiKeyContainer}>
+            <Text style={styles.apiKeyHint}>
+              Looping video behind the player, from the Echo Canvas library and ArchiveTune. Add
+              your own tokens below to also search Apple Music and Tidal motion artwork.
+            </Text>
+            {([
+              {
+                label: 'Apple MusicKit Token',
+                value: settings.appleMusicToken,
+                onChange: settings.setAppleMusicToken,
+                placeholder: 'eyJhbGciOiJFUzI1NiIs...',
+                hint: 'A developer token from your Apple Developer account (MusicKit key). Stored on this device only.',
+              },
+              {
+                label: 'Tidal Client Token',
+                value: settings.tidalToken,
+                onChange: settings.setTidalToken,
+                placeholder: 'Tidal client token',
+                hint: 'Optional. Unlocks Tidal album video covers. Stored on this device only.',
+              },
+            ] as const).map(field => (
+              <View key={field.label} style={{ marginTop: 12 }}>
+                <View style={styles.apiKeyHeader}>
+                  <Ionicons name="key-outline" size={16} color="#d9e66a" />
+                  <Text style={styles.apiKeyLabel}>{field.label}</Text>
+                  {field.value ? (
+                    <View style={styles.apiKeySaved}>
+                      <Ionicons name="checkmark-circle" size={14} color="#30D158" />
+                      <Text style={styles.apiKeySavedText}>Saved</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <TextInput
+                  style={styles.apiKeyInput}
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  placeholder={field.placeholder}
+                  placeholderTextColor="#555"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Text style={styles.apiKeyHint}>{field.hint}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
         <SettingsRowSwitch icon="play-outline" label="Auto-Scroll Lyrics" value={true} onToggle={() => {}} />
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
+        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
         {settings.navBarStyle === 'classic' && (
           <SettingsRow
             icon="layers-outline" label="Mini Player Style"
@@ -813,6 +863,7 @@ const SettingsScreen: React.FC<Props> = () => {
           />
         )}
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
+        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'library'} title="Library" onClose={closeSheet}>
@@ -1101,7 +1152,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16 },
 
   // Screen title
-  screenTitle: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: 12, marginBottom: 20 },
+  screenTitle: { fontSize: 34, fontWeight: '700', marginTop: 12, marginBottom: 20 },
 
   // Profile card
   profileCard: {
@@ -1122,11 +1173,11 @@ const styles = StyleSheet.create({
   },
   profileRight: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
-  profileName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+  profileName: { fontSize: 18, fontWeight: '700' },
   profileSub: { fontSize: 12, marginBottom: 12 },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: 0 },
   statItem: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 17, fontWeight: '700', letterSpacing: -0.4 },
+  statNumber: { fontSize: 17, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 1 },
   statDivider: { width: 1, height: 28, opacity: 0.5 },
 
@@ -1145,14 +1196,14 @@ const styles = StyleSheet.create({
   quickHint: { fontSize: 11, textAlign: 'center', marginBottom: 24, opacity: 0.7 },
 
   // Pin picker
-  pinSectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginTop: 12, marginBottom: 4, marginLeft: 2 },
+  pinSectionLabel: { fontSize: 11, fontWeight: '600', marginTop: 12, marginBottom: 4, marginLeft: 2 },
   pinPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   pinPickerLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
   pinPickerUsed: { fontSize: 12, marginRight: 4 },
 
   // Section label
   sectionLabel: {
-    fontSize: 12, fontWeight: '600', letterSpacing: 0.6,
+    fontSize: 13, fontWeight: '600',
     marginBottom: 8, marginLeft: 4,
   },
 

@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Image, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
-import { RotatingVinyl } from './VinylRecord';
+import AppleArtworkStage from './AppleArtworkStage';
+import Artwork from './allegra/Artwork';
 // Theme context used via props
 type ProcessedLyric = { timestamp: number; text: string };
 
@@ -14,6 +14,9 @@ interface NowPlayingLyricsAreaProps {
   currentTime: any;
   onLyricPress: (timestamp: number) => void;
   songTitle?: string;
+  songArtist?: string;
+  /** Changes on every track change; drives the artwork transition. */
+  songId?: string;
   isUserScrollingRef: React.MutableRefObject<boolean>;
   scrollTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   flatListRef: React.RefObject<SynchronizedLyricsRef>;
@@ -25,6 +28,8 @@ interface NowPlayingLyricsAreaProps {
     textMuted: string;
   };
   onCoverLongPress: () => void;
+  /** A motion canvas fills the screen: step the artwork aside so it shows. */
+  canvasVisible?: boolean;
 }
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
@@ -33,19 +38,30 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   currentTime,
   onLyricPress,
   songTitle,
+  songArtist,
+  songId,
   isUserScrollingRef,
   scrollTimeoutRef,
   flatListRef,
   coverImageUri,
   storePlaying,
-  isDark,
-  colors,
   onCoverLongPress,
+  canvasVisible = false,
 }) => {
   if (!showLyrics) {
     return (
-      <View style={styles.vinylContainer}>
-        <RotatingVinyl imageUri={coverImageUri} size={width * 0.75} isPlaying={storePlaying} />
+      <View style={styles.artworkContainer}>
+        {canvasVisible ? null : (
+          <AppleArtworkStage
+            uri={coverImageUri}
+            title={songTitle ?? 'Untitled'}
+            artist={songArtist}
+            songKey={songId ?? songTitle ?? 'song'}
+            size={width - 64}
+            playing={storePlaying}
+            onLongPress={onCoverLongPress}
+          />
+        )}
       </View>
     );
   }
@@ -70,6 +86,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
         }
       }}
       headerContent={
+        canvasVisible ? <View style={styles.topSpacer} /> : (
         <View style={styles.topSpacer}>
           <Pressable
             onLongPress={onCoverLongPress}
@@ -78,15 +95,10 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
               pressed && { opacity: 0.8 },
             ]}
           >
-            {coverImageUri ? (
-              <Image source={{ uri: coverImageUri }} style={styles.mainCover} />
-            ) : (
-              <View style={[styles.mainCover, { backgroundColor: isDark ? '#333' : colors.cardHover, justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="musical-note" size={60} color={isDark ? '#666' : colors.textMuted} />
-              </View>
-            )}
+            <Artwork uri={coverImageUri} title={songTitle ?? 'Untitled'} artist={songArtist} size={250} priority="high" style={styles.mainCover} />
           </Pressable>
         </View>
+        )
       }
     />
   );
@@ -103,13 +115,13 @@ const styles = StyleSheet.create({
   mainCover: {
     width: 250,
     height: 250,
-    borderRadius: 12,
+    borderRadius: 16,
   },
-  vinylContainer: {
+  artworkContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 200,
+    paddingBottom: 260,
   },
 });
 

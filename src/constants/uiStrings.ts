@@ -5,7 +5,7 @@
 export const AppStrings = {
   appTitle: 'LuvLyrics',
   loadingSubtitle: 'Your music, your lyrics',
-  initializationFailed: '⚠️ Initialization Failed',
+  initializationFailed: "LuvLyrics couldn't start",
   retry: 'Retry',
 };
 

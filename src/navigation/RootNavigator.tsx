@@ -14,28 +14,34 @@ import { navigationRef } from '../utils/navigationService';
 import TabNavigator from './TabNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
 import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
+import { VoiceSearchCard } from '../components/VoiceSearchCard';
 import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
+import { useStreamSession } from '../hooks/useStreamSession';
+import { useCoverArtBackfill } from '../hooks/useCoverArtBackfill';
+
+// Tabs whose layout leaves room for the Dynamic Island mini player up top.
+const ISLAND_ROUTES = new Set(['Home', 'Stream']);
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
+  useStreamSession();
+  useCoverArtBackfill();
 
-  // Island mode: only render MiniPlayer on the Home tab.
+  // Island mode: only render MiniPlayer on the Home and Stream tabs.
   // Classic bar mode: render MiniPlayer on every tab/screen — except Luvs, which is
   // a full-bleed reels feed running its own audio pool. The bar used to paint over
   // it and its transport controlled a different player than the one you could hear.
   const showMiniPlayer = currentRoute !== 'Luvs' && (
     miniPlayerStyle === 'island'
-      ? currentRoute === 'Home'
+      ? ISLAND_ROUTES.has(currentRoute ?? '')
       : true
   );
 
@@ -68,10 +74,6 @@ export const RootNavigator: React.FC = () => {
             component={AddEditLyricsScreen}
           />
           <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-          />
-          <Stack.Screen
             name="CreatePlaylist"
             component={CreatePlaylistModal}
             options={{
@@ -88,10 +90,6 @@ export const RootNavigator: React.FC = () => {
             }}
           />
           <Stack.Screen
-            name="AudioDownloader"
-            component={AudioDownloaderScreen}
-          />
-          <Stack.Screen
             name="YoutubeBrowser"
             component={YoutubeBrowserScreen}
             options={{
@@ -101,9 +99,11 @@ export const RootNavigator: React.FC = () => {
           />
         </Stack.Navigator>
         
-        {/* Island mode: Home tab only. Bar mode: all tabs. */}
-        {showMiniPlayer && <MiniPlayer isHomeTab={currentRoute === 'Home'} />}
+        {/* Island mode: Home + Stream. Bar mode: all tabs. */}
+        {showMiniPlayer && <MiniPlayer isHomeTab={ISLAND_ROUTES.has(currentRoute ?? '')} />}
         <BackgroundDownloader />
+        {/* Hold the mic, say a song: the answer appears here, over everything. */}
+        <VoiceSearchCard />
       </View>
     </NavigationContainer>
   );

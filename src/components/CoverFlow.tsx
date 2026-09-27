@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, Platform, ViewStyle } from 'react-native';
-import { Image } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -13,10 +12,10 @@ import Animated, {
   cancelAnimation,
   useAnimatedReaction,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Song } from '../types/song';
-import { getGradientForSong } from '../constants/gradients';
+import { Image } from 'expo-image';
+import Artwork from './allegra/Artwork';
 
 const COVER_SIZE = 200;
 const PEEK = 34;
@@ -86,7 +85,6 @@ const CoverCard = memo(function CoverCard({
     progress,
     isEditMode,
     isPlaying,
-    defaultGradientColors,
   }: CoverCardProps) {
     const animatedStyle = useAnimatedStyle(() => {
       const slot = virtualIndex - progress.value;
@@ -113,31 +111,12 @@ const CoverCard = memo(function CoverCard({
     }, [virtualIndex]);
 
     const imageUri = song.coverImageUri;
-    const gradient = useMemo(() => {
-      const g = getGradientForSong(song);
-      return (g.length >= 2 ? g : defaultGradientColors) as [string, string];
-    }, [song, defaultGradientColors]);
 
     return (
       <Animated.View collapsable={false} style={[styles.card, animatedStyle]} pointerEvents="none">
         <View style={[styles.shadow, isPlaying && styles.playingRing]}>
           {/* Fallback only when song has no art — never as a scroll placeholder */}
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.coverArt}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={0}
-              recyclingKey={song.id}
-            />
-          ) : (
-            <LinearGradient colors={gradient} style={StyleSheet.absoluteFill}>
-              <View style={styles.fallbackIcon}>
-                <Ionicons name="musical-notes" size={44} color="rgba(255,255,255,0.3)" />
-              </View>
-            </LinearGradient>
-          )}
+          <Artwork uri={imageUri} title={song.title} artist={song.artist} size={COVER_SIZE} style={StyleSheet.absoluteFill} transition={0} />
 
           <Animated.View style={[styles.backDim, dimStyle]} pointerEvents="none" />
 

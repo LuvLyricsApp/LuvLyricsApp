@@ -10,6 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VoiceMicButton } from './VoiceMicButton';
 import { useSettingsStore } from '../store/settingsStore';
 import { TAB_BAR_HEIGHT } from '../constants/layout';
+import { VISIBLE_TABS } from '../navigation/tabs';
+import { MoreMenu, useMoreMenu } from './MoreMenu';
+import { MorphIcon } from './allegra/motion';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -20,13 +23,17 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const micEnabled = useSettingsStore(s => s.micEnabled);
-  const midpoint = Math.ceil(state.routes.length / 2);
-  const leftRoutes = state.routes.slice(0, midpoint);
-  const rightRoutes = state.routes.slice(midpoint);
+  const routes = state.routes.filter(r => VISIBLE_TABS.has(r.name));
+  const activeKey = state.routes[state.index]?.key;
+  const midpoint = Math.ceil(routes.length / 2);
+  const leftRoutes = routes.slice(0, midpoint);
+  const rightRoutes = routes.slice(midpoint);
+  const more = useMoreMenu(state, navigation);
+  const moreActive = more.open || more.activeKey !== null;
 
-  const renderTab = (route: typeof state.routes[0], index: number, offset = 0) => {
+  const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = state.index === index + offset;
+    const isFocused = route.key === activeKey && !more.open;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -51,7 +58,15 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
   };
 
   return (
-    <View style={styles.outerContainer} pointerEvents="box-none">
+    <View style={[styles.outerContainer, more.open && styles.outerOpen]} pointerEvents="box-none">
+      <MoreMenu
+        open={more.open}
+        activeKey={more.activeKey}
+        anchorBottom={TAB_BAR_HEIGHT + insets.bottom}
+        anchorRight={12}
+        onSelect={more.select}
+        onClose={more.close}
+      />
       {/* edgeToEdgeEnabled draws under the system bars, so the inset has to be
           reserved as padding too — growing the height alone just re-centres the
           icons into the gesture pill / 3-button strip. */}
@@ -59,7 +74,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
         <View style={styles.tabBar}>
           {/* Left tabs */}
           <View style={styles.tabGroup}>
-            {leftRoutes.map((r, i) => renderTab(r, i, 0))}
+            {leftRoutes.map(renderTab)}
           </View>
 
           {/* Center mic button — inline, inside the bar */}
@@ -71,7 +86,16 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
           {/* Right tabs */}
           <View style={styles.tabGroup}>
-            {rightRoutes.map((r, i) => renderTab(r, i, midpoint))}
+            {rightRoutes.map(renderTab)}
+            <Pressable
+              onPress={more.toggle}
+              style={styles.tab}
+              accessibilityRole="button"
+              accessibilityLabel="More"
+              accessibilityState={{ expanded: more.open, selected: moreActive }}
+            >
+              <MorphIcon on={more.open} onIcon="close" offIcon="ellipsis-horizontal" size={24} color={moreActive ? '#fff' : 'rgba(255,255,255,0.5)'} />
+            </Pressable>
           </View>
         </View>
       </View>
@@ -91,6 +115,9 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 100,
   },
+  // While the menu is open the bar's layer covers the screen, so the dim
+  // backdrop above it can receive touches (Android clips hit-testing to bounds).
+  outerOpen: { top: 0, justifyContent: 'flex-end' },
   container: {
     width: '100%',
     height: TAB_BAR_HEIGHT,

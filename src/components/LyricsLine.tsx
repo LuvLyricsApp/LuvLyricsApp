@@ -110,7 +110,6 @@ const styles = StyleSheet.create({
   },
   text: {
     textAlign: 'left',
-    letterSpacing: -0.5,
   },
 });
 

@@ -206,7 +206,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
       
       // Validation
       if (!title.trim()) {
-        Alert.alert('Missing Title', 'Please enter a song title first.');
+        Alert.alert('Add a title first', 'Lyrics are matched by song title.');
         return;
       }
 
@@ -243,8 +243,8 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
 
               setMagicStatus(hasSynced ? 'green' : 'blue');
               
-              const modeText = hasSynced ? 'Synced lyrics applied!' : 'Plain lyrics applied.';
-              setToastMessage(`✨ ${modeText} (${result.source})`);
+              const modeText = hasSynced ? 'Synced lyrics added' : 'Plain lyrics added';
+              setToastMessage(`${modeText} (${result.source})`);
               setToastType('success');
               setShowToast(true);
               setMagicAttempt(0);
@@ -307,7 +307,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
     if (hasSyncedTimestamps) {
       setLyricsText(lyricsToRawText(parsedLines));
       
-      setToastMessage(`✨ Synced Lyrics Auto-Applied from ${result.source}`);
+      setToastMessage(`Synced lyrics added from ${result.source}`);
       setToastType('success');
       setShowToast(true);
     } else {
@@ -334,7 +334,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('Missing Title', 'Please enter a song title.');
+      Alert.alert('Add a title', 'The song needs a title before it can be saved.');
       return;
     }
 
@@ -406,8 +406,8 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
     } catch (error) {
       console.error('Save failed:', error);
       Alert.alert(
-        'Save Failed', 
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check the console logs and try again.`
+        "Couldn't save", 
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}\n\nTry again in a moment.`
       );
     } finally {
       setIsSaving(false);
@@ -461,8 +461,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                      <Ionicons name="timer-outline" size={16} color="#000" />
                      <Text style={[styles.magicButtonText, { color: '#000' }]}>Sync</Text>
                    </Pressable>
-                   {/* ✨ Magic Search Button */}
-                   {/* ✨ Magic Search Button */}
+                   {/* Lyrics search */}
                    <Pressable 
                       style={[
                           styles.magicButtonSmall, 
@@ -596,7 +595,7 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
           <View style={styles.lyricsSection}>
             <View style={styles.lyricsHeader}>
               <Text style={styles.lyricsLabel}>
-                  {isShowingTransliteration ? 'TRANSLITERATION (VIBE MODE)' : 'LYRICS (ORIGINAL)'}
+                  {isShowingTransliteration ? 'Transliteration' : 'Lyrics'}
               </Text>
               <View style={{ flexDirection: 'row', gap: 16 }}>
                  <Pressable onPress={() => {
@@ -616,13 +615,13 @@ const AddEditLyricsScreen = ({ navigation, route }: any) => {
                         }
                  }}>
                   <Text style={[styles.aiButton, { color: isShowingTransliteration ? '#EDEDED' : '#7ED957' }]}>
-                      {isShowingTransliteration ? 'Show Original' : 'Transliterate'}
+                      {isShowingTransliteration ? 'Show original' : 'Transliterate'}
                   </Text>
                 </Pressable>
                 
                 { !isShowingTransliteration && (
                     <Pressable onPress={() => setShowSearchModal(true)}>
-                      <Text style={styles.aiButton}>FETCH</Text>
+                      <Text style={styles.aiButton}>Find</Text>
                     </Pressable>
                 )}
                 <Pressable onPress={handlePaste}>
@@ -785,7 +784,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   saveButton: {
     backgroundColor: '#fff',
@@ -826,24 +824,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lyricsLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#888888',
-    letterSpacing: 1,
   },
   pasteButton: {
     fontSize: 14,
     fontWeight: '500',
     color: '#EDEDED',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   aiButton: {
     fontSize: 14,
     fontWeight: '600',
     color: '#7ED957', // Lyric green accent
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   lyricsInput: {
     backgroundColor: '#0A0A0A',
@@ -964,7 +957,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#888',
     marginBottom: 12,
-    letterSpacing: 0.5,
   },
   audioPickerButton: {
     flexDirection: 'row',

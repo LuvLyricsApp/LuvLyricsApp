@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,10 +30,21 @@ import { analyzeImageBrightness } from '../utils/imageAnalyzer';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
 import TimelineScrubber from './TimelineScrubber';
 import { luvsEngine } from '../services/luvsEngine';
+import CanvasVideoLayer from './CanvasVideoLayer';
+import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
+import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
+import Artwork from './allegra/Artwork';
+import { duotoneFor } from './allegra/artworkSeed';
+import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ART_SIZE = SCREEN_WIDTH * 0.72;
-const PROGRESS_W = SCREEN_WIDTH - 40;
+/** Shared with the Luvs header so its buttons sit on the same edge as the cover. */
+export const LUVS_GUTTER = 24;
+const GUTTER = LUVS_GUTTER;
+/** Space reserved for the Luvs header (back / reload / vault) above the stage. */
+const HEADER_CLEARANCE = 72;
+/** Title row + scrubber + action row + the gaps between them. */
+const BOTTOM_BLOCK = 58 + 14 + 46 + 18 + 72;
 
 // ─── Equalizer bars ──────────────────────────────────────────────────────────
 const EqBars = ({ active }: { active: boolean }) => {
@@ -117,7 +128,7 @@ const HeartParticle = ({ angle, trigger }: { angle: number; trigger: number }) =
 
   return (
     <Animated.View style={[{ position: 'absolute', width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }, style]} pointerEvents="none">
-      <Ionicons name="heart" size={13} color="#FF2D55" />
+      <Ionicons name="heart" size={13} color={Signal.accent} />
     </Animated.View>
   );
 };
@@ -128,7 +139,9 @@ const HeartBurst = ({ trigger }: { trigger: number }) => (
   </View>
 );
 
-// ─── Animated action button ───────────────────────────────────────────────────
+// ─── Action button ───────────────────────────────────────────────────────────
+// A frosted circle with its label underneath. All four sit in one row with equal
+// columns, so they align to the same grid as the title and scrubber above them.
 interface ActionBtnProps {
   icon: string;
   label: string;
@@ -138,86 +151,84 @@ interface ActionBtnProps {
   iconStyle?: StyleProp<ViewStyle>;
   onPress: () => void;
   disabled?: boolean;
+  /** Fill for the circle when this action is "on" (liked, saved). */
+  activeTint?: string;
+  children?: React.ReactNode;
 }
 
 const ActionBtn = ({
-  icon, label, iconColor = '#fff', labelColor, iconSize = 30,
-  iconStyle, onPress, disabled = false,
+  icon, label, iconColor = Signal.ink, labelColor, iconSize = 24,
+  iconStyle, onPress, disabled = false, activeTint, children,
 }: ActionBtnProps) => {
   const sc = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }] }));
-
   const handlePress = useCallback(() => {
     sc.value = withSequence(
-      withSpring(0.72, { damping: 12, stiffness: 600 }),
-      withSpring(1.16, { damping: 5, stiffness: 260 }),
-      withSpring(1, { damping: 8, stiffness: 300 })
+      withSpring(0.82, { damping: 14, stiffness: 600 }),
+      withSpring(1.08, { damping: 8, stiffness: 320 }),
+      withSpring(1, Motion.spring.tactile)
     );
     onPress();
   }, [onPress, sc]);
 
   return (
-    <Pressable onPress={disabled ? undefined : handlePress} disabled={disabled}>
-      <Animated.View style={[styles.actionBtn, animStyle]}>
+    <Pressable
+      onPress={disabled ? undefined : handlePress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.actionCell}
+      hitSlop={6}
+    >
+      <Animated.View style={[styles.actionCircle, activeTint ? { backgroundColor: activeTint, borderColor: activeTint } : null, animStyle]}>
+        {children}
         <Animated.View style={iconStyle as ViewStyle}>
-          <Ionicons name={icon as any} size={iconSize} color={iconColor} />
+          <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={iconSize} color={iconColor} />
         </Animated.View>
-        <Text style={[styles.actionLabel, labelColor ? { color: labelColor } : undefined]}>
-          {label}
-        </Text>
       </Animated.View>
+      <Text style={[styles.actionLabel, labelColor ? { color: labelColor } : undefined]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 };
 
-// ─── Progress controller ──────────────────────────────────────────────────────
-const LuvsProgressController = ({
-  isActive, insetTop, insetBottom, onScrubStateChange,
+// ─── Scrubber ────────────────────────────────────────────────────────────────
+// Inline, in the layout column (not pinned to a screen edge). Reads the Luvs
+// audio pool; values are seconds so the time labels read correctly.
+const LuvsScrubber = ({
+  isActive, onScrubStateChange,
 }: {
   isActive: boolean;
-  insetTop: number;
-  insetBottom: number;
   onScrubStateChange?: (scrubbing: boolean) => void;
 }) => {
   const position = useSharedValue(0);
   const duration = useSharedValue(0);
-  const progress = useSharedValue(0);
 
   useEffect(() => {
     if (!isActive) return;
     luvsBufferManager.setStatusUpdateCallback((status) => {
       if (status.isLoaded) {
-        position.value = status.positionMillis;
-        duration.value = status.durationMillis || 0;
-        progress.value = status.durationMillis > 0
-          ? status.positionMillis / status.durationMillis : 0;
+        position.value = (status.positionMillis || 0) / 1000;
+        duration.value = (status.durationMillis || 0) / 1000;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
-  const fillStyle = useAnimatedStyle(() => ({
-    width: Math.min(progress.value, 1) * PROGRESS_W,
-  }));
-
-  if (!isActive) return null;
-
   return (
-    <>
-      <View style={[styles.topBar, { top: insetTop + 10 }]}>
-        <Animated.View style={[styles.topBarFill, fillStyle]} />
-      </View>
-      <View style={[styles.scrubberWrap, { bottom: insetBottom + 78 }]}>
+    <View style={styles.scrubber}>
+      {isActive ? (
         <TimelineScrubber
           currentTime={position}
           duration={duration}
-          onSeek={(t) => luvsBufferManager.seekTo(t)}
+          onSeek={(t) => luvsBufferManager.seekTo(t * 1000)}
           onScrubStart={() => { onScrubStateChange?.(true); luvsBufferManager.pause(); }}
           onScrubEnd={() => { onScrubStateChange?.(false); luvsBufferManager.resume(); }}
-          variant="island"
+          variant="classic"
         />
-      </View>
-    </>
+      ) : null}
+    </View>
   );
 };
 
@@ -232,6 +243,10 @@ interface LuvCardProps {
   onLike: (song: UnifiedSong) => void;
   onShare: (song: UnifiedSong) => void;
   onDownload: (song: UnifiedSong) => void;
+  /** Hands the clip to the main player as a full song (Spotify's "play full song"). */
+  onPlayFull?: (song: UnifiedSong) => void;
+  /** Already queued for download this session. */
+  isSaved?: boolean;
   onPlayPause: () => void;
   /** Lets the feed suspend ViewPager2 paging while the timeline is being dragged. */
   onScrubStateChange?: (scrubbing: boolean) => void;
@@ -255,49 +270,40 @@ interface LuvCardProps {
 
 export const LuvCard = React.memo<LuvCardProps>(
   ({ song, isActive, isLiked, isPlaying, onLike, onShare, onDownload,
-     onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
+     onPlayFull, isSaved = false, onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
      isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
+    // Only the card on screen looks up and decodes a canvas.
+    const duotone = useMemo(() => duotoneFor(`${song.title}|${song.artist ?? ''}`), [song.title, song.artist]);
+    const canvas = useCanvasArtwork(isActive ? { title: song.title, artist: song.artist, duration: song.duration } : null);
+    const [canvasVisible, setCanvasVisible] = useState(false);
     const [burstTrigger, setBurstTrigger] = useState(0);
     const [isMagicActive, setIsMagicActive] = useState(false);
     const [gradientOpacity, setGradientOpacity] = useState(0.9);
     const magicRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const glowSc = useSharedValue(1);
-    const glowOp = useSharedValue(0.15);
+    // The cover breathes with playback, as on Now Playing: full size while
+    // playing, settling smaller on pause.
+    const artScale = useSharedValue(isPlaying ? 1 : 0.92);
     const heartSc = useSharedValue(1);
     const ppOp = useSharedValue(0);
     const ppSc = useSharedValue(0.4);
 
     useEffect(() => {
-      if (isPlaying && isActive) {
-        glowSc.value = withRepeat(
-          withSequence(
-            withTiming(1.22, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
-            withTiming(1.0, { duration: 1500, easing: Easing.inOut(Easing.sin) })
-          ), -1, false
-        );
-        glowOp.value = withRepeat(
-          withSequence(
-            withTiming(0.5, { duration: 1500 }),
-            withTiming(0.12, { duration: 1500 })
-          ), -1, false
-        );
-      } else {
-        cancelAnimation(glowSc); cancelAnimation(glowOp);
-        glowSc.value = withTiming(1, { duration: 500 });
-        glowOp.value = withTiming(0.12, { duration: 500 });
-      }
+      artScale.value = withSpring(isPlaying || !isActive ? 1 : 0.92, Motion.spring.hero);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, isActive]);
+    }, [isPlaying, isActive]);
 
+    // Pop only when the listener likes it — not when a liked card mounts.
+    const likedOnMount = useRef(isLiked);
     useEffect(() => {
-      if (isLiked) {
+      if (isLiked && !likedOnMount.current) {
         heartSc.value = withSequence(
-          withSpring(1.75, { damping: 4, stiffness: 450 }),
-          withSpring(1, { damping: 8, stiffness: 300 })
+          withSpring(1.35, { damping: 9, stiffness: 520 }),
+          withSpring(1, Motion.spring.tactile)
         );
       }
+      likedOnMount.current = false;
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLiked]);
 
@@ -330,6 +336,7 @@ export const LuvCard = React.memo<LuvCardProps>(
 
     const handleShare = useCallback(() => onShare(song), [onShare, song]);
     const handleDownload = useCallback(() => onDownload(song), [onDownload, song]);
+    const handlePlayFull = useCallback(() => onPlayFull?.(song), [onPlayFull, song]);
 
     const handleMagic = useCallback(() => {
       setIsMagicActive(true);
@@ -353,10 +360,7 @@ export const LuvCard = React.memo<LuvCardProps>(
       return { opacity, transform: [{ scale }, { translateY }] } as ViewStyle;
     });
 
-    const glowStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: glowSc.value }],
-      opacity: glowOp.value,
-    }));
+    const artStyle = useAnimatedStyle(() => ({ transform: [{ scale: artScale.value }] }));
     const heartStyle = useAnimatedStyle(() => ({
       transform: [{ scale: heartSc.value }],
     }));
@@ -367,6 +371,17 @@ export const LuvCard = React.memo<LuvCardProps>(
 
     // Placed after every hook so the hook order never changes as cards scroll in
     // and out of range.
+    // ── Layout grid ────────────────────────────────────────────────────────
+    // One column, one gutter. Everything below the header is sized from the
+    // real screen and safe areas, so nothing overlaps on small or tall phones.
+    const contentTop = insets.top + HEADER_CLEARANCE;
+    // The pill bar floats over the feed; keep the actions clear of it.
+    const contentBottom = insets.bottom + TAB_BAR_CLEARANCE;
+    const artSize = Math.round(Math.max(
+      160,
+      Math.min(SCREEN_WIDTH - GUTTER * 2, 420, luvHeight - contentTop - contentBottom - BOTTOM_BLOCK - 28),
+    ));
+
     if (!isMounted) {
       return <View style={[styles.card, { height: luvHeight }]} />;
     }
@@ -377,108 +392,120 @@ export const LuvCard = React.memo<LuvCardProps>(
         renderToHardwareTextureAndroid
       >
         <Pressable style={[StyleSheet.absoluteFill, styles.pressable]} onPress={handleTap}>
-          {/* Full-screen blurred bg */}
-          {song.highResArt && (
+          {/* Full-screen blurred bg — or, with no cover, the song's own duotone
+              (the same one its generated artwork uses) so the card is never black. */}
+          {song.highResArt ? (
             <Image
               source={{ uri: song.highResArt }}
               style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: luvHeight }]}
               blurRadius={isActive ? 45 : 0}
               resizeMode="cover"
             />
+          ) : (
+            <LinearGradient
+              colors={[duotone[0], duotone[1], duotone[0]]}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
           )}
 
-          {/* Cinematic vignette */}
+          {/* Motion canvas: full-bleed like Spotify's feed; artwork steps aside once it lands */}
+          {isActive ? (
+            <CanvasVideoLayer canvas={canvas} playing={isPlaying} scrimStrength={0.55} onVisibleChange={setCanvasVisible} />
+          ) : null}
+
+          {/* Legibility: light at the top, deep at the bottom where the text sits. */}
           <LinearGradient
-            colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.04)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.1)']}
-            locations={[0, 0.28, 0.72, 1]}
+            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.25)', `rgba(0,0,0,${gradientOpacity})`]}
+            locations={[0, 0.2, 0.55, 1]}
             style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
           />
 
-          {/* Glow halo behind art */}
-          <Animated.View style={[styles.artGlow, glowStyle]} />
-
-          {/* Album art */}
-          {song.highResArt ? (
-            <Image source={{ uri: song.highResArt }} style={styles.coverArt} resizeMode="cover" />
-          ) : (
-            <View style={styles.coverArtFallback}>
-              <Ionicons name="musical-note" size={64} color="rgba(255,255,255,0.3)" />
-            </View>
-          )}
-
-          {/* Play/pause flash */}
-          <Animated.View style={[styles.ppOverlay, ppStyle]} pointerEvents="none">
-            <View style={styles.ppCircle}>
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={46} color="#fff" />
-            </View>
-          </Animated.View>
-
-          {/* UI layer */}
           <View
-            style={[StyleSheet.absoluteFill, isNearActive ? styles.uiOn : styles.uiOff]}
+            style={[
+              styles.column,
+              { paddingTop: contentTop, paddingBottom: contentBottom },
+              isNearActive ? styles.uiOn : styles.uiOff,
+            ]}
             pointerEvents={isNearActive ? 'box-none' : 'none'}
           >
-            <LuvsProgressController
-              isActive={isActive}
-              insetTop={insets.top}
-              insetBottom={insets.bottom}
-              onScrubStateChange={onScrubStateChange}
-            />
+            {/* Stage — the cover, centred in whatever height is left. */}
+            <View style={styles.stage} pointerEvents="none">
+              {!(isActive && canvasVisible) ? (
+                <Animated.View style={[styles.coverArt, { width: artSize, height: artSize }, artStyle]}>
+                  <Artwork uri={song.highResArt} title={song.title} artist={song.artist} size={artSize} priority={isActive ? 'high' : 'normal'} style={styles.coverArtInner} />
+                </Animated.View>
+              ) : null}
+              {/* Play/pause flash, centred on the cover */}
+              <Animated.View style={[styles.ppOverlay, ppStyle]}>
+                <View style={styles.ppCircle}>
+                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={40} color="#fff" style={isPlaying ? undefined : styles.ppNudge} />
+                </View>
+              </Animated.View>
+            </View>
 
-            {/* Right buttons */}
-            <View style={[styles.actionsCol, { bottom: insets.bottom + 130 }]}>
-              <View style={styles.actionWithBurst}>
-                <HeartBurst trigger={burstTrigger} />
-                <ActionBtn
-                  icon={isLiked ? 'heart' : 'heart-outline'}
-                  label={isLiked ? "Luv'd" : 'Luv'}
-                  iconColor={isLiked ? '#FF2D55' : '#fff'}
-                  labelColor={isLiked ? '#FF2D55' : undefined}
-                  iconSize={33}
-                  iconStyle={heartStyle}
-                  onPress={handleLike}
-                />
+            {/* Title block — left-aligned to the gutter, Full song on the same line */}
+            <View style={styles.metaRow}>
+              <View style={styles.songTexts}>
+                <Text style={styles.songTitle} numberOfLines={1}>{song.title}</Text>
+                <View style={styles.artistRow}>
+                  <EqBars active={isActive && isPlaying} />
+                  <Text style={styles.songArtist} numberOfLines={1}>
+                    {song.artist || 'Unknown Artist'}
+                  </Text>
+                </View>
               </View>
+              {onPlayFull ? (
+                <Pressable
+                  onPress={handlePlayFull}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Play full song ${song.title}`}
+                  style={({ pressed }) => [styles.playFull, pressed && styles.playFullPressed]}
+                >
+                  <Ionicons name="play" size={14} color={Signal.waveInk} style={styles.playFullGlyph} />
+                  <Text style={styles.playFullText}>Full song</Text>
+                </Pressable>
+              ) : null}
+            </View>
 
+            <LuvsScrubber isActive={isActive} onScrubStateChange={onScrubStateChange} />
+
+            {/* Actions — four equal columns on the same gutter */}
+            <View style={styles.actionsRow}>
               <ActionBtn
-                icon="sparkles"
-                label={isMagicActive ? 'Learning…' : 'Magic'}
-                iconColor={isMagicActive ? '#4CD964' : '#fff'}
-                labelColor={isMagicActive ? '#4CD964' : undefined}
-                iconSize={28}
+                icon={isLiked ? 'heart' : 'heart-outline'}
+                label={isLiked ? "Luv'd" : 'Luv'}
+                iconColor={isLiked ? Signal.accent : Signal.ink}
+                labelColor={isLiked ? Signal.accent : undefined}
+                iconStyle={heartStyle}
+                activeTint={isLiked ? 'rgba(238, 107, 95, 0.22)' : undefined}
+                onPress={handleLike}
+              >
+                <HeartBurst trigger={burstTrigger} />
+              </ActionBtn>
+              <ActionBtn
+                icon={isSaved ? 'checkmark' : 'arrow-down'}
+                label={isSaved ? 'Saved' : 'Save'}
+                iconColor={isSaved ? Signal.waveInk : Signal.ink}
+                labelColor={isSaved ? Signal.wave : undefined}
+                activeTint={isSaved ? Signal.wave : undefined}
+                onPress={handleDownload}
+                disabled={isSaved}
+              />
+              <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
+              <ActionBtn
+                icon="radio-outline"
+                label={isMagicActive ? 'Finding…' : 'Similar'}
+                iconColor={isMagicActive ? Signal.wave : Signal.ink}
+                labelColor={isMagicActive ? Signal.wave : undefined}
                 onPress={handleMagic}
                 disabled={isMagicActive}
               />
-
-              <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
-              <ActionBtn icon="bookmark-outline" label="Save" onPress={handleDownload} />
             </View>
-
-            {/* Bottom song info */}
-            <LinearGradient
-              colors={['rgba(0,0,0,0)', `rgba(0,0,0,${gradientOpacity})`]}
-              locations={[0, 0.6]}
-              style={[styles.bottomGrad, { paddingBottom: insets.bottom + 20 }]}
-            >
-              <View style={styles.songCard}>
-                {song.highResArt ? (
-                  <Image source={{ uri: song.highResArt }} style={styles.miniArt} />
-                ) : (
-                  <View style={styles.miniArtFallback}>
-                    <Ionicons name="musical-note" size={18} color="#fff" />
-                  </View>
-                )}
-                <View style={styles.songTexts}>
-                  <Text style={styles.songTitle} numberOfLines={1}>{song.title}</Text>
-                  <View style={styles.artistRow}>
-                    <EqBars active={isActive && isPlaying} />
-                    <Text style={styles.songArtist} numberOfLines={1}>
-                      {song.artist || 'Unknown Artist'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </LinearGradient>
           </View>
         </Pressable>
       </Animated.View>
@@ -492,186 +519,157 @@ export const LuvCard = React.memo<LuvCardProps>(
     prev.isMounted === next.isMounted &&
     prev.isLiked === next.isLiked &&
     prev.isPlaying === next.isPlaying &&
+    prev.isSaved === next.isSaved &&
     prev.song.id === next.song.id
 );
 
 const styles = StyleSheet.create({
   card: {
     width: SCREEN_WIDTH,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#000',
-  },
-  pressable: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  uiOn: { opacity: 1 },
-  uiOff: { opacity: 0 },
-  particle: { position: 'absolute' },
-
-  artGlow: {
-    position: 'absolute',
-    width: ART_SIZE + 70,
-    height: ART_SIZE + 70,
-    borderRadius: (ART_SIZE + 70) / 2,
-    backgroundColor: 'rgba(255,255,255,0.11)',
-  },
-  coverArt: {
-    width: ART_SIZE,
-    height: ART_SIZE,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    marginTop: -70,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.75,
-    shadowRadius: 28,
-    elevation: 18,
-  },
-  coverArtFallback: {
-    width: ART_SIZE,
-    height: ART_SIZE,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -70,
-  },
-
-  ppOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  ppCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.28)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  topBar: {
-    position: 'absolute',
-    left: 20,
-    width: PROGRESS_W,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 2,
     overflow: 'hidden',
   },
-  topBarFill: {
-    height: 3,
-    backgroundColor: '#fff',
-    borderRadius: 2,
-  },
+  pressable: {},
+  uiOn: { opacity: 1 },
+  uiOff: { opacity: 0 },
 
-  scrubberWrap: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
+  // ── Column ──
+  column: {
+    ...StyleSheet.absoluteFillObject,
+    paddingHorizontal: GUTTER,
   },
-
-  actionsCol: {
-    position: 'absolute',
-    right: 14,
-    gap: 22,
-    alignItems: 'center',
-  },
-  actionWithBurst: {
+  stage: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  burstAnchor: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
+  coverArt: {
+    borderRadius: Radius.panel,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.55,
+    shadowRadius: 30,
+    elevation: 18,
+  },
+  coverArtInner: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: Radius.panel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
+  },
+  ppOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  ppCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(7, 8, 11, 0.5)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
     alignItems: 'center',
-    zIndex: 20,
+    justifyContent: 'center',
   },
-  actionBtn: {
-    alignItems: 'center',
-    gap: 5,
-  },
-  actionLabel: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 11,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+  ppNudge: { marginLeft: 4 },
 
-  bottomGrad: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 90,
-  },
-  songCard: {
+  // ── Title row ──
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    gap: 14,
+    minHeight: 58,
+    marginTop: 28,
   },
-  miniArt: {
-    width: 50,
-    height: 50,
-    borderRadius: 11,
-    marginRight: 12,
-  },
-  miniArtFallback: {
-    width: 50,
-    height: 50,
-    borderRadius: 11,
-    marginRight: 12,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  songTexts: { flex: 1 },
+  songTexts: { flex: 1, minWidth: 0 },
   songTitle: {
-    color: '#fff',
-    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 5,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 24,
+    lineHeight: 29,
+    color: Signal.ink,
   },
   artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    marginTop: 4,
   },
   songArtist: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 13,
-    fontWeight: '500',
     flex: 1,
+    fontWeight: '500',
+    fontSize: 15,
+    color: 'rgba(244, 241, 234, 0.72)',
+  },
+  playFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: Radius.pill,
+    backgroundColor: Signal.wave,
+  },
+  playFullPressed: { transform: [{ scale: 0.95 }] },
+  playFullGlyph: { marginLeft: 1 },
+  playFullText: {
+    fontWeight: '600',
+    fontSize: 14,
+    color: Signal.waveInk,
   },
 
+  // ── Scrubber ──
+  scrubber: {
+    height: 46,
+    marginTop: 14,
+    justifyContent: 'center',
+  },
+
+  // ── Actions ──
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 18,
+  },
+  actionCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  actionCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
+  },
+  actionLabel: {
+    marginTop: 7,
+    fontWeight: '600',
+    fontSize: 11.5,
+    color: 'rgba(244, 241, 234, 0.82)',
+  },
+  burstAnchor: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+
+  // ── Equaliser ──
   eqWrap: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 2,
-    height: 16,
+    height: 14,
   },
   eqBar: {
     width: 3,
-    backgroundColor: '#FF2D55',
+    backgroundColor: Signal.wave,
     borderRadius: 2,
   },
 });

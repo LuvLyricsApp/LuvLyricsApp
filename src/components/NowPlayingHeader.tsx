@@ -45,7 +45,7 @@ const NowPlayingHeader: React.FC<NowPlayingHeaderProps> = ({
           </Pressable>
 
           <View style={{ alignItems: 'center', flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>NOW PLAYING</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>Now playing</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{currentSongTitle}</Text>
           </View>
 

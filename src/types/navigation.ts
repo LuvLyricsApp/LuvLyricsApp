@@ -4,39 +4,45 @@
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { CompositeScreenProps } from '@react-navigation/native';
+import { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 
 // Root Stack Navigator
 export type RootStackParamList = {
-  Main: undefined;
+  Main: NavigatorScreenParams<TabParamList> | undefined;
   NowPlaying: { songId: string };
   AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
-  Settings: undefined; // moved off the tab bar; reached from the Home header
-  AudioDownloader: {
-    fromBrowser?: boolean;
-    videoTitle?: string;
-    videoAuthor?: string;
-    videoId?: string;
-    audioUrl?: string;
-    audioBitrate?: number;
-    audioFormat?: string;
-    thumbnail?: string;
-    lengthSeconds?: number;
-    voiceQuery?: string;
-    autoDownload?: boolean;
-  } | undefined;
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault
   CreatePlaylist: { playlistId?: string, initialName?: string } | undefined; // Create or Edit playlist modal
   AddToPlaylist: { songId?: string; playlistId?: string }; // NEW: Add song to playlist modal
 };
 
+/** Params for the audio downloader, which lives inside the tab navigator. */
+export type AudioDownloaderParams = {
+  fromBrowser?: boolean;
+  videoTitle?: string;
+  videoAuthor?: string;
+  videoId?: string;
+  audioUrl?: string;
+  audioBitrate?: number;
+  audioFormat?: string;
+  thumbnail?: string;
+  lengthSeconds?: number;
+  voiceQuery?: string;
+  autoDownload?: boolean;
+} | undefined;
+
 // Bottom Tab Navigator
 export type TabParamList = {
   Home: undefined; // Was Library
+  Stream: undefined; // catalog streaming + Echo-style home feed
   Luvs: undefined;
-  Library: undefined; // Was Playlists
+  Library: NavigatorScreenParams<LibraryStackParamList> | undefined; // Was Playlists
   Search: undefined; // replaced Settings in the tab bar
+  // Pushed screens without a tab icon. They live in the tab navigator so the
+  // bottom bar stays on screen, as in Spotify and Apple Music (see VISIBLE_TABS).
+  Settings: undefined;
+  AudioDownloader: AudioDownloaderParams;
 };
 
 /**
@@ -47,6 +53,7 @@ export type TabParamList = {
 export type LibraryStackParamList = {
   PlaylistsHome: undefined;
   PlaylistDetail: { playlistId: string };
+  Downloads: undefined;
 };
 
 // Screen Props

@@ -6,8 +6,6 @@ import { Fonts } from './fonts';
 
 export const Typography = {
   fontFamily: {
-    display: Fonts.interBold,
-    body: Fonts.interRegular,
     lyrics: Fonts.lyrics,
   },
   
@@ -83,7 +81,7 @@ export const TextStyles = {
     fontSize: Typography.fontSize.lyricCurrent,
   },
   lyricOther: {
-    fontFamily: Fonts.interBold,
+    fontWeight: '700',
     fontSize: Typography.fontSize.lyricOther,
   },
 } as const;

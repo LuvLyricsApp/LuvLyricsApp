@@ -7,8 +7,11 @@ import { create } from 'zustand';
 import { Song, SortOption } from '../types/song';
 import * as queries from '../database/queries';
 import { useDailyStatsStore } from './dailyStatsStore';
-import { registerSongsGetter } from './playerStore';
 import { nativeSearch } from '../services/NativeSearch';
+
+// Deliberately no static import of './playerStore' here: playerStore imports this
+// module, and a back-edge evaluated at init left playerStore half-initialised
+// (a TDZ throw on web; a silently reset getter on Hermes). Use dynamic imports.
 
 interface SongsState {
   // State
@@ -24,6 +27,8 @@ interface SongsState {
   getSong: (id: string) => Promise<Song | null>;
   addSong: (song: Song) => Promise<void>;
   updateSong: (song: Song) => Promise<void>;
+  /** Fill in a missing cover (backfill). No-op if the song gained one meanwhile. */
+  patchCover: (songId: string, coverImageUri: string) => Promise<void>;
   deleteSong: (id: string) => Promise<void>;
   hideSong: (id: string, hide: boolean) => Promise<void>;
   setCurrentSong: (song: Song | null) => void;
@@ -107,6 +112,23 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       },
       
       // Update existing song
+      patchCover: async (songId: string, coverImageUri: string) => {
+        const existing = get().songs.find(s => s.id === songId);
+        if (!existing || existing.coverImageUri) return;
+        await queries.patchCoverImageUri(songId, coverImageUri);
+        set(state => ({
+          songs: state.songs.map(s => (s.id === songId && !s.coverImageUri ? { ...s, coverImageUri } : s)),
+        }));
+        const { usePlayerStore } = await import('./playerStore');
+        const player = usePlayerStore.getState();
+        if (player.currentSong?.id === songId && !player.currentSong.coverImageUri) {
+          player.updateCurrentSong({ coverImageUri });
+        }
+        if (player.playlistQueue?.some(s => s.id === songId)) {
+          player.updateQueue(player.playlistQueue.map(s => (s.id === songId && !s.coverImageUri ? { ...s, coverImageUri } : s)));
+        }
+      },
+
       updateSong: async (song: Song) => {
         set({ isLoading: true, error: null });
         try {
@@ -219,6 +241,13 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       // consumers that read song.isLiked directly (RecentlyPlayedGrid,
       // SongCard) stay reactive without a full refetch.
       toggleLike: async (songId: string) => {
+         // A streamed song has no library row to like — saving it downloads it
+         // into the library instead (the row it then gets can be liked).
+         if (songId.startsWith('stream:')) {
+             const { StreamService } = await import('../services/stream/StreamService');
+             StreamService.save(songId);
+             return;
+         }
          try {
              const { usePlaylistStore } = await import('./playlistStore');
              await usePlaylistStore.getState().toggleLiked(songId);
@@ -243,6 +272,3 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       
       clearError: () => set({ error: null }),
 }));
-
-// Give playerStore a sync path to songs — breaks the circular require in nextInPlaylist
-registerSongsGetter(() => useSongsStore.getState().songs);

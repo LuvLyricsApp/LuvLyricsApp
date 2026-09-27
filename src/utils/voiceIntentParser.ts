@@ -15,10 +15,12 @@ export function parseVoiceIntent(transcript: string, songs: Song[]): VoiceIntent
   const t = transcript.toLowerCase().trim();
   if (!t) return { action: 'UNKNOWN', transcript };
 
-  if (/\b(next|skip)\b/.test(t)) return { action: 'NEXT' };
-  if (/\b(prev(ious)?|go\s+back|last\s+song)\b/.test(t)) return { action: 'PREV' };
-  if (/\b(pause|stop)\b/.test(t)) return { action: 'PAUSE' };
-  if (/\b(shuffle)\b/.test(t)) return { action: 'SHUFFLE' };
+  // Transport commands only when that's the whole utterance, so a song called
+  // "Don't Stop Me Now" or "Skip to My Lou" is searched, not obeyed.
+  if (/^(next|skip)(\s+(song|track|this|it|one))?$/.test(t)) return { action: 'NEXT' };
+  if (/^(prev(ious)?|go\s+back|last\s+song)(\s+(song|track|one))?$/.test(t)) return { action: 'PREV' };
+  if (/^(pause|stop)(\s+(music|song|it|this|playback|playing))?$/.test(t)) return { action: 'PAUSE' };
+  if (/^shuffle(\s+(it|this|all|songs|the\s+queue|my\s+queue))?$/.test(t)) return { action: 'SHUFFLE' };
   // bare "play"/"resume" with nothing after → resume
   if (/^(resume|play|unpause|continue)$/.test(t)) return { action: 'RESUME' };
 
@@ -44,6 +46,54 @@ export function parseVoiceIntent(transcript: string, songs: Song[]): VoiceIntent
   }
 
   return { action: 'UNKNOWN', transcript };
+}
+
+const FILLER = /^(?:(?:please|hey|can you|could you|i want to|i wanna|let'?s)\s+)*(?:play|put on|open|download|get me|find|search for|search|listen to)?\s*(?:the\s+)?(?:song\s+)?(?:called\s+)?/i;
+
+/**
+ * What to search for when an utterance is a song request: the transcript minus
+ * "play", "download", "search for", "the song called", a trailing "please".
+ */
+export function songQueryOf(transcript: string): string {
+  return transcript
+    .trim()
+    .replace(FILLER, '')
+    .replace(/\s+(?:please|now|for me)$/i, '')
+    .replace(/\s+(?:song|track)$/i, '')
+    .trim();
+}
+
+/**
+ * Library songs that match a spoken query, best first. Title agreement counts
+ * most; an artist named in the query breaks ties ("tum hi ho arijit").
+ */
+export function rankSongs(query: string, songs: Song[], limit = 3): Song[] {
+  const q = normalize(query);
+  if (!q) return [];
+  const qWords = q.split(' ').filter(w => w.length > 1);
+  const scored: { song: Song; score: number }[] = [];
+  for (const song of songs) {
+    const title = normalize(song.title);
+    if (!title) continue;
+    const artist = normalize(song.artist ?? '');
+    let score = 0;
+    if (title === q) score = 100;
+    else if (title.startsWith(q)) score = 80;
+    else if (title.length > 2 && q.includes(title)) score = 75;
+    else if (title.includes(q)) score = 60;
+    else {
+      const titleWords = title.split(' ');
+      const overlap = qWords.filter(qw => titleWords.some(tw => tw === qw || (qw.length > 3 && tw.startsWith(qw)))).length;
+      if (overlap >= 2 || (overlap === 1 && qWords.length === 1)) score = 20 + overlap * 10;
+    }
+    if (score === 0) continue;
+    if (artist && qWords.some(w => w.length > 2 && artist.includes(w))) score += 8;
+    scored.push({ song, score });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score || b.song.playCount - a.song.playCount)
+    .slice(0, limit)
+    .map(x => x.song);
 }
 
 function normalize(s: string): string {

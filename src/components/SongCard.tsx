@@ -150,9 +150,9 @@ export const SongCard: React.FC<SongCardProps> = memo(({
             )}
             <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' }} />
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="sparkles" size={42} color="#FFF" />
-              <Text style={{ color: '#fff', fontSize: 10, marginTop: 8, fontWeight: '900', letterSpacing: 1 }}>MAGIC LYRICS</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, marginTop: 2 }}>TAP TO SEARCH</Text>
+              <Ionicons name="document-text-outline" size={36} color="#FFF" />
+              <Text style={{ color: '#fff', fontSize: 13, marginTop: 8, fontWeight: '700' }}>Find lyrics</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>Tap to search</Text>
             </View>
           </View>
         </Animated.View>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   defaultThumbnail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   thumbnail: { flex: 1 },
   info: { gap: 2, marginTop: 8 },
-  title: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
+  title: { fontSize: 14, fontWeight: '700' },
   subtitle: { fontSize: 12 },
   duration: { fontSize: 11, marginTop: 2 },
   heartButton: { position: 'absolute', top: 8, right: 8, zIndex: 5 },

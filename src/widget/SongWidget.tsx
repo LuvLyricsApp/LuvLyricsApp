@@ -83,9 +83,9 @@ export function SongWidget({ title = 'No Song Playing', artist = 'LuvLyrics', co
           maxLines={1}
           style={{
             fontSize: 18,
-            fontFamily: 'Inter',
+            // Resolved from android/app/src/main/assets/fonts; falls back to the system font.
+            fontFamily: 'SF-Pro-Text-Bold',
             color: '#FFFFFF',
-            fontWeight: 'bold',
           }}
         />
         <TextWidget
@@ -93,7 +93,7 @@ export function SongWidget({ title = 'No Song Playing', artist = 'LuvLyrics', co
           maxLines={1}
           style={{
             fontSize: 14,
-            fontFamily: 'Inter',
+            fontFamily: 'SF-Pro-Text-Regular',
             color: '#AAAAAA',
             marginBottom: 12,
           }}

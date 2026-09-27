@@ -1,10 +1,13 @@
 /**
  * LyricsRepository
- * Simplified with Lyrica API (aggregates LRCLIB, YouTube Music, Genius, JioSaavn)
+ * Asks every Echo Music provider in parallel (YouLyPlus, Paxsenix, Unison,
+ * BetterLyrics, SimpMusic, LRCLIB, KuGou) plus the Lyrica backend, then ranks
+ * all of it so the picker shows real options instead of a single guess.
  */
 
 import { lyricaService, LyricaResult } from './LyricaService';
 import { SmartLyricMatcher } from './SmartLyricMatcher';
+import { EchoLyricsCascade } from './lyrics/EchoLyricsCascade';
 
 export interface SearchResult {
   id: string;
@@ -33,8 +36,17 @@ export const LyricsRepository = {
     onProgress?.('Searching global databases...');
     
     try {
-      const raw = await lyricaService.fetchLyrics(targetMetadata.title, targetMetadata.artist, false, targetMetadata.duration);
-      const multiResults: LyricaResult[] = raw ? [raw] : [];
+      const [echoHits, lyrica] = await Promise.all([
+        EchoLyricsCascade.fetchAll({
+          title: targetMetadata.title,
+          artist: targetMetadata.artist,
+          duration: targetMetadata.duration,
+        }),
+        lyricaService.fetchLyrics(targetMetadata.title, targetMetadata.artist, false, targetMetadata.duration, { skipEcho: true })
+          .catch(() => null),
+      ]);
+      const multiResults: LyricaResult[] = echoHits.map(hit => lyricaService.fromProvider(hit));
+      if (lyrica) multiResults.push(lyrica);
 
       if (multiResults.length === 0) {
         onProgress?.('No lyrics found');
@@ -81,7 +93,7 @@ export const LyricsRepository = {
 
       onProgress?.(`Found ${results.length} lyric options`);
     } catch (error) {
-      console.error('[LyricsRepository] Error:', error);
+      if (__DEV__) console.error('[LyricsRepository] Error:', error);
       onProgress?.('Search failed');
     }
 

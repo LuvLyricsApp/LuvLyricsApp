@@ -26,9 +26,9 @@ export const MagicModeModal: React.FC<MagicModeModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           
-          <Text style={styles.modalTitle}>Choose Your Magic Level</Text>
+          <Text style={styles.modalTitle}>Sync lyrics</Text>
           <Text style={styles.modalSubtitle}>
-            How would you like to timestamp your lyrics?
+            How should the timestamps be made?
           </Text>
           
           {/* Option 1: Magic Mode (User provides lyrics) */}
@@ -40,11 +40,11 @@ export const MagicModeModal: React.FC<MagicModeModalProps> = ({
               <Ionicons name="create-outline" size={32} color="#EDEDED" />
             </View>
             <View style={styles.modeTextContainer}>
-              <Text style={styles.modeTitle}>🪄 Magic</Text>
+              <Text style={styles.modeTitle}>Use my lyrics</Text>
               <Text style={styles.modeDescription}>
-                I have lyrics, just add timestamps
+                Paste the words and we add the timing
               </Text>
-              <Text style={styles.modeTime}>⏱️ ~60 seconds</Text>
+              <Text style={styles.modeTime}>About a minute</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
           </Pressable>
@@ -55,14 +55,14 @@ export const MagicModeModal: React.FC<MagicModeModalProps> = ({
             onPress={onPureMagicMode}
           >
             <View style={styles.modeIconContainer}>
-              <Ionicons name="sparkles" size={32} color="#EDEDED" />
+              <Ionicons name="mic-outline" size={32} color="#EDEDED" />
             </View>
             <View style={styles.modeTextContainer}>
-              <Text style={styles.modeTitle}>✨ Pure Magic</Text>
+              <Text style={styles.modeTitle}>Transcribe the song</Text>
               <Text style={styles.modeDescription}>
-                AI extracts lyrics + timestamps automatically
+                Words and timing are pulled from the audio
               </Text>
-              <Text style={styles.modeTime}>⏱️ ~90 seconds</Text>
+              <Text style={styles.modeTime}>About a minute and a half</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
           </Pressable>

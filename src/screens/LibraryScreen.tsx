@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   brandActionButton: { padding: 4, position: 'relative' },
   brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
   brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', letterSpacing: -1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
+  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
   recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },

@@ -19,7 +19,7 @@ export const GradientPicker: React.FC<GradientPickerProps> = memo(({ selectedId,
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>VISUAL THEME</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Visual theme</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {GRADIENTS.map((gradient) => {
           const isSelected = gradient.id === selectedId;
@@ -53,7 +53,7 @@ GradientPicker.displayName = 'GradientPicker';
 
 const styles = StyleSheet.create({
   container: { gap: 12 },
-  label: { fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  label: { fontSize: 13, fontWeight: '600' },
   scrollContent: { gap: 16, paddingRight: 24 },
   item: { alignItems: 'center', gap: 8 },
   thumbnailContainer: { width: 96, height: 96, borderRadius: 16, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },

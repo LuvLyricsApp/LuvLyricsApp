@@ -257,7 +257,8 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
 
     if (__DEV__) console.log(`[YTBrowser] Handing off: ${videoInfo.title}`);
 
-    navigation.replace('AudioDownloader', {
+    // The downloader lives in the tab navigator now: close this modal and land on it.
+    navigation.popTo('Main', { screen: 'AudioDownloader', params: {
       fromBrowser: true,
       videoTitle: videoInfo.title,
       videoAuthor: videoInfo.author,
@@ -267,7 +268,7 @@ export const YoutubeBrowserScreen = ({ navigation }: any) => {
       audioFormat: videoInfo.audioFormat,
       thumbnail: videoInfo.thumbnail,
       lengthSeconds: videoInfo.lengthSeconds,
-    });
+    } });
   }, [videoInfo, navigation]);
 
   return (

@@ -59,12 +59,6 @@ export function endAudioLoad(songId: string): void {
   if (audioLoadInFlight === songId) audioLoadInFlight = null;
 }
 
-// Injected by songsStore at init — breaks the circular require in nextInPlaylist
-let _getSongs: (() => Song[]) | null = null;
-export function registerSongsGetter(fn: () => Song[]): void {
-  _getSongs = fn;
-}
-
 interface PlayerState {
   currentSongId: string | null;
   currentSong: Song | null;
@@ -311,10 +305,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const state = get();
 
     // Safety net: queue was never set (e.g. song launched via fallback path or Recently Played)
-    // Rebuild from memory so auto-next still works — no circular dep to songsStore
+    // Rebuild from memory so auto-next still works. Read at call time: songsStore
+    // must not import this module back at init (see songsStore.ts).
     if (!state.playlistQueue || state.playlistQueue.length === 0) {
       if (state.currentPlaylistId === 'library' && state.currentSongId) {
-        const allSongs: Song[] = _getSongs ? _getSongs() : [];
+        const allSongs: Song[] = useSongsStore.getState().songs;
         if (allSongs.length > 0) {
           const idx = allSongs.findIndex((s: Song) => s.id === state.currentSongId);
           set({ playlistQueue: allSongs, currentQueueIndex: idx !== -1 ? idx : 0 });

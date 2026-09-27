@@ -94,6 +94,20 @@ interface SettingsState {
   youtubeApiKey: string;
   setYoutubeApiKey: (key: string) => void;
 
+  // Canvas: looping motion artwork behind the player (Echo Music providers)
+  canvasEnabled: boolean;
+  setCanvasEnabled: (enabled: boolean) => void;
+  /** Your own Apple MusicKit developer token — unlocks Apple motion artwork. */
+  appleMusicToken: string;
+  setAppleMusicToken: (token: string) => void;
+  /** Optional Tidal client token — unlocks Tidal video covers. */
+  tidalToken: string;
+  setTidalToken: (token: string) => void;
+
+  /** Luvs clips open on the song's hook instead of the intro (Spotify-style). */
+  luvsStartAtHook: boolean;
+  setLuvsStartAtHook: (enabled: boolean) => void;
+
   resetToDefaults: () => void;
 }
 
@@ -127,6 +141,10 @@ const DEFAULT_SETTINGS = {
   quickPins: ['export', 'import', 'scan'] as [string, string, string],
   ytVideoPreview: false,
   youtubeApiKey: '',
+  canvasEnabled: true,
+  appleMusicToken: '',
+  tidalToken: '',
+  luvsStartAtHook: true,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -191,6 +209,15 @@ export const useSettingsStore = create<SettingsState>()(
       setYtVideoPreview: (ytVideoPreview) => set({ ytVideoPreview }),
       youtubeApiKey: '',
       setYoutubeApiKey: (youtubeApiKey) => set({ youtubeApiKey }),
+
+      canvasEnabled: true,
+      setCanvasEnabled: (canvasEnabled) => set({ canvasEnabled }),
+      appleMusicToken: '',
+      setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
+      tidalToken: '',
+      setTidalToken: (tidalToken) => set({ tidalToken: tidalToken.trim() }),
+      luvsStartAtHook: true,
+      setLuvsStartAtHook: (luvsStartAtHook) => set({ luvsStartAtHook }),
     }),
     {
       name: 'lyricflow-settings',

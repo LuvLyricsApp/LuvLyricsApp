@@ -98,7 +98,7 @@ const BulkHeader: React.FC<BulkHeaderProps> = memo((props) => (
     <View>
         <ScrollableHeader {...props} />
         <View style={styles.bulkTitleContainer}>
-            <Text style={styles.label}>3. NAME YOUR PLAYLIST</Text>
+            <Text style={styles.label}>3. Name your playlist</Text>
             <TextInput
                 style={styles.playlistInput}
                 value={props.bulkPlaylistName}
@@ -375,11 +375,11 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                             <ScrollView>
                                 <ScrollableHeader {...sharedHeaderProps} />
                                 <View style={{ paddingHorizontal: 16 }}>
-                                    <Text style={styles.label}>1. GET JSON FROM AI</Text>
+                                    <Text style={styles.label}>1. Get the song list as JSON</Text>
                                     <Pressable style={styles.copyPromptBtn} onPress={copyPromptToClipboard}>
                                         <Text style={styles.copyPromptText}>Copy Prompt for ChatGPT</Text>
                                     </Pressable>
-                                    <Text style={styles.label}>2. PASTE JSON HERE</Text>
+                                    <Text style={styles.label}>2. Paste it here</Text>
                                     <TextInput
                                         style={styles.jsonInput}
                                         value={jsonInput}
@@ -410,7 +410,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                     }
                                     keyExtractor={item => item.id}
                                     numColumns={2}
-                                    contentContainerStyle={{ paddingBottom: 100 }}
+                                    contentContainerStyle={{ paddingBottom: 140 }}
                                     renderItem={({ item }) => {
                                         if (!item.result) {
                                             return (
@@ -492,8 +492,8 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                             key={`section-${activeTabId}`}
                             ListHeaderComponent={<ScrollableHeader {...sharedHeaderProps} />}
                             sections={[
-                                ...(activeTab.results.length > 0 ? [{ title: 'OFFICIAL TRACKS', data: activeTab.results }] : []),
-                                { title: 'REMIXES & COVERS', data: activeTab.remixResults, collapsed: !remixSectionExpanded },
+                                ...(activeTab.results.length > 0 ? [{ title: 'Official tracks', data: activeTab.results }] : []),
+                                { title: 'Remixes and covers', data: activeTab.remixResults, collapsed: !remixSectionExpanded },
                             ]}
                             keyExtractor={item => item.id}
                             contentContainerStyle={styles.gridContent}
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     closeTabBtn: { marginLeft: 5 },
     bulkTitleContainer: { paddingHorizontal: 16, marginBottom: 16 },
     content: { flex: 1 },
-    gridContent: { padding: 12, paddingBottom: 120 },
+    gridContent: { padding: 12, paddingBottom: 140 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     statusText: { color: '#666', marginTop: 16, fontSize: 13 },
     emptyText: { color: '#444', marginTop: 16, fontSize: 16 },
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     reviewBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
     clearBtn: { padding: 8 },
     bulkContainer: { padding: 16, flex: 1 },
-    label: { color: '#666', marginBottom: 8, marginTop: 16, fontWeight: '700', fontSize: 11, textTransform: 'uppercase' },
+    label: { color: '#666', marginBottom: 8, marginTop: 16, fontWeight: '600', fontSize: 13 },
     playlistInput: { backgroundColor: 'rgba(255,255,255,0.07)', color: '#fff', padding: 14, borderRadius: 18, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
     jsonInput: { backgroundColor: 'rgba(255,255,255,0.07)', color: '#ccc', padding: 12, borderRadius: 18, fontSize: 13, height: 160, textAlignVertical: 'top', fontFamily: 'monospace', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
     copyPromptBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#1E1E1E', borderRadius: 20, marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 4, },
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
     parseBtn: { backgroundColor: '#1A1A1A', padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 32, flexDirection: 'row', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 4, },
     parseBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 8, marginHorizontal: 4 },
-    sectionHeaderText: { color: '#444', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
+    sectionHeaderText: { color: '#8a8a8a', fontSize: 14, fontWeight: '700' },
     gridCardWrapper: { width: '50%', padding: 4 },
     swapOverlay: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(0,0,0,0.6)', padding: 4, borderRadius: 40, pointerEvents: 'none' },
     alreadyPresentOverlay: {

@@ -1,9 +1,9 @@
 /**
  * Luvs Screen - Full-screen immersive TikTok/Instagram-style feed
  *
- * The tab bar and the mini player are both suppressed for this route (see
- * TabNavigator + RootNavigator), so the feed genuinely owns the screen and exits
- * through its own back button.
+ * The bottom bar floats over the feed like any tab (Reels / TikTok style); only
+ * the mini player is suppressed here (see RootNavigator), because Luvs runs its
+ * own audio pool.
  *
  * On Android the paging is handled by LuvsPagerView, a native ViewPager2. iOS keeps
  * the paging FlatList — see the fallback branch at the bottom.
@@ -34,7 +34,7 @@ import { useFocusEffect, useNavigation, useIsFocused } from '@react-navigation/n
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLuvsFeedStore } from '../store/luvsFeedStore';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
-import { LuvCard } from '../components/LuvCard';
+import { LuvCard, LUVS_GUTTER } from '../components/LuvCard';
 import {
   LuvsPager,
   LuvsPagerHandle,
@@ -49,6 +49,13 @@ import { UnifiedSong } from '../types/song';
 import { LuvsVaultModal } from '../components/LuvsVaultModal';
 import { PerformanceHUD } from '../components/PerformanceHUD';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
+import { StreamService } from '../services/stream/StreamService';
+import { streamIdFor } from '../services/stream/streamSong';
+import { hookOffsetSeconds } from '../services/luvsHook';
+import { useSettingsStore } from '../store/settingsStore';
+import { Signal } from '../constants/allegraTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -59,8 +66,9 @@ const LUV_HEIGHT = SCREEN_HEIGHT;
 const SKIP_THRESHOLD_SECONDS = 3;
 
 const LuvsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isFocused = useIsFocused();
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const colors = useThemeColors();
   const isDark = useIsDark();
 
@@ -239,7 +247,7 @@ const LuvsScreen: React.FC = () => {
         luvsEngine.recordInteraction(interaction);
 
         if (__DEV__) {
-          const verb = skipped ? '⏭️ Skipped' : '👀 Watched';
+          const verb = skipped ? 'Skipped' : 'Watched';
           console.log(`[Luvs] ${verb}: ${prevSong.title} (${watchDuration.toFixed(1)}s)`);
         }
       }
@@ -251,7 +259,17 @@ const LuvsScreen: React.FC = () => {
       luvsEngine.setCurrentIndex(newIndex);
       // ALWAYS FORCE PLAY ON SWIPE
       setIsPlaying(true);
-      luvsBufferManager.updateActiveIndex(newIndex, feedSongs, true);
+      const nextSong = feedSongs[newIndex];
+      luvsBufferManager.updateActiveIndex(newIndex, feedSongs, true)
+        .then(() => {
+          // Spotify-style: open the clip on the hook, not the intro. Skipped if
+          // the listener already swiped on while the track was loading.
+          if (!useSettingsStore.getState().luvsStartAtHook) return;
+          if (viewTrackingRef.current !== newIndex) return;
+          const offset = hookOffsetSeconds(nextSong?.duration);
+          if (offset > 0) luvsBufferManager.seekTo(offset * 1000);
+        })
+        .catch(() => {});
 
       if (newIndex >= feedSongs.length - 2) {
         loadMoreSongs();
@@ -310,17 +328,31 @@ const LuvsScreen: React.FC = () => {
   const handleSharePress = useCallback(async (song: UnifiedSong) => {
     try {
       await Share.share({
-        message: `🎵 Check out "${song.title}" by ${song.artist || 'Unknown Artist'}!`,
+        message: song.artist ? `${song.title} by ${song.artist}` : song.title,
       });
     } catch {
       if (__DEV__) console.log('Share cancelled');
     }
   }, []);
 
+  // "Save" downloads the song into the library (it then plays offline from
+  // Downloads). "Luv" stays the lightweight vault bookmark.
   const handleDownloadPress = useCallback((song: UnifiedSong) => {
-    // Also toggle vault status since "Save" is currently linked to Vault
-    handleLikePress(song);
-  }, [handleLikePress]);
+    if (savedIds.has(song.id)) return;
+    StreamService.save(song);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSavedIds(prev => new Set(prev).add(song.id));
+  }, [savedIds]);
+
+  // Spotify's "play full song": hand the clip to the main player with the rest
+  // of the feed as the queue, then open Now Playing.
+  const handlePlayFullPress = useCallback(async (song: UnifiedSong) => {
+    const idx = feedSongs.findIndex(s => s.id === song.id);
+    await luvsBufferManager.pause();
+    setIsPlaying(false);
+    StreamService.play(idx >= 0 ? feedSongs.slice(idx) : [song], 0);
+    rootNavigation.navigate('NowPlaying', { songId: streamIdFor(song) });
+  }, [feedSongs, rootNavigation]);
 
   const handlePlayPause = useCallback(async () => {
     if (isPlaying) {
@@ -332,16 +364,6 @@ const LuvsScreen: React.FC = () => {
       setIsPlaying(true);
     }
   }, [isPlaying, silenceMainPlayer]);
-
-  const handleGoBack = useCallback(() => {
-    // The tab bar is hidden on this route, so this button is the only way out —
-    // fall back to Home when there is no tab history to pop.
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home' as never);
-    }
-  }, [navigation]);
 
   const renderCard = useCallback(
     (item: UnifiedSong, index: number) => {
@@ -360,6 +382,8 @@ const LuvsScreen: React.FC = () => {
           onLike={handleLikePress}
           onShare={handleSharePress}
           onDownload={handleDownloadPress}
+          onPlayFull={handlePlayFullPress}
+          isSaved={savedIds.has(item.id)}
           onPlayPause={handlePlayPause}
           onScrubStateChange={setIsScrubbing}
           luvHeight={LUV_HEIGHT}
@@ -371,7 +395,7 @@ const LuvsScreen: React.FC = () => {
         />
       );
     },
-    [currentIndex, isPlaying, isInVault, handleLikePress, handleSharePress, handleDownloadPress, handlePlayPause, currentIndexSV]
+    [currentIndex, isPlaying, isInVault, handleLikePress, handleSharePress, handleDownloadPress, handlePlayFullPress, savedIds, handlePlayPause, currentIndexSV]
   );
 
   const renderItem = useCallback(
@@ -471,15 +495,7 @@ const LuvsScreen: React.FC = () => {
       />
 
       <View style={[styles.topBar, { top: insets.top + 12 }]} pointerEvents="box-none">
-        <Pressable
-          style={styles.iconButton}
-          onPress={handleGoBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="chevron-back" size={26} color="#fff" />
-        </Pressable>
+        <Text style={styles.title} accessibilityRole="header">Luvs</Text>
 
         <View style={styles.topBarRight}>
           <Pressable
@@ -489,7 +505,7 @@ const LuvsScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Reload feed"
           >
-            <Ionicons name="refresh" size={22} color="#fff" />
+            <Ionicons name="refresh" size={20} color="#fff" />
           </Pressable>
 
           <Pressable
@@ -499,7 +515,7 @@ const LuvsScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel={`Vault, ${vault.length} saved`}
           >
-            <MaterialCommunityIcons name="heart-multiple" size={22} color="#fff" />
+            <MaterialCommunityIcons name="heart-multiple" size={20} color="#fff" />
             {vault.length > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{vault.length}</Text>
@@ -539,8 +555,8 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: LUVS_GUTTER,
+    right: LUVS_GUTTER,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -555,17 +571,22 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  title: {
+    fontWeight: '700',
+    fontSize: 28,
+    color: '#fff',
   },
   badge: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: '#FF2D55',
+    backgroundColor: Signal.accent,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -576,7 +597,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   loadingContainer: {
     position: 'absolute',

@@ -275,6 +275,19 @@ export const patchYoutubeVideoId = async (songId: string, videoId: string): Prom
   });
 };
 
+/**
+ * Narrow write for cover backfill — touches one column only, so it can never
+ * clobber lyrics or edits made by a full updateSong() in flight.
+ */
+export const patchCoverImageUri = async (songId: string, coverImageUri: string): Promise<void> => {
+  await withDbWrite(async (db) => {
+    await db.runAsync(
+      `UPDATE songs SET cover_image_uri = ? WHERE id = ? AND (cover_image_uri IS NULL OR cover_image_uri = '')`,
+      [coverImageUri, songId]
+    );
+  });
+};
+
 export const deleteSong = async (id: string): Promise<void> => {
   try {
     const song = await getSongById(id);
