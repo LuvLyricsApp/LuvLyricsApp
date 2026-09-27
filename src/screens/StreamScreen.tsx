@@ -8,7 +8,8 @@
  * Tapping a song streams it through the normal player queue with radio
  * autoplay; ↓ saves it into Downloads; long-press plays it next.
  *
- * The header scrolls away with the content — no collapsing bar.
+ * The header scrolls away with the content — no collapsing bar. Behind it all
+ * runs Allegra's live shader (DynamicAura), tinted by the playing cover.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,12 +27,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
 import { Radius, Signal, Space } from '../constants/allegraTheme';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
-import { hexToRgb } from '../components/allegra/palette';
+import DynamicAura from '../components/allegra/DynamicAura';
+import { AuraMood } from '../components/allegra/MusicFlowField';
 import { RiseIn } from '../components/allegra/motion';
 import { PrimaryButton, SectionHeading } from '../components/allegra/home';
 import { CoverShelf, GUTTER, MoodChips, QuickPicks, ShortcutGrid, SongRow, TrackItem } from '../components/stream/StreamHome';
@@ -61,9 +63,10 @@ const MOODS = [
 ] as const;
 const MOOD_LABELS = MOODS.map(m => m.label);
 
-const rgba = (hex: string, alpha: number): string => {
-  const [r, g, b] = hexToRgb(hex).map(c => Math.round(c * 255));
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+// Calm moods slow the shader; the loud ones give it energy.
+const SHADER_MOOD: Record<string, AuraMood> = {
+  Chill: 'chill', Focus: 'chill', Romance: 'chill', Heartbreak: 'chill',
+  Energy: 'energy', Party: 'energy',
 };
 
 const StreamScreen: React.FC = () => {
@@ -177,7 +180,11 @@ const StreamScreen: React.FC = () => {
     else runSearch(picked.query, picked.label);
   }, [clearSearch, runSearch]);
 
-  // The page takes a quiet wash from whatever is playing (or the top pick).
+  const isFocused = useIsFocused();
+  const isPlaying = usePlayerStore(s => s.isPlaying);
+  const shaderMood: AuraMood = (mood && SHADER_MOOD[mood]) || 'energy';
+
+  // The shader takes its colours from whatever is playing (or the top pick).
   const washArt = currentSong?.coverImageUri ?? feed?.keepListening[0]?.highResArt ?? feed?.quickPicks[0]?.highResArt;
   const palette = useArtworkPalette(washArt);
 
@@ -304,18 +311,14 @@ const StreamScreen: React.FC = () => {
 
   return (
     <View style={styles.screen}>
+      {/* Allegra's live shader: the playing cover's colours, full energy while
+          music plays, and the picked mood's motion. Frames stop off-screen. */}
+      <DynamicAura palette={palette} playing={isPlaying} active={isFocused} mood={shaderMood} dim={0.18} />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingTop: insets.top + Space.xs }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Signal.wave} progressViewOffset={insets.top + 40} />}
       >
-        {/* The wash scrolls away with the header, like Spotify's. */}
-        <LinearGradient
-          pointerEvents="none"
-          colors={[rgba(palette.primary, 0.34), rgba(palette.primary, 0.34), rgba(palette.primary, 0.08), 'rgba(0, 0, 0, 0)']}
-          locations={[0, 0.42, 0.72, 1]}
-          style={styles.wash}
-        />
         {/* Shares its line with the Dynamic Island mini player, top right. */}
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">Stream</Text>
@@ -360,8 +363,6 @@ const StreamScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Signal.bg },
-  // Starts above the content so pull-to-refresh overscroll stays tinted.
-  wash: { position: 'absolute', top: -300, left: 0, right: 0, height: 720 },
   content: { paddingBottom: 180 },
   header: { height: ISLAND_CLEARANCE, justifyContent: 'center', paddingHorizontal: GUTTER },
   title: { fontSize: 28, fontWeight: '700', color: Signal.ink },

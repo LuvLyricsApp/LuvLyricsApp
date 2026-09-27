@@ -1,4 +1,4 @@
-import { parseVoiceIntent } from './voiceIntentParser';
+import { parseVoiceIntent, rankSongs, songQueryOf } from './voiceIntentParser';
 import { Song } from '../types/song';
 
 function makeSong(id: string, title: string): Song {
@@ -177,5 +177,46 @@ describe('priority', () => {
 
   it('PAUSE takes priority over potential song named "stop"', () => {
     expect(parseVoiceIntent('stop', noSongs).action).toBe('PAUSE');
+  });
+});
+
+// ── Songs whose titles contain command words ───────────────────────────────
+
+describe('command words inside a song title', () => {
+  it.each(["don't stop me now", 'skip to my lou', 'next to me', 'stop crying your heart out'])(
+    '"%s" is not a transport command',
+    (t) => expect(['NEXT', 'PREV', 'PAUSE', 'SHUFFLE']).not.toContain(parseVoiceIntent(t, noSongs).action),
+  );
+});
+
+// ── Voice search helpers ────────────────────────────────────────────────────
+
+describe('songQueryOf', () => {
+  it.each([
+    ['play Tum Hi Ho', 'Tum Hi Ho'],
+    ['please play the song called Kesariya', 'Kesariya'],
+    ['download Levitating please', 'Levitating'],
+    ['search for blinding lights song', 'blinding lights'],
+    ['Pasoori', 'Pasoori'],
+  ])('"%s" → "%s"', (t, q) => expect(songQueryOf(t)).toBe(q));
+});
+
+describe('rankSongs', () => {
+  const withArtists: Song[] = [
+    { ...makeSong('a', 'Tum Hi Ho'), artist: 'Arijit Singh', playCount: 3 },
+    { ...makeSong('b', 'Tum Hi Ho (Unplugged)'), artist: 'Cover Band', playCount: 9 },
+    { ...makeSong('c', 'Hotel California'), artist: 'Eagles' },
+  ];
+
+  it('puts the exact title first, then prefixes', () => {
+    expect(rankSongs('tum hi ho', withArtists).map(s => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('lets a spoken artist break the tie', () => {
+    expect(rankSongs('tum hi ho unplugged cover band', withArtists)[0].id).toBe('b');
+  });
+
+  it('returns nothing for an unrelated query', () => {
+    expect(rankSongs('bohemian rhapsody', withArtists)).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
-import { View, Text, StyleSheet, Pressable, Platform, ImageBackground, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, ImageBackground, ViewStyle, useWindowDimensions } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -17,6 +17,10 @@ import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
 import { Glass, Motion, Radius } from '../constants/allegraTheme';
 import { VISIBLE_TABS } from '../navigation/tabs';
+import { MoreMenu, useMoreMenu } from './MoreMenu';
+import { MorphIcon } from './allegra/motion';
+
+const MORE_KEY = '__more__';
 
 const MIC_WRAPPER_SIZE = 56;
 const INDICATOR_W = 62;
@@ -54,6 +58,10 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   // Android it has to clear the gesture / 3-button bar, which edge-to-edge draws under.
   const insets = useSafeAreaInsets();
   const bottomOffset = Platform.OS === 'ios' ? 12 : insets.bottom + 8;
+  const { width: screenWidth } = useWindowDimensions();
+  const [pill, setPill] = useState({ width: 0, height: 64 });
+  const more = useMoreMenu(state, navigation);
+  const moreActive = more.open || more.activeKey !== null;
 
   // Glass highlight that springs between tabs. Positions are measured, and it
   // moves by translateX only (never width) — Allegra's transform-only rule.
@@ -62,16 +70,17 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const [tabCenters, setTabCenters] = useState<Record<string, number>>({});
   const indicatorX = useSharedValue(0);
   const indicatorOpacity = useSharedValue(0);
-  // Settings and the downloader are tab routes without an icon: the bar stays,
-  // nothing is highlighted.
+  // Three everyday tabs, the mic, then ••• for everything else. On a screen
+  // from the menu (or while it's open) the highlight sits on •••.
   const routes = state.routes.filter(r => VISIBLE_TABS.has(r.name));
   const splitAt = Math.ceil(routes.length / 2);
   const leftRoutes = routes.slice(0, splitAt);
   const rightRoutes = routes.slice(splitAt);
   const activeKey = state.routes[state.index]?.key;
-  const activeOnLeft = leftRoutes.some(r => r.key === activeKey);
-  const activeCenter = activeKey !== undefined && tabCenters[activeKey] !== undefined
-    ? (activeOnLeft ? groupX.left : groupX.right) + tabCenters[activeKey]
+  const highlightKey = moreActive ? MORE_KEY : activeKey;
+  const highlightOnLeft = leftRoutes.some(r => r.key === highlightKey);
+  const activeCenter = highlightKey !== undefined && tabCenters[highlightKey] !== undefined
+    ? (highlightOnLeft ? groupX.left : groupX.right) + tabCenters[highlightKey]
     : null;
 
   useEffect(() => {
@@ -108,7 +117,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
   const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = route.key === activeKey;
+    const isFocused = route.key === activeKey && !more.open;
     const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name;
 
     const onPress = async () => {
@@ -164,10 +173,56 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
     );
   };
 
+  const measureCenter = (key: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
+    const { x, width } = e.nativeEvent.layout;
+    const center = x + width / 2;
+    setTabCenters(prev => (prev[key] === center ? prev : { ...prev, [key]: center }));
+  };
+
+  const moreButton = (
+    <Pressable
+      key={MORE_KEY}
+      onPress={more.toggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: more.open, selected: moreActive }}
+      accessibilityLabel="More"
+      onLayout={measureCenter(MORE_KEY)}
+      style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
+    >
+      <MorphIcon
+        on={more.open}
+        onIcon="close"
+        offIcon="ellipsis-horizontal"
+        size={22}
+        color={moreActive ? activeIconColor : inactiveIconColor}
+      />
+      <Text style={[styles.label, { color: moreActive ? activeIconColor : inactiveIconColor }]} numberOfLines={1}>
+        More
+      </Text>
+    </Pressable>
+  );
+
   return (
-    <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
+    <View
+      style={[styles.container, more.open ? { top: 0, bottom: 0, paddingBottom: bottomOffset } : { bottom: bottomOffset }]}
+      pointerEvents="box-none"
+    >
+      <MoreMenu
+        open={more.open}
+        activeKey={more.activeKey}
+        anchorBottom={bottomOffset + pill.height}
+        anchorRight={Math.max(8, (screenWidth - pill.width) / 2)}
+        onSelect={more.select}
+        onClose={more.close}
+      />
       {/* Pill */}
-      <View style={[styles.pillContainer, { backgroundColor: pillBg, borderColor }]}>
+      <View
+        style={[styles.pillContainer, { backgroundColor: pillBg, borderColor }]}
+        onLayout={e => {
+          const { width, height } = e.nativeEvent.layout;
+          setPill(p => (p.width === width && p.height === height ? p : { width, height }));
+        }}
+      >
         {/* Dynamic Background — oversized + heavier blur so album-art edges
             don't read as a sharp rectangle inside the pill rim. */}
         <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
@@ -218,10 +273,11 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 
             {/* Right tabs */}
             <View
-              style={[styles.tabGroup, { flex: rightRoutes.length }]}
+              style={[styles.tabGroup, { flex: rightRoutes.length + 1 }]}
               onLayout={e => { const x = e.nativeEvent.layout.x; setGroupX(g => (g.right === x ? g : { ...g, right: x })); }}
             >
               {rightRoutes.map(renderTab)}
+              {moreButton}
             </View>
           </View>
         </BlurView>
@@ -234,6 +290,7 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
+    justifyContent: 'flex-end',
     left: 0,
     right: 0,
     alignItems: 'center',

@@ -1,10 +1,10 @@
 /**
- * Routes that get an icon in the bottom bar. Settings and the downloader are
- * tab routes too — so the bar stays on screen while they're open, like any
- * pushed page in Spotify or Apple Music — but they have no icon of their own.
- * Only the full-screen player (root stack) covers the bar.
+ * The everyday tabs — the only routes with an icon in the bottom bar. Search,
+ * Library, Downloads, the downloader and Settings are tab routes too (so the
+ * bar stays on screen while they're open) but live behind the ••• menu
+ * (components/MoreMenu.tsx). Only the full-screen player covers the bar.
  */
-export const VISIBLE_TABS: ReadonlySet<string> = new Set(['Home', 'Stream', 'Luvs', 'Library', 'Search']);
+export const VISIBLE_TABS: ReadonlySet<string> = new Set(['Home', 'Stream', 'Luvs']);
 
 /**
  * Height the floating pill bar takes above the safe-area inset, including its

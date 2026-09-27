@@ -84,14 +84,15 @@ unmounts mid-load.
 | Canvas (motion artwork) | `src/services/canvas/`, `src/hooks/useCanvasArtwork.ts`, `src/components/CanvasVideoLayer.tsx` — see `docs/canvas-and-providers.md` |
 | Design tokens | `src/constants/allegraTheme.ts` — Allegra "Soft Signal" colors, radius, motion |
 | Artwork | `src/components/allegra/Artwork.tsx` — **every** song cover renders through `<Artwork>`: real cover cross-dissolves over `GeneratedArtwork` (per-song duotone + monogram, `artworkSeed.ts`); never a grey box / note icon. `useCoverArtBackfill` (RootNavigator) fills missing library covers from iTunes 1000px → Saavn via `services/covers/CoverArtResolver.ts`, persisted with the one-column `patchCoverImageUri` |
-| Allegra UI system | `src/components/allegra/` — `MusicFlowField` (Allegra's WebGL shader ported to a Skia runtime shader), `DynamicAura` (field + flutes + vignette + scrim, used by Downloads and Now Playing), `palette.ts` / `useArtworkPalette` (cover colours via native Palette, Allegra's vivify rules), `motion.tsx` (`RiseIn`, `Tactile`), `home.tsx` (section heading, buttons, Downloads sleeve) |
+| Allegra UI system | `src/components/allegra/` — `MusicFlowField` (Allegra's WebGL shader ported to a Skia runtime shader), `DynamicAura` (field + flutes + vignette + scrim, used by Stream, Downloads and Now Playing), `palette.ts` / `useArtworkPalette` (cover colours via native Palette, Allegra's vivify rules), `motion.tsx` (`RiseIn`, `Tactile`), `home.tsx` (section heading, buttons, Downloads sleeve) |
 | Streaming | `src/services/stream/` — `StreamService` (play/queue/radio/lyrics for `stream:` songs), `homeFeed.ts` (Echo-style feed), `src/screens/StreamScreen.tsx` + `src/components/stream/StreamHome.tsx` (mood chips, shortcut grid, paged Quick picks, cover shelves), `src/hooks/useStreamSession.ts` (mounted in RootNavigator) |
 | Downloads | `src/screens/DownloadsScreen.tsx` — inside the Library tab stack |
 | Recommendations | `src/services/stream/recommend.ts` — YouTube Music automix/related (`src/services/ytmusic/`, WEB_REMIX metadata only, ported from Echo) resolved to Saavn/Gaana audio; Saavn radio fallback |
 | Scrubber | `src/components/TimelineScrubber.tsx` |
 | Downloads | `src/services/DownloadManager.ts`, `src/components/BackgroundDownloader.tsx` |
 | Desktop bridge | `src/services/DesktopBridgeService.ts` — **live**, auto-starts at boot via `App.tsx` → `desktopBridgeSettingsStore.load()` |
-| Stores | `src/store/` — songsStore, playlistStore, settingsStore, downloadQueueStore, etc. |
+| Stores | `src/store/` — songsStore, playlistStore, settingsStore, downloadQueueStore, voiceSearchStore, etc. |
+| Voice | `src/hooks/useVoiceCommands.ts`, `src/utils/voiceIntentParser.ts`, `src/store/voiceSearchStore.ts`, `src/components/VoiceSearchCard.tsx` |
 | Screens | `src/screens/` — Library, NowPlaying, Playlist, Search, Settings, etc. |
 
 ## Rules
@@ -109,7 +110,8 @@ unmounts mid-load.
 - Fonts in `assets/fonts/` must be real font binaries — the old Inter files were once saved GitHub HTML pages, which Android silently swapped for Roboto
 - Motion: springs for anything a finger can interrupt, 200–400ms for state changes, 40ms list staggers, max two moving effects per screen, transform/opacity only. Primitives live in `components/allegra/motion.tsx` (`RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`) — reuse them instead of hand-rolling
 - UI copy is sentence case ("Good morning", "Now playing"), never all caps. No `textTransform: 'uppercase'`, no positive `letterSpacing` on labels, no monospace as decoration, no emoji in UI strings, no sparkle icons or "magic" wording — these read as generated UI. Shelves use `SectionHeading` title + optional plain `subtitle`, not an eyebrow over every heading
-- Bottom bar: shown on every screen except the full-screen player. Pushed pages that need it (Settings, the downloader) are hidden routes in the tab navigator (`VISIBLE_TABS` in `src/navigation/tabs.ts`), not root-stack screens. Full-bleed screens pad by `TAB_BAR_CLEARANCE + insets.bottom`
+- Bottom bar: three everyday tabs (Home, Stream, Luvs) + mic + ••• (`components/MoreMenu.tsx`: Search, Library, Downloads, Get songs, Settings). It shows on every screen except the full-screen player — menu destinations are hidden routes in the tab navigator (`VISIBLE_TABS` in `src/navigation/tabs.ts`), not root-stack screens. Add a destination to `MORE_ITEMS`, not a new tab icon. Full-bleed screens pad by `TAB_BAR_CLEARANCE + insets.bottom`
+- Voice: hold the mic, say a song, let go → `VoiceSearchCard` (mounted once in RootNavigator) shows the best match with Play. `useVoiceCommands` feeds `voiceSearchStore`; library matches rank instantly (`rankSongs`), the catalog search starts from the partial transcript. Transport words (next/stop/…) only act when they are the whole utterance. Speech comes from the native Android `VoiceInput` module — iOS has none yet (`expo-speech-recognition` would add it)
 - Covers never print their title twice: `GeneratedArtwork`'s on-cover label is opt-in (`label`) — only where no title sits beside it
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
@@ -129,7 +131,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 24 suites / 280 tests passing
+node_modules\.bin\jest.cmd                  # expect 25 suites / 297 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

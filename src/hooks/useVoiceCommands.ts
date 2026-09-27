@@ -1,9 +1,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { NativeVoiceInput } from '../services/NativeVoiceInput';
-import { parseVoiceIntent } from '../utils/voiceIntentParser';
+import { parseVoiceIntent, songQueryOf } from '../utils/voiceIntentParser';
 import { usePlayerStore } from '../store/playerStore';
 import { useSongsStore } from '../store/songsStore';
-import { navigationRef } from '../utils/navigationService';
+import { useVoiceSearchStore } from '../store/voiceSearchStore';
+import { searchMusic } from '../services/MultiSourceSearchService';
+import { UnifiedSong } from '../types/song';
+
+const catalog = (query: string): Promise<UnifiedSong[]> => searchMusic(query);
+const voice = () => useVoiceSearchStore.getState();
 
 export interface VoiceCommandsState {
   isListening: boolean;
@@ -30,14 +35,17 @@ export function useVoiceCommands() {
     const subStart = NativeVoiceInput.onStart(() => {
       isListeningRef.current = true;
       setState(s => ({ ...s, isListening: true, error: null, partialTranscript: '' }));
+      if (voice().phase !== 'listening') voice().listen();
     });
 
     const subPartial = NativeVoiceInput.onPartialResult(({ transcript }) => {
       setState(s => ({ ...s, partialTranscript: transcript }));
+      voice().hear(transcript, catalog, songQueryOf);
     });
 
     const subLevel = NativeVoiceInput.onAudioLevel(({ level }) => {
       setState(s => ({ ...s, audioLevel: level }));
+      voice().setLevel(level);
     });
 
     const subResult = NativeVoiceInput.onResult(({ transcript }) => {
@@ -59,6 +67,7 @@ export function useVoiceCommands() {
                   code === 'busy' ? 'Voice is busy — try again' :
                   'Something went wrong';
       setState(s => ({ ...s, isListening: false, audioLevel: 0, error: msg }));
+      voice().notify(msg);
     });
 
     return () => {
@@ -73,6 +82,11 @@ export function useVoiceCommands() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const confirm = useCallback((message: string) => {
+    setState(s => ({ ...s, lastCommand: message }));
+    voice().notify(message);
+  }, []);
+
   const dispatch = useCallback((transcript: string) => {
     const songs = useSongsStore.getState().songs;
     const intent = parseVoiceIntent(transcript, songs);
@@ -81,22 +95,22 @@ export function useVoiceCommands() {
     switch (intent.action) {
       case 'NEXT':
         store.nextInPlaylist();
-        setState(s => ({ ...s, lastCommand: 'Next song' }));
+        confirm('Next song');
         break;
 
       case 'PREV':
         store.previousInPlaylist();
-        setState(s => ({ ...s, lastCommand: 'Previous song' }));
+        confirm('Previous song');
         break;
 
       case 'PAUSE':
         store.requestPlayback(false);
-        setState(s => ({ ...s, lastCommand: 'Paused' }));
+        confirm('Paused');
         break;
 
       case 'RESUME':
         store.requestPlayback(true);
-        setState(s => ({ ...s, lastCommand: 'Playing' }));
+        confirm('Playing');
         break;
 
       case 'SHUFFLE': {
@@ -105,7 +119,7 @@ export function useVoiceCommands() {
           const shuffled = [...queue].sort(() => Math.random() - 0.5);
           store.updateQueue(shuffled);
         }
-        setState(s => ({ ...s, lastCommand: 'Shuffled' }));
+        confirm('Shuffled');
         break;
       }
 
@@ -115,32 +129,28 @@ export function useVoiceCommands() {
           const song = queue[intent.index];
           store.loadSong(song.id);
           store.requestPlayback(true);
-          setState(s => ({ ...s, lastCommand: `Playing ${song.title}` }));
+          confirm(`Playing ${song.title}`);
         } else {
-          setState(s => ({ ...s, error: 'Song not found at that position' }));
+          voice().notify('No song at that position');
         }
         break;
       }
 
+      // Anything that names a song opens the result card instead of playing
+      // blind: library matches first, streamable ones as they arrive.
       case 'PLAY_SONG':
-        store.loadSong(intent.songId);
-        store.requestPlayback(true);
-        setState(s => ({ ...s, lastCommand: `Playing ${intent.title}` }));
+      case 'UNKNOWN': {
+        const query = songQueryOf(transcript);
+        if (!query) { voice().notify("Didn't catch that"); break; }
+        voice().search(query, { songs, catalog, transcript });
         break;
+      }
 
       case 'SEARCH_DOWNLOAD':
-        navigationRef.current?.navigate('Main', {
-          screen: 'AudioDownloader',
-          params: { voiceQuery: intent.query, autoDownload: true },
-        });
-        setState(s => ({ ...s, lastCommand: `Finding ${intent.query}` }));
-        break;
-
-      case 'UNKNOWN':
-        setState(s => ({ ...s, error: `Didn't understand: "${transcript}"` }));
+        voice().search(intent.query, { songs, catalog, wantsDownload: true, transcript });
         break;
     }
-  }, []);
+  }, [confirm]);
 
   const startListening = useCallback(async () => {
     if (isListeningRef.current) return;
@@ -149,14 +159,17 @@ export function useVoiceCommands() {
     if (!NativeVoiceInput.isAvailable()) {
       setState(s => ({ ...s, isListening: false, error: 'Voice not available on this device' }));
       isListeningRef.current = false;
+      voice().notify("Voice search isn't available on this device yet");
       return;
     }
+    voice().listen();
     try {
       await NativeVoiceInput.startListening();
     } catch (e) {
       isListeningRef.current = false;
       const msg = e instanceof Error ? e.message : 'Voice start failed';
       setState(s => ({ ...s, isListening: false, error: msg }));
+      voice().notify("Couldn't start the microphone");
     }
   }, []);
 
@@ -174,6 +187,7 @@ export function useVoiceCommands() {
 
   const cancelListening = useCallback(async () => {
     isListeningRef.current = false;
+    voice().dismiss();
     setState(s => ({ ...s, isListening: false, audioLevel: 0, partialTranscript: '' }));
     if (!NativeVoiceInput.isAvailable()) return;
     try {

@@ -17,6 +17,7 @@ import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
+import { VoiceSearchCard } from '../components/VoiceSearchCard';
 import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
@@ -101,6 +102,8 @@ export const RootNavigator: React.FC = () => {
         {/* Island mode: Home + Stream. Bar mode: all tabs. */}
         {showMiniPlayer && <MiniPlayer isHomeTab={ISLAND_ROUTES.has(currentRoute ?? '')} />}
         <BackgroundDownloader />
+        {/* Hold the mic, say a song: the answer appears here, over everything. */}
+        <VoiceSearchCard />
       </View>
     </NavigationContainer>
   );
