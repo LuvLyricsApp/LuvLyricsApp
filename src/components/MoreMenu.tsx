@@ -1,9 +1,13 @@
 /**
  * The "More" menu behind the ••• tab: everything that isn't one of the three
- * everyday tabs. It grows out of the button it belongs to (transform origin at
- * the bottom-right, spring), the page dims behind it, and the rows arrive 30ms
- * apart so the eye reads them top to bottom. The pill bar stays crisp above the
- * dim, and ••• turns into × while it is open.
+ * everyday tabs. Laid out like iOS's medium-size context menus — three big
+ * tiles for the places people jump to most, then rows with a one-line hint.
+ *
+ * Real frosted glass (see allegra/Frosted — blur on Android too), tinted by the
+ * playing cover. It grows out of the button it belongs to (transform origin at
+ * the bottom-right, spring), the page blurs and dims behind it, and tiles then
+ * rows arrive 30ms apart. The pill bar stays crisp above the dim, and ••• turns
+ * into × while it is open.
  *
  * Reduce Motion: the card and rows just fade.
  */
@@ -11,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import Animated, {
   EntryAnimationsValues,
+  LayoutAnimation,
   runOnJS,
   useAnimatedStyle,
   useReducedMotion,
@@ -19,11 +24,15 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurIntensity, Glass, Motion, Signal } from '../constants/allegraTheme';
+import { Glass, Motion, Signal } from '../constants/allegraTheme';
+import { usePlayerStore } from '../store/playerStore';
+import Frosted from './allegra/Frosted';
+import { Tactile } from './allegra/motion';
+import { useArtworkPalette } from './allegra/useArtworkPalette';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -31,27 +40,40 @@ export interface MoreItem {
   key: string;
   label: string;
   icon: IconName;
+  /** Rows carry a one-line hint; tiles don't. */
+  hint?: string;
 }
 
-/** What lives behind •••, in the order people reach for it. */
-export const MORE_ITEMS: readonly MoreItem[] = [
+/** The three places people jump to most — big tiles across the top. */
+export const MORE_TILES: readonly MoreItem[] = [
   { key: 'Search', label: 'Search', icon: 'search' },
   { key: 'Library', label: 'Library', icon: 'library-outline' },
   { key: 'Downloads', label: 'Downloads', icon: 'arrow-down-circle-outline' },
-  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline' },
-  { key: 'Settings', label: 'Settings', icon: 'settings-outline' },
 ];
 
-const STAGGER_MS = 30;
+/** Less frequent destinations, listed below the tiles. */
+export const MORE_ROWS: readonly MoreItem[] = [
+  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline', hint: 'Download any track' },
+  { key: 'Settings', label: 'Settings', icon: 'settings-outline', hint: 'Playback, lyrics, look' },
+];
 
-const rowIn = (index: number) => (_v: EntryAnimationsValues) => {
+/** Everything behind •••, in the order people reach for it. */
+export const MORE_ITEMS: readonly MoreItem[] = [...MORE_TILES, ...MORE_ROWS];
+
+const STAGGER_MS = 30;
+const RADIUS = 26;
+
+const riseIn = (index: number) => (_v: EntryAnimationsValues): LayoutAnimation => {
   'worklet';
-  const delay = 40 + index * STAGGER_MS;
+  const delay = 50 + index * STAGGER_MS;
   return {
-    initialValues: { opacity: 0, transform: [{ translateY: 10 }] },
+    initialValues: { opacity: 0, transform: [{ translateY: 10 }, { scale: 0.94 }] },
     animations: {
       opacity: withDelay(delay, withTiming(1, { duration: Motion.duration.base, easing: Motion.ease.decelerate })),
-      transform: [{ translateY: withDelay(delay, withSpring(0, Motion.spring.tactile)) }],
+      transform: [
+        { translateY: withDelay(delay, withSpring(0, Motion.spring.tactile)) },
+        { scale: withDelay(delay, withSpring(1, Motion.spring.tactile)) },
+      ],
     },
   };
 };
@@ -75,6 +97,9 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
   const openRef = useRef(open);
   openRef.current = open;
   const unmountIfClosed = useCallback(() => { if (!openRef.current) setMounted(false); }, []);
+  // The glass picks up the playing cover's colours.
+  const cover = usePlayerStore(s => s.currentSong?.coverImageUri);
+  const palette = useArtworkPalette(cover);
 
   useEffect(() => {
     if (open) {
@@ -102,76 +127,140 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
       ? { opacity: p }
       : {
         opacity: Math.min(1, p * 1.4),
-        transform: [{ translateY: (1 - p) * 14 }, { scale: 0.72 + 0.28 * p }],
+        transform: [{ translateY: (1 - p) * 16 }, { scale: 0.7 + 0.3 * p }],
       };
   });
 
   if (!mounted) return null;
 
+  const choose = (key: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    onSelect(key);
+  };
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close menu">
-          <View style={styles.dim} />
+          <Frosted radius={0} intensity={22} tint={0.18} edge={false} />
+          {/* Deepest where the menu is, so it lifts off the page. */}
+          <LinearGradient
+            colors={['rgba(4, 5, 7, 0.1)', 'rgba(4, 5, 7, 0.35)', 'rgba(4, 5, 7, 0.62)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
         </Pressable>
       </Animated.View>
 
       <Animated.View
-        style={[styles.card, { bottom: anchorBottom + 10, right: anchorRight }, cardStyle]}
+        style={[styles.card, { bottom: anchorBottom + 12, right: anchorRight }, cardStyle]}
         accessibilityRole="menu"
       >
-        <BlurView intensity={BlurIntensity.sheet} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.cardTint} />
-        {open ? MORE_ITEMS.map((item, i) => {
-          const on = item.key === activeKey;
-          return (
-            <Animated.View key={item.key} entering={reduce ? undefined : rowIn(i)}>
-              {i > 0 ? <View style={styles.rule} /> : null}
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  onSelect(item.key);
-                }}
-                accessibilityRole="menuitem"
-                accessibilityState={{ selected: on }}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              >
-                <Text style={[styles.label, on && styles.labelOn]}>{item.label}</Text>
-                <Ionicons name={item.icon} size={20} color={on ? Signal.wave : Signal.inkSoft} />
-              </Pressable>
-            </Animated.View>
-          );
-        }) : null}
+        <Frosted radius={RADIUS} palette={palette} />
+        {open ? (
+          <>
+            <View style={styles.tiles}>
+              {MORE_TILES.map((item, i) => {
+                const on = item.key === activeKey;
+                return (
+                  <Animated.View key={item.key} entering={reduce ? undefined : riseIn(i)} style={styles.tileCell}>
+                    <Tactile
+                      onPress={() => choose(item.key)}
+                      pressScale={0.93}
+                      accessibilityRole="menuitem"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={item.label}
+                      style={[styles.tile, on && styles.tileOn]}
+                    >
+                      <Ionicons name={item.icon} size={24} color={on ? Signal.wave : Signal.ink} />
+                      <Text style={[styles.tileLabel, on && styles.labelOn]} numberOfLines={1}>{item.label}</Text>
+                    </Tactile>
+                  </Animated.View>
+                );
+              })}
+            </View>
+
+            <View style={styles.rows}>
+              {MORE_ROWS.map((item, i) => {
+                const on = item.key === activeKey;
+                return (
+                  <Animated.View key={item.key} entering={reduce ? undefined : riseIn(MORE_TILES.length + i)}>
+                    {i > 0 ? <View style={styles.rule} /> : null}
+                    <Pressable
+                      onPress={() => choose(item.key)}
+                      accessibilityRole="menuitem"
+                      accessibilityState={{ selected: on }}
+                      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                    >
+                      <Ionicons name={item.icon} size={22} color={on ? Signal.wave : Signal.inkSoft} />
+                      <View style={styles.rowText}>
+                        <Text style={[styles.rowLabel, on && styles.labelOn]}>{item.label}</Text>
+                        {item.hint ? <Text style={styles.rowHint} numberOfLines={1}>{item.hint}</Text> : null}
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={Signal.inkFaint} />
+                    </Pressable>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
       </Animated.View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  dim: { flex: 1, backgroundColor: 'rgba(4, 5, 7, 0.55)' },
   card: {
     position: 'absolute',
-    width: 232,
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairlineStrong,
-    paddingVertical: 4,
+    width: 292,
+    borderRadius: RADIUS,
+    padding: 10,
     // Grows out of the ••• button, which sits at the pill's right end.
     transformOrigin: 'bottom right',
+    // A soft, far shadow sells the float on iOS; Android elevation would draw
+    // a hard grey slab under translucent glass, so it relies on the dim.
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 18 },
   },
-  cardTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20, 22, 27, 0.72)' },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tileCell: { flex: 1 },
+  tile: {
+    height: 78,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  tileOn: {
+    backgroundColor: 'rgba(217, 230, 106, 0.14)',
+    borderColor: 'rgba(217, 230, 106, 0.35)',
+  },
+  tileLabel: { fontSize: 12.5, fontWeight: '600', color: Signal.ink },
+  rows: {
+    marginTop: 8,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 48,
-    paddingHorizontal: 18,
+    gap: 14,
+    minHeight: 58,
+    paddingHorizontal: 14,
   },
   rowPressed: { backgroundColor: Glass.fillPressed },
-  rule: { height: StyleSheet.hairlineWidth, marginLeft: 18, backgroundColor: Glass.hairline },
-  label: { fontSize: 16, fontWeight: '500', color: Signal.ink },
-  labelOn: { color: Signal.wave, fontWeight: '600' },
+  rowText: { flex: 1, minWidth: 0 },
+  rule: { height: StyleSheet.hairlineWidth, marginLeft: 50, backgroundColor: Glass.hairline },
+  rowLabel: { fontSize: 16, fontWeight: '600', color: Signal.ink },
+  rowHint: { fontSize: 12.5, color: Signal.inkMuted, marginTop: 2 },
+  labelOn: { color: Signal.wave },
 });
 
 export default MoreMenu;

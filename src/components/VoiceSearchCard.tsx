@@ -23,16 +23,17 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { BlurIntensity, Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
+import { Glass, Motion, Radius, Signal } from '../constants/allegraTheme';
 import { useVoiceSearchStore, VoicePick } from '../store/voiceSearchStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { StreamService } from '../services/stream/StreamService';
 import { Tactile } from './allegra/motion';
 import Artwork from './allegra/Artwork';
+import Frosted from './allegra/Frosted';
+import { useArtworkPalette } from './allegra/useArtworkPalette';
 
 const pickArt = (p: VoicePick) => (p.kind === 'local' ? p.song.coverImageUri : p.song.highResArt);
 const pickArtist = (p: VoicePick) => p.song.artist ?? '';
@@ -64,6 +65,10 @@ export const VoiceSearchCard: React.FC = () => {
   const { select, dismiss } = useVoiceSearchStore.getState();
   const reduce = useReducedMotion();
   const { width } = useWindowDimensions();
+  // The glass takes the colours of the song on the card (or the one playing).
+  const shownArt = picks[selected] ? pickArt(picks[selected]) : undefined;
+  const playingArt = usePlayerStore(s => s.currentSong?.coverImageUri);
+  const palette = useArtworkPalette(shownArt ?? playingArt);
 
   const visible = phase !== 'idle';
   const interactive = visible && phase !== 'listening';
@@ -231,14 +236,12 @@ export const VoiceSearchCard: React.FC = () => {
     <View style={styles.layer} pointerEvents={interactive ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityRole="button" accessibilityLabel="Close">
-          <BlurView intensity={BlurIntensity.compact} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.dim} />
+          <Frosted radius={0} intensity={28} tint={0.3} edge={false} />
         </Pressable>
       </Animated.View>
 
       <Animated.View style={[styles.card, { width: cardWidth }, cardStyle]} accessibilityViewIsModal={interactive}>
-        <BlurView intensity={BlurIntensity.sheet} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.cardTint} />
+        <Frosted radius={Radius.sheet} intensity={70} palette={palette} />
         {interactive && phase !== 'notice' ? (
           <Pressable onPress={dismiss} hitSlop={10} style={styles.close} accessibilityRole="button" accessibilityLabel="Close">
             <Ionicons name="close" size={20} color={Signal.inkMuted} />
@@ -260,17 +263,13 @@ const styles = StyleSheet.create({
     zIndex: 3000,
     elevation: 300,
   },
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4, 5, 7, 0.5)' },
   card: {
     borderRadius: Radius.sheet,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairlineStrong,
     paddingHorizontal: 24,
     paddingTop: 28,
     paddingBottom: 20,
   },
-  cardTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16, 18, 22, 0.74)' },
   close: { position: 'absolute', top: 14, right: 14, zIndex: 2, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center' },
 
