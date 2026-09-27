@@ -7,6 +7,7 @@
  * - Dynamic Header (Syncs with playing song)
  */
 
+import { displayPlaylistName } from '../utils/sentenceCase';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -335,7 +336,7 @@ export const PlaylistDetailScreen: React.FC = () => {
       const playlist = playlists.find((p) => p.id === playlistId);
       const playlistSongs = await playlistQueries.getPlaylistSongs(playlistId);
 
-      setPlaylistName(playlist?.name || 'Playlist');
+      setPlaylistName(playlist?.name ? displayPlaylistName(playlist.name) : 'Playlist');
       setPlaylistCover(playlist?.coverImageUri || null);
       setSongs(playlistSongs);
     } catch (e) {

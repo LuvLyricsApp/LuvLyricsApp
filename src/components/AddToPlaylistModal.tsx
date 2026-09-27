@@ -1,3 +1,4 @@
+import { displayPlaylistName } from '../utils/sentenceCase';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -177,7 +178,7 @@ export const AddToPlaylistModal = () => {
             <Ionicons name="musical-notes" size={20} color="#666" />
           </View>
           <View style={styles.listTextContainer}>
-            <Text style={styles.listTitle} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.listTitle} numberOfLines={1}>{displayPlaylistName(item.name)}</Text>
             <Text style={styles.listSubtitle} numberOfLines={1}>{item.songCount} songs</Text>
           </View>
         </View>

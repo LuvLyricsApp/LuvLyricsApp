@@ -398,7 +398,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={commit}
-            placeholder="Your songs, playlists, or anything online"
+            placeholder="Songs, artists, playlists"
             placeholderTextColor={Signal.inkFaint}
             returnKeyType="search"
             autoCorrect={false}

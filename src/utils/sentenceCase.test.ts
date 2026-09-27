@@ -9,3 +9,11 @@ describe('sentenceCase', () => {
     expect(sentenceCase('BTS')).toBe('BTS');
   });
 });
+
+describe('displayPlaylistName', () => {
+  it('shows the built-in playlist in sentence case and leaves others alone', () => {
+    const { displayPlaylistName } = jest.requireActual('./sentenceCase');
+    expect(displayPlaylistName('Liked Songs')).toBe('Liked songs');
+    expect(displayPlaylistName('Road Trip')).toBe('Road Trip');
+  });
+});

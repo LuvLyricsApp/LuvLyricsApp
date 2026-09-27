@@ -9,3 +9,6 @@ export const sentenceCase = (text: string): string => {
   const lower = text.toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 };
+
+/** The built-in playlist is stored as "Liked Songs"; our copy is sentence case. */
+export const displayPlaylistName = (name: string): string => (name === 'Liked Songs' ? 'Liked songs' : name);

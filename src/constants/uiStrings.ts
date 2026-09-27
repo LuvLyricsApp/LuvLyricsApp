@@ -29,7 +29,7 @@ export const PlaylistsStrings = {
 };
 
 export const LikedSongsStrings = {
-  likedSongs: 'Liked Songs',
+  likedSongs: 'Liked songs',
   noLikedSongsYet: 'No liked songs yet',
 };
 
