@@ -198,6 +198,25 @@ shows a floating artwork card.
 **Mini player background:** glow animated (two blobs in the cover's colours) or
 cover tint.
 
+### Player menu and sheets
+
+••• opens a tall frosted sheet in Echo's order: Radio · Add · Share as pill
+buttons, then rounded rows (Cast, Ambient mode, Lyrics, Shuffle, Download,
+Like, Repeat, Refetch), View artist, Set as ringtone, Listen together, and
+Details · Equalizer · Advanced. A row that would do nothing for this song is
+not shown. Active modes (liked, repeat, in a room) tint their icon `wave`.
+Results come back as a short toast, never an alert.
+
+**Listen together** is a sheet too: name + "Start a room" (`wave`), or a room
+code to join; inside, the big room code with copy / share, join requests with
+Decline / Let in, who's listening (host badge, dimmed when offline) and End /
+Leave. A join request also appears as a frosted card at the top of any screen.
+While in a room the player shows a small "Listening together · n" chip under
+the grabber.
+
+**Ambient mode** fills the screen with the canvas (or the cover, centred) and
+the title underneath, keeps the screen awake, and returns on a tap or back.
+
 ### Canvas
 
 Decorative, muted, never takes audio focus. The cover stays under it, so
