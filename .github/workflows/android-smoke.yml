@@ -1,0 +1,101 @@
+name: Android smoke test
+
+# Boots the release build on an Android emulator and records what the user
+# would see: a screenshot 45s after launch and the JS / crash lines from
+# logcat. Catches "installs fine, then blank screen" failures that no unit
+# test can. The screenshot and full logcat are published to the "smoke-latest"
+# release and uploaded as a workflow artifact.
+
+on:
+  push:
+    branches: [main, claude/luvlyricsapp-ui-redesign-njxgnc]
+    paths: ['src/**', 'android/**', 'index.ts', 'App.tsx', 'app.json', 'package.json', 'package-lock.json', '.github/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Launch on emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key
+        run: |
+          mkdir -p /tmp/tpl && cd /tmp/tpl
+          npm pack expo-template-bare-minimum@sdk-54 --silent
+          tar -xzf expo-template-bare-minimum-*.tgz package/android/app/debug.keystore
+          cp package/android/app/debug.keystore "$GITHUB_WORKSPACE/android/app/debug.keystore"
+
+      # Same release build as the phone APK, but for the emulator's x86_64 CPU.
+      - name: Build release APK (x86_64)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=x86_64 \
+            "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/LuvLyrics-x86_64.apk"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk
+
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-smoke
+          path: smoke/
+          retention-days: 14
+
+      - name: Publish screenshot and logcat
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f smoke/after-45s.png ] || exit 0
+          gh release delete smoke-latest --yes --cleanup-tag || true
+          gh release create smoke-latest smoke/after-45s.png smoke/logcat.txt \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Emulator smoke test — latest" \
+            --notes "Screenshot 45s after launch and full logcat, from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}."
