@@ -22,7 +22,7 @@ jobs:
   apk:
     name: Build and publish APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
 
     steps:
       - name: Checkout
@@ -71,9 +71,13 @@ jobs:
       - name: Build release APK
         working-directory: android
         # gradlew was committed from Windows without the executable bit.
+        # gradle.properties caps the JVM at 2 GB, which leaves R8 (minify)
+        # thrashing for the better part of an hour; runners have 16 GB.
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=arm64-v8a \
+            "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/release/app-release.apk LuvLyrics.apk
