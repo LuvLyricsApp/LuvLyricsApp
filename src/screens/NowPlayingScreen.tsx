@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Dimensions, View, StyleSheet, useWindowDimensions } from 'react-native';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { useFocusEffect, usePreventRemove } from '@react-navigation/native';
 import Animated, {
@@ -29,6 +29,17 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSettingsStore } from '../store/settingsStore';
 import { PlayerSheet, QueueList, SleepTimerList } from '../components/player/PlayerSheet';
 import { sleepLabel, useSleepTimerStore } from '../store/sleepTimerStore';
+import PlayerMenu, { PlayerMenuAction } from '../components/player/PlayerMenu';
+import { SongDetails, TempoPitch } from '../components/player/PlayerExtras';
+import AmbientMode from '../components/player/AmbientMode';
+import ListenTogetherPanel from '../components/listenTogether/ListenTogetherPanel';
+import { Toast } from '../components/Toast';
+import { StreamService } from '../services/stream/StreamService';
+import { isStreamSongId } from '../services/stream/streamSong';
+import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
+import { refetchCurrent, setAsRingtone, shareSong, shuffleUpcoming } from '../services/player/playerMenuActions';
+import { usePlaybackModesStore } from '../store/playbackModesStore';
+import { useListenTogetherStore } from '../store/listenTogetherStore';
 
 const { Gesture, GestureDetector } = GestureHandler;
 
@@ -43,7 +54,10 @@ type Props = RootStackScreenProps<'NowPlaying'>;
 const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { songId } = route.params;
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
-  const { height: screenH } = useWindowDimensions();
+  // The screen, not the window: on Android the window leaves out the nav bar,
+  // and a sheet parked at the window height would leave a sliver showing.
+  const { height: windowH } = useWindowDimensions();
+  const screenH = Math.max(windowH, Dimensions.get('screen').height);
   const reduceMotion = useReducedMotion();
 
   // ── Sheet: rise in, follow the finger, fall away ────────────────────────
@@ -96,13 +110,21 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   }, [screenH, finishClose, revealPill, closing, sheetY]);
 
-  usePreventRemove(holdRoute, () => animateClose(0));
+  // Ambient mode (player menu): back leaves ambient first, then the player.
+  const [ambient, setAmbient] = useState(false);
+  const ambientRef = useRef(false);
+  ambientRef.current = ambient;
+  usePreventRemove(holdRoute, () => {
+    if (ambientRef.current) setAmbient(false);
+    else animateClose(0);
+  });
 
   // Drag down from anywhere to dismiss. Over the lyrics it only takes over once
   // the list is scrolled to its top — otherwise the drag scrolls the lyrics.
   const lyricsOffset = useSharedValue(0);
   const startY = useSharedValue(0);
   const dismissGesture = Gesture.Pan()
+    .enabled(!ambient)
     .manualActivation(true)
     .onTouchesDown((e, state) => {
       'worklet';
@@ -169,10 +191,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const {
     currentSong,
     isCurrentSongLiked,
-    menuVisible,
-    setMenuVisible,
-    menuAnchor,
-    handleMenuPress,
     showCoverSearch,
     setShowCoverSearch,
     controlsVisible,
@@ -180,9 +198,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     showLyrics,
     setShowLyrics,
     processedLyrics,
-    isLinear,
     flatListRef,
-    getActiveLyricIndex,
     togglePlay,
     skipForward,
     skipBackward,
@@ -215,7 +231,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [artistName, animateClose]);
 
-  const [sheet, setSheet] = React.useState<'queue' | 'timer' | null>(null);
+  const [sheet, setSheet] = React.useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(null);
   const closeSheet = useCallback(() => setSheet(null), []);
 
   // The sleep timer's remaining time, refreshed while it runs.
@@ -229,55 +245,91 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [sleepEndsAt]);
   const sleepText = sleepEndsAt ? sleepLabel(sleepEndsAt, now) : null;
 
-  const menuOptions = React.useMemo<React.ComponentProps<typeof NowPlayingHeader>['menuOptions']>(() => [
-    {
-      label: showLyrics ? 'Hide lyrics' : 'Show lyrics',
-      icon: showLyrics ? 'eye-off-outline' : 'eye-outline',
-      onPress: () => {
-        setMenuVisible(false);
+  // What the ••• menu's actions report, as a toast.
+  const [notice, setNotice] = useState<string | null>(null);
+  const say = useCallback((text: string) => setNotice(text), []);
+  const repeatOne = usePlaybackModesStore(s => s.repeatOne);
+  const setRepeatOne = usePlaybackModesStore(s => s.setRepeatOne);
+  const roomOpen = useListenTogetherStore(s => s.room !== null);
+  const listeners = useListenTogetherStore(s => s.room?.users.length ?? 0);
+
+  const onMenuAction = useCallback(async (action: PlayerMenuAction) => {
+    const song = currentSong;
+    if (!song) return;
+    const stream = isStreamSongId(song.id);
+    switch (action) {
+      case 'radio': {
+        setSheet(null);
+        say('Starting a radio from this song…');
+        const n = await StreamService.startRadio(song);
+        say(n > 0 ? `Radio on — ${n} songs up next` : 'Couldn’t find a radio for this song');
+        return;
+      }
+      case 'add':
+        setSheet(null);
+        if (stream) say(StreamService.save(song.id) ? 'Downloading — once it’s saved you can add it to a playlist' : 'Couldn’t save this song');
+        else navigation.navigate('AddToPlaylist', { songId: song.id });
+        return;
+      case 'share':
+        shareSong(song);
+        return;
+      case 'cast':
+        setSheet(null);
+        if (!NativeAudioPlayer.openOutputSwitcher()) say('No other devices found');
+        return;
+      case 'ambient':
+        setSheet(null);
+        setAmbient(true);
+        return;
+      case 'lyrics':
+        setSheet(null);
         setShowLyrics(!showLyrics);
+        return;
+      case 'shuffle':
+        setSheet(null);
+        say(shuffleUpcoming() > 0 ? 'Shuffled what plays next' : 'Nothing queued to shuffle');
+        return;
+      case 'download':
+        setSheet(null);
+        say(StreamService.save(song.id) ? 'Downloading to your library' : 'Couldn’t download this song');
+        return;
+      case 'like':
+        toggleLike(song.id);
+        return;
+      case 'repeat':
+        setRepeatOne(!repeatOne);
+        say(repeatOne ? 'Repeat off' : 'Repeating this song');
+        return;
+      case 'refetch': {
+        setSheet(null);
+        say('Loading the song again…');
+        const ok = await refetchCurrent();
+        say(ok ? 'Reloaded' : 'Couldn’t reload the song');
+        return;
       }
-    },
-    {
-      label: 'Go to current lyric',
-      icon: 'locate-outline',
-      onPress: () => {
-        setMenuVisible(false);
-        const activeLyricIndex = getActiveLyricIndex();
-        if (flatListRef.current && activeLyricIndex !== -1 && !isLinear) {
-          flatListRef.current.scrollToIndex({
-            index: activeLyricIndex,
-            animated: true,
-            viewPosition: 0.3,
-          });
-        }
-      }
-    },
-    {
-      label: 'Edit lyrics',
-      icon: 'create-outline',
-      onPress: () => {
-        setMenuVisible(false);
-        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
-      }
-    },
-    {
-      label: 'Sync lyrics',
-      icon: 'timer-outline',
-      onPress: () => {
-        setMenuVisible(false);
-        if (currentSong?.id) navigation.navigate('AddEditLyrics', { songId: currentSong.id });
-      }
-    },
-    {
-      label: 'Change cover',
-      icon: 'image-outline',
-      onPress: () => {
-        setMenuVisible(false);
-        setShowCoverSearch(true);
-      }
-    },
-  ], [showLyrics, setShowLyrics, getActiveLyricIndex, isLinear, currentSong?.id, setShowCoverSearch, flatListRef, setMenuVisible, navigation]);
+      case 'artist':
+        setSheet(null);
+        openArtist?.();
+        return;
+      case 'ringtone':
+        setSheet(null);
+        say(await setAsRingtone(song));
+        return;
+      case 'together':
+        setSheet('together');
+        return;
+      case 'details':
+        setSheet('details');
+        return;
+      case 'equalizer':
+        setSheet(null);
+        if (!NativeAudioPlayer.openEqualizer()) say('No equalizer on this phone');
+        return;
+      case 'advanced':
+        setSheet('advanced');
+        return;
+    }
+  }, [currentSong, navigation, say, showLyrics, setShowLyrics, toggleLike, repeatOne, setRepeatOne, openArtist]);
 
   const handleCoverSelect = useCallback(async (uri: string) => {
     setShowCoverSearch(false);
@@ -303,7 +355,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
           showLyrics={showLyrics}
-          canvas={canvas}
+          canvas={ambient ? null : canvas}
           playing={storePlaying}
         />
 
@@ -311,10 +363,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           animatedStyle={animatedStyle}
           controlsVisible={controlsVisible}
           onGoBack={() => animateClose(0)}
-          menuVisible={menuVisible}
-          onMenuClose={() => setMenuVisible(false)}
-          menuAnchor={menuAnchor}
-          menuOptions={menuOptions}
+          together={roomOpen ? listeners : null}
+          onTogetherPress={() => setSheet('together')}
         />
 
         <CoverArtSearchScreen
@@ -357,7 +407,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           onSeek={handleScrub}
           showLyrics={showLyrics}
           compact={showLyrics}
-          onMorePress={handleMenuPress}
+          onMorePress={() => setSheet('menu')}
           onOpenQueue={() => setSheet('queue')}
           onOpenTimer={() => setSheet('timer')}
           sleepLabel={sleepText}
@@ -370,6 +420,32 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         <PlayerSheet visible={sheet === 'timer'} title="Sleep timer" onClose={closeSheet}>
           <SleepTimerList onPicked={closeSheet} />
         </PlayerSheet>
+        <PlayerSheet visible={sheet === 'menu'} tall onClose={closeSheet}>
+          {currentSong ? (
+            <PlayerMenu song={currentSong} liked={isCurrentSongLiked} showLyrics={showLyrics} onAction={onMenuAction} />
+          ) : null}
+        </PlayerSheet>
+        <PlayerSheet visible={sheet === 'details'} title="Details" onClose={closeSheet}>
+          {currentSong ? (
+            <SongDetails
+              song={currentSong}
+              onEditLyrics={() => { closeSheet(); navigation.navigate('AddEditLyrics', { songId: currentSong.id }); }}
+              onChangeCover={() => { closeSheet(); setShowCoverSearch(true); }}
+            />
+          ) : null}
+        </PlayerSheet>
+        <PlayerSheet visible={sheet === 'advanced'} title="Tempo and pitch" onClose={closeSheet}>
+          <TempoPitch />
+        </PlayerSheet>
+        <PlayerSheet visible={sheet === 'together'} title="Listen together" tall onClose={closeSheet}>
+          <ListenTogetherPanel />
+        </PlayerSheet>
+
+        {ambient && currentSong ? (
+          <AmbientMode song={currentSong} canvas={canvas} playing={storePlaying} onExit={() => setAmbient(false)} />
+        ) : null}
+
+        <Toast visible={notice !== null} message={notice ?? ''} type="info" onDismiss={() => setNotice(null)} duration={2600} />
       </Animated.View>
       </GestureDetector>
     </View>

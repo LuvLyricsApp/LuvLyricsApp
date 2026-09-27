@@ -17,6 +17,7 @@ import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { MoreMenuHost } from '../components/MoreMenu';
+import { ListenTogetherHost } from '../components/listenTogether/ListenTogetherHost';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
 import { VoiceSearchCard } from '../components/VoiceSearchCard';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
@@ -104,6 +105,8 @@ export const RootNavigator: React.FC = () => {
         {showMiniPlayer && <MiniPlayer />}
         {/* After the pill, so the ••• menu opens over it. */}
         <MoreMenuHost />
+        {/* Listen together: runs the room sync, shows join requests anywhere. */}
+        <ListenTogetherHost />
         <BackgroundDownloader />
         {/* Hold the mic, say a song: the answer appears here, over everything. */}
         <VoiceSearchCard />
