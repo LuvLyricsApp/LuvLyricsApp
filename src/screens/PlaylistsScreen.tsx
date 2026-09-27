@@ -210,28 +210,17 @@ export const PlaylistsScreen: React.FC = () => {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* ... Header ... */}
         <View style={styles.header}>
-          <Text style={styles.title}>{PlaylistsStrings.yourLibrary}</Text>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={styles.backButton}>
+              <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+            </Pressable>
+          ) : null}
+          <Text style={[styles.title, styles.titleFlex]}>Playlists</Text>
           <Pressable onPress={handleCreatePlaylist} style={styles.addButton}>
             <Ionicons name="add-circle-outline" size={28} color={colors.textPrimary} />
           </Pressable>
         </View>
 
-        {/* Downloads: every song that plays offline, one tap from the library. */}
-        <Pressable
-          onPress={() => navigation.navigate('Downloads')}
-          accessibilityRole="button"
-          accessibilityLabel="Open downloads"
-          style={({ pressed }) => [styles.downloadsEntry, pressed && { opacity: 0.8 }]}
-        >
-          <View style={styles.downloadsIcon}>
-            <Ionicons name="arrow-down" size={18} color={Signal.waveInk} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.downloadsTitle}>Downloads</Text>
-            <Text style={styles.downloadsMeta}>Songs on this device · play offline</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Signal.inkMuted} />
-        </Pressable>
 
         {isLoading && playlists.length === 0 ? (
              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -286,6 +275,8 @@ export const PlaylistsScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  backButton: { marginRight: 6 },
+  titleFlex: { flex: 1 },
   downloadsEntry: {
     flexDirection: 'row',
     alignItems: 'center',

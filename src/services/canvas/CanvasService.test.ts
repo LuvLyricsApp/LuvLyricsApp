@@ -48,6 +48,7 @@ describe('cleanTitleForLookup', () => {
   it('strips video/lyrics tags, features and extensions', () => {
     expect(cleanTitleForLookup('Blinding Lights (Official Video)')).toBe('Blinding Lights');
     expect(cleanTitleForLookup('Song [Lyrics] (feat. Someone).mp3')).toBe('Song');
+    expect(cleanTitleForLookup('Marandhaye (From "Teddy")')).toBe('Marandhaye');
   });
 });
 
@@ -142,6 +143,20 @@ describe('CanvasService.resolve', () => {
     f.restore();
     expect(again?.url).toBe('https://x/a.mp4');
     expect(f.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('retries the free sources with the lead artist and without the film tag', async () => {
+    const f = mockFetch([
+      [ECHO, { items: [] }],
+      // The archive files the song under its lead artist only.
+      [ARTIST_VIDEO, (url: string) => (url.endsWith('a=D.%20Imman')
+        ? { artist: 'D. Imman', animated: 'https://cdn/marandhaye.mp4' }
+        : null)],
+    ]);
+    const hit = await CanvasService.resolve({ title: 'Marandhaye (From "Teddy")', artist: 'D. Imman, Pradeep Kumar, Jonita Gandhi' });
+    f.restore();
+    expect(hit?.url).toBe('https://cdn/marandhaye.mp4');
+    expect(f.calls.every(u => !u.includes('Teddy'))).toBe(true);
   });
 
   it('returns null for unknown artists without calling anything', async () => {

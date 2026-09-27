@@ -16,7 +16,6 @@ import PlaylistsScreen from '../screens/PlaylistsScreen';
 import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
 import StreamScreen from '../screens/StreamScreen';
-import DownloadsScreen from '../screens/DownloadsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import ArtistScreen from '../screens/ArtistScreen';
@@ -34,11 +33,11 @@ const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
 const LibraryStackScreen: React.FC = () => (
   <LibraryStack.Navigator
     id="LibraryStack"
-    screenOptions={{ headerShown: false, animation: 'slide_from_bottom' }}
+    screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
   >
-    <LibraryStack.Screen name="PlaylistsHome" component={PlaylistsScreen} />
-    <LibraryStack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
-    <LibraryStack.Screen name="Downloads" component={DownloadsScreen} options={{ animation: 'slide_from_right' }} />
+    <LibraryStack.Screen name="LibraryHome" component={LibraryScreen} />
+    <LibraryStack.Screen name="Playlists" component={PlaylistsScreen} />
+    <LibraryStack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} options={{ animation: 'slide_from_bottom' }} />
   </LibraryStack.Navigator>
 );
 
@@ -55,10 +54,6 @@ const BrowseStackScreen: React.FC = () => (
     <BrowseStack.Screen name="Artist" component={ArtistScreen} getId={({ params }) => params?.browseId ?? params?.name} />
     <BrowseStack.Screen name="Collection" component={CollectionScreen} getId={({ params }) => params?.browseId} />
   </BrowseStack.Navigator>
-);
-
-const HomeIcon = ({ color, focused }: { color: string; focused: boolean }) => (
-  <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
 );
 
 const StreamIcon = ({ color, focused }: { color: string; focused: boolean }) => (
@@ -102,6 +97,7 @@ export const TabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       id="MainTabs"
+      initialRouteName="Stream"
       // Back from Settings / the downloader returns to the tab you came from.
       backBehavior="history"
       tabBar={navBarStyle === 'modern-pill' ? renderModernPillTabBar : renderCustomTabBar}
@@ -112,7 +108,6 @@ export const TabNavigator: React.FC = () => {
         tabBarShowLabel: navBarStyle === 'classic',
       }}
     >
-      <Tab.Screen name="Home" component={LibraryScreen} options={{ tabBarLabel: 'Home', tabBarIcon: HomeIcon }} />
       <Tab.Screen name="Stream" component={StreamScreen} options={{ tabBarLabel: 'Stream', tabBarIcon: StreamIcon }} />
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
       <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />

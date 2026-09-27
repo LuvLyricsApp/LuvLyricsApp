@@ -1,622 +1,331 @@
-import React, { useEffect, useCallback, useState } from 'react';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-  RefreshControl,
-  Modal,
-  ScrollView,
-  Platform,
-  InteractionManager,
-  Image,
-} from 'react-native';
+/**
+ * Library — your songs. The Downloads layout (live colour room, play /
+ * shuffle, filter, sort, downloads in flight) with what the old Home screen
+ * did: recently played, add lyrics, the download queue, and a long press on
+ * any song for cover / version / info / lyrics / share / hide / delete.
+ *
+ * The root of the Library tab; Playlists sit behind the header button.
+ */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TabScreenProps } from '../types/navigation';
+import * as Haptics from '../utils/haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
+import { RecentlyPlayedGrid } from '../components/RecentlyPlayedGrid';
+import { DownloadQueueModal } from '../components/DownloadQueueModal';
+import { PerformanceHUD } from '../components/PerformanceHUD';
+import { useSongActions } from '../components/library/useSongActions';
+import DynamicAura from '../components/allegra/DynamicAura';
+import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
+import { RiseIn } from '../components/allegra/motion';
+import { GlassButton, PrimaryButton, SectionHeading, Sleeve } from '../components/allegra/home';
+import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
+import { TrackRow } from '../components/stream/StreamItems';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
-import { useSettingsStore } from '../store/settingsStore';
-import { useArtHistoryStore } from '../store/artHistoryStore';
-import { useDailyStatsStore } from '../store/dailyStatsStore';
-import { AuroraHeader } from '../components/AuroraHeader';
-import AuraBand from '../components/allegra/AuraBand';
-import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
-import { Toast } from '../components/Toast';
-import { DownloadQueueModal } from '../components/DownloadQueueModal';
-import { ModernDeleteModal } from '../components/ModernDeleteModal';
-import { SongListItem } from '../components/SongListItem';
-import { PerformanceHUD } from '../components/PerformanceHUD';
-import { useDownloadQueueStore } from '../store/downloadQueueStore';
-import { RecentlyPlayedMode } from '../components/RecentlyPlayedGrid';
-import { CoverArtSearchScreen } from './CoverArtSearchScreen';
-import { SongVersionSearchModal } from '../components/SongVersionSearchModal';
-import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
-import { getGradientColors } from '../constants/gradients';
-import { Fonts } from '../constants/fonts';
+import { QueueItem, useDownloadQueueStore } from '../store/downloadQueueStore';
 import { Song } from '../types/song';
-import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
-import * as ImagePicker from 'expo-image-picker';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
-import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
-import { useSortedSongs } from '../hooks/useSortedSongs';
-import { usePlaybackQueue } from '../hooks/usePlaybackQueue';
-import { FlashList, FlashListRef } from '@shopify/flash-list';
-import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS, useAnimatedStyle, useDerivedValue, interpolate, Extrapolation } from 'react-native-reanimated';
-import LibraryHeader from '../components/LibraryHeader';
-import LibraryEmptyState from '../components/LibraryEmptyState';
-import LibraryBottomSheet from '../components/LibraryBottomSheet';
-import LibraryEditModal from '../components/LibraryEditModal';
-import * as Haptics from '../utils/haptics';
 
-const AnimatedFlashList = Animated.createAnimatedComponent(FlashList) as any;
+const LIBRARY_QUEUE_ID = 'library';
 
-type SongItemLayout = { span?: number; size?: number };
+type Nav = CompositeNavigationProp<NativeStackNavigationProp<LibraryStackParamList>, NativeStackNavigationProp<RootStackParamList>>;
 
-const setSongItemLayout = (layout: SongItemLayout) => {
-  layout.size = 80;
-  layout.span = 1;
+type SortMode = 'recent' | 'title' | 'artist';
+
+const sorters: Record<SortMode, (a: Song, b: Song) => number> = {
+  recent: (a, b) => Date.parse(b.dateCreated) - Date.parse(a.dateCreated),
+  title: (a, b) => a.title.localeCompare(b.title),
+  artist: (a, b) => (a.artist ?? '').localeCompare(b.artist ?? ''),
 };
 
-// Scroll distance over which the cover-art background dissolves to black.
-// Short on purpose — a small flick should resolve it fully, and scrolling back
-// to the top brings it straight back.
-const AURORA_FADE_DISTANCE = 140;
-const AURA_BAND_HEIGHT = 340; // below the status bar
-
-// Android list top-edge dissolve under the sticky "LuvLyrics" brand bar.
-// Must be 0 at rest — a fixed length keeps the top row faded even when fully
-// scrolled to the top (irritating). Binary rather than ramped: `fadingEdgeLength`
-// is a native prop, so every intermediate step costs a full screen re-render
-// mid-gesture, and the ramp resolved within the first few px anyway.
-const LIST_EDGE_FADE_MAX = 56;
-
-type Props = TabScreenProps<'Library'>;
-
-const LibraryScreen: React.FC<Props> = ({ navigation }) => {
-  const colors = useThemeColors();
-  const isDark = useIsDark();
+const LibraryScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
+  const fetchSongs = useSongsStore(s => s.fetchSongs);
+  const toggleLike = useSongsStore(s => s.toggleLike);
+  const currentSong = usePlayerStore(s => s.currentSong);
+  const actions = useSongActions();
+  const [queueOpen, setQueueOpen] = useState(false);
+  const songs = useSongsStore(s => s.songs);
+  const queue = useDownloadQueueStore(s => s.queue);
+  const retryItem = useDownloadQueueStore(s => s.retryItem);
+  const clearCompleted = useDownloadQueueStore(s => s.clearCompleted);
+  const currentSongId = usePlayerStore(s => s.currentSongId);
+  const currentCover = usePlayerStore(s => s.currentSong?.coverImageUri);
+  const isPlaying = usePlayerStore(s => s.isPlaying);
   const isFocused = useIsFocused();
-  const isPlaying = usePlayerStore(state => state.isPlaying);
-  const songs = useSongsStore(state => state.songs);
-  const fetchSongs = useSongsStore(state => state.fetchSongs);
-  const updateSong = useSongsStore(state => state.updateSong);
-  const getSong = useSongsStore(state => state.getSong);
-  const deleteSong = useSongsStore(state => state.deleteSong);
-  const toggleLike = useSongsStore(state => state.toggleLike);
-  const hideSong = useSongsStore(state => state.hideSong);
+  const [sort, setSort] = useState<SortMode>('recent');
+  const [filter, setFilter] = useState('');
 
-  const playerCurrentSong = usePlayerStore(state => state.currentSong);
-  const playerCurrentSongId = usePlayerStore(state => state.currentSong?.id);
-  const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
-  const playerCurrentGradient = usePlayerStore(state => state.currentSong?.gradientId);
-  const recentArts = useArtHistoryStore(s => s.recentArts);
-  const addRecentArt = useArtHistoryStore(s => s.addRecentArt);
-  const libraryBackgroundMode = useSettingsStore(state => state.libraryBackgroundMode);
-  const playInMiniPlayerOnly = useSettingsStore(state => state.playInMiniPlayerOnly);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
+  const downloaded = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    return songs
+      .filter(s => !s.isHidden)
+      .filter(s => !needle || s.title.toLowerCase().includes(needle) || (s.artist ?? '').toLowerCase().includes(needle))
+      .sort(sorters[sort]);
+  }, [songs, sort, filter]);
 
-  useFocusEffect(useCallback(() => { setMiniPlayerHidden(false); }, [setMiniPlayerHidden]));
+  // The room takes the colour of what's playing, else of the newest download.
+  const stageSong = downloaded.find(s => s.coverImageUri) ?? downloaded[0];
+  const stageArt = currentCover ?? stageSong?.coverImageUri;
+  const palette = useArtworkPalette(stageArt);
 
-  const [showBottomSheet, setShowBottomSheet] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [libraryFocusMode, setLibraryFocusMode] = useState(false);
-  const setLibraryFocusModeStore = useSettingsStore(state => state.setLibraryFocusMode);
-  const [activeThemeColors, setActiveThemeColors] = useState<string[] | undefined>(undefined);
-  const [activeImageUri, setActiveImageUri] = useState<string | null>(null);
-  const [recentArtVisible, setRecentArtVisible] = useState(false);
-  const [showCoverSearch, setShowCoverSearch] = useState(false);
-  const [showVersionSearchModal, setShowVersionSearchModal] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [showQueueModal, setShowQueueModal] = useState(false);
-  const [showEditInfoModal, setShowEditInfoModal] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editArtist, setEditArtist] = useState('');
-  const [recentlyPlayedMode, setRecentlyPlayedMode] = useState<RecentlyPlayedMode>('recent');
-  const [selectedSongForArt, setSelectedSongForArt] = useState<Song | null>(null);
+  const active = useMemo(() => queue.filter(q => q.status !== 'completed'), [queue]);
 
-  const scrollY = useSharedValue(0);
-  const lastSentFocusMode = useSharedValue(false);
-  const lastEdgeFadeLen = useSharedValue(0);
-  const flatListRef = React.useRef<FlashListRef<Song>>(null);
-  // Android-only prop — keep JS state so FlashList re-renders with the new length.
-  const [listEdgeFadeLength, setListEdgeFadeLength] = useState(0);
+  // Songs can change elsewhere (a download lands, lyrics arrive): refresh on focus.
+  useEffect(() => navigation.addListener('focus', () => { fetchSongs(); }), [navigation, fetchSongs]);
 
-  const isSolidBg = libraryBackgroundMode === 'purest-black'
-    || libraryBackgroundMode === 'grey'
-    || libraryBackgroundMode === 'theme-subtle'
-    || libraryBackgroundMode === 'black'
-    || libraryBackgroundMode === 'theme-blue';
+  const playSong = useCallback((song: Song) => {
+    const index = downloaded.findIndex(s => s.id === song.id);
+    if (index >= 0) usePlayerStore.getState().setPlaylistQueue(LIBRARY_QUEUE_ID, downloaded, index);
+    else usePlayerStore.getState().setPlaylistQueue(LIBRARY_QUEUE_ID, [song], 0);
+  }, [downloaded]);
+  const doneCount = queue.length - active.length;
 
-  // The header itself stays put and fully opaque — only the artwork inside it
-  // fades (see AuroraHeader's artworkOpacity). Fading the whole layer dissolved
-  // the fade-to-black gradient along with the colour, which broke the blend.
-  const headerAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 0 }] }));
+  const play = useCallback((index: number, shuffle = false) => {
+    if (downloaded.length === 0) return;
+    Haptics.selectionAsync().catch(() => {});
+    let list = downloaded;
+    let start = index;
+    if (shuffle) {
+      list = [...downloaded];
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      start = 0;
+    }
+    usePlayerStore.getState().setPlaylistQueue(LIBRARY_QUEUE_ID, list, start);
+  }, [downloaded]);
 
-  // The shader band takes the colours of the song on show (or playing).
-  const auraPalette = useArtworkPalette(activeImageUri ?? playerCurrentCover);
+  const totalMinutes = Math.round(downloaded.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
 
-  const auroraFade = useDerivedValue(() =>
-    isSolidBg
-      ? 1
-      : interpolate(scrollY.value, [0, AURORA_FADE_DISTANCE], [1, 0], Extrapolation.CLAMP)
+  const renderActive = (item: QueueItem) => (
+    <TrackRow
+      key={item.id}
+      title={item.song.title}
+      artist={item.song.artist}
+      artwork={item.song.highResArt}
+      meta={item.status === 'failed' ? 'Failed' : item.stageStatus || item.status}
+      progress={item.status === 'failed' ? undefined : item.progress}
+      onPress={() => {}}
+      trailingIcon={item.status === 'failed' ? 'refresh' : undefined}
+      trailingLabel="Retry download"
+      onTrailingPress={item.status === 'failed' ? () => retryItem(item.id) : undefined}
+    />
   );
 
-  const updateFocusMode = useCallback((shouldFocus: boolean) => {
-    // Solid static backgrounds don't use focus-mode header hiding
-    if (isSolidBg) shouldFocus = false;
-    if (shouldFocus !== libraryFocusMode) {
-      setLibraryFocusMode(shouldFocus);
-      setLibraryFocusModeStore(shouldFocus);
-    }
-  }, [libraryFocusMode, setLibraryFocusModeStore, isSolidBg]);
+  const header = (
+    <View style={{ paddingTop: insets.top + Space.sm }}>
+      <View style={styles.topBar}>
+        <Text style={styles.title} accessibilityRole="header">Library</Text>
+        <View style={styles.topActions}>
+          <Pressable onPress={() => navigation.navigate('AddEditLyrics', {})} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add lyrics" style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <Ionicons name="add" size={22} color={Signal.ink} />
+          </Pressable>
+          <Pressable onPress={() => setQueueOpen(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Download queue" style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <Ionicons name="arrow-down" size={20} color={Signal.ink} />
+            {active.length > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{active.length}</Text></View> : null}
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('Playlists')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Playlists" style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <Ionicons name="albums-outline" size={20} color={Signal.ink} />
+          </Pressable>
+        </View>
+      </View>
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      'worklet';
-      const y = event.contentOffset.y;
-      scrollY.value = y;
-      const isFocusZone = y > 150;
-      if (isFocusZone !== lastSentFocusMode.value) {
-        lastSentFocusMode.value = isFocusZone;
-        runOnJS(updateFocusMode)(isFocusZone);
-      }
-
-      // Top-edge dissolve only once the user leaves rest position. At y<=0 the
-      // list must be fully sharp under the LuvLyrics brand bar.
-      const nextEdge = y <= 0 ? 0 : LIST_EDGE_FADE_MAX;
-      if (nextEdge !== lastEdgeFadeLen.value) {
-        lastEdgeFadeLen.value = nextEdge;
-        runOnJS(setListEdgeFadeLength)(nextEdge);
-      }
-    },
-  });
-
-  const activeDownloadsCount = useDownloadQueueStore(state => state.queue.filter(i => i.status === 'downloading' || i.status === 'pending' || i.status === 'staging').length);
-  const addToScanQueue = useLyricsScanQueueStore(state => state.addToQueue);
-
-  const filteredSongs = useSortedSongs(songs, '', 'recent', 'desc');
-
-  const handleAddToQueue = useCallback((song: Song) => {
-    const currentQueue = useLyricsScanQueueStore.getState().queue;
-    const existing = currentQueue[song.id];
-    const isPlainResult =
-      (existing?.status === 'completed' && existing?.resultType === 'plain') ||
-      (!existing && songCanUpgradeToSyncedLyrics(song));
-
-    if (existing) {
-      if (existing.status === 'failed' || isPlainResult) {
-        addToScanQueue(song, isPlainResult);
-        Haptics.vibrate(50);
-        setToast({ visible: true, message: isPlainResult ? `Retrying for synced lyrics: "${song.title}"` : `Retrying: "${song.title}"`, type: 'info' });
-      } else {
-        setToast({ visible: true, message: `Already searching for "${song.title}"`, type: 'info' });
-      }
-    } else {
-      addToScanQueue(song);
-      Haptics.vibrate(50);
-      setToast({ visible: true, message: `Searching lyrics for "${song.title}"...`, type: 'success' });
-    }
-  }, [addToScanQueue]);
-
-  const handleBrandPress = useCallback(() => {
-    if (!playerCurrentSongId) {
-      setToast({ visible: true, message: 'Play a song first to open artist mode', type: 'info' });
-      return;
-    }
-    Haptics.vibrate(10);
-    setRecentlyPlayedMode((currentMode) => currentMode === 'recent' ? 'artist' : 'recent');
-  }, [playerCurrentSongId]);
-
-
-  const playSong = usePlaybackQueue({
-    playInMiniPlayerOnly,
-    setMiniPlayerHidden,
-    navigation,
-  });
-
-  const handleSongPress = useCallback((song: Song) => {
-    InteractionManager.runAfterInteractions(() => {
-      playSong(song, filteredSongs, songs);
-    });
-  }, [playSong, filteredSongs, songs]);
-
-  const handleSongLongPress = useCallback((song: Song) => {
-    setSelectedSongForArt(song);
-    setShowBottomSheet(true);
-  }, []);
-
-  const handleAddPress = useCallback(() => navigation.navigate('AddEditLyrics', {}), [navigation]);
-
-  useEffect(() => {
-    const updateTheme = async () => {
-      let themeColors: string[] | undefined;
-      let image: string | null = null;
-      if (libraryBackgroundMode === 'current') {
-        if (playerCurrentSongId) {
-          image = playerCurrentCover || null;
-          if (!image && playerCurrentGradient) {
-            themeColors = playerCurrentGradient === 'dynamic' ? ['#f7971e', '#ffd200', '#ff6b35'] : getGradientColors(playerCurrentGradient);
-          }
-        }
-      } else if (libraryBackgroundMode === 'daily') {
-        const topId = useDailyStatsStore.getState().getTopSongOfYesterday() || useDailyStatsStore.getState().getTopSongOfToday();
-        if (topId) {
-          const song = songs.find(s => s.id === topId) || await getSong(topId);
-          if (song) {
-            image = song.coverImageUri || null;
-            if (!image && song.gradientId) {
-              themeColors = song.gradientId === 'dynamic' ? ['#f7971e', '#ffd200', '#ff6b35'] : getGradientColors(song.gradientId);
-            }
-          }
-        }
-      } else if (libraryBackgroundMode === 'black') {
-        themeColors = ['#050505', '#050505', '#050505'];
-        image = null;
-      } else if (libraryBackgroundMode === 'purest-black') {
-        themeColors = ['#000000', '#000000', '#000000'];
-        image = null;
-      } else if (libraryBackgroundMode === 'grey') {
-        themeColors = ['#121212', '#212121', '#121212'];
-        image = null;
-      } else if (libraryBackgroundMode === 'theme-subtle') {
-        // Theme Subtle — greyish blue tint, soft and elegant
-        themeColors = ['#121820', '#1E2A38', '#121820'];
-        image = null;
-      } else if (libraryBackgroundMode === 'theme-blue') {
-        // Vibrant theme blue gradient — noticeably blue
-        themeColors = ['#0A1628', '#1A3A6B', '#2F8CFF'];
-        image = null;
-      }
-      setActiveThemeColors(themeColors); setActiveImageUri(image);
-    };
-    updateTheme();
-  }, [libraryBackgroundMode, playerCurrentSongId, playerCurrentCover, playerCurrentGradient, songs, songs.length, getSong]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', fetchSongs);
-    return unsubscribe;
-  }, [navigation, fetchSongs]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true); await fetchSongs(); setRefreshing(false);
-  }, [fetchSongs]);
-
-  const handleDeleteSong = async () => {
-    if (!selectedSongForArt) return;
-    try {
-      await deleteSong(selectedSongForArt.id);
-      setShowDeleteConfirm(false); setShowBottomSheet(false);
-      setToast({ visible: true, message: 'Song deleted', type: 'success' });
-    } catch {
-      setToast({ visible: true, message: 'Failed to delete song', type: 'error' });
-    }
-  };
-
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-      if (!result.canceled && result.assets[0].uri && selectedSongForArt) {
-        const uri = result.assets[0].uri;
-        await updateSong({ ...selectedSongForArt, coverImageUri: uri, dateModified: new Date().toISOString() });
-        addRecentArt(uri); setShowBottomSheet(false); fetchSongs();
-      }
-    } catch {
-      setToast({ visible: true, message: 'Failed to save cover', type: 'error' });
-    }
-  };
-
-  const selectRecentArt = async (uri: string) => {
-    if (selectedSongForArt) {
-      try {
-        await updateSong({ ...selectedSongForArt, coverImageUri: uri, dateModified: new Date().toISOString() });
-        addRecentArt(uri);
-        setShowBottomSheet(false); fetchSongs();
-      } catch {
-        setToast({ visible: true, message: 'Failed to save cover', type: 'error' });
-      }
-    }
-  };
-
-  const handleSaveInfo = async () => {
-    if (selectedSongForArt && editTitle.trim()) {
-      try {
-        await updateSong({ ...selectedSongForArt, title: editTitle.trim(), artist: editArtist.trim(), dateModified: new Date().toISOString() });
-        await fetchSongs(); setToast({ visible: true, message: 'Song info updated', type: 'success' }); setShowEditInfoModal(false);
-      } catch {
-        setToast({ visible: true, message: 'Failed to update song', type: 'error' });
-      }
-    }
-  };
-
-  const handleShareSong = async () => {
-    if (!selectedSongForArt) return;
-    if (!selectedSongForArt.audioUri) {
-      setToast({ visible: true, message: 'No audio file found to share', type: 'error' });
-      return;
-    }
-    try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        setToast({ visible: true, message: 'Sharing is not available on this device', type: 'error' });
-        return;
-      }
-      setShowBottomSheet(false);
-      let uriToShare = selectedSongForArt.audioUri;
-      if (uriToShare.startsWith('content://')) {
-        const extension = uriToShare.includes('m4a') ? 'm4a' : 'mp3';
-        const tempFile = `${FileSystem.cacheDirectory}share_temp_${Date.now()}.${extension}`;
-        try {
-          await FileSystem.copyAsync({ from: uriToShare, to: tempFile });
-          uriToShare = tempFile;
-        } catch (copyError) {
-          if (__DEV__) console.error('Failed to copy content URI for sharing:', copyError);
-        }
-      }
-      await Sharing.shareAsync(uriToShare, {
-        dialogTitle: `Share "${selectedSongForArt.title}"`,
-        mimeType: 'audio/mpeg',
-        UTI: 'public.audio'
-      });
-    } catch (error) {
-      if (__DEV__) console.error('Share error:', error);
-      setToast({ visible: true, message: 'Failed to share song', type: 'error' });
-    }
-  };
-
-  const handleRemoveCover = async () => {
-    setShowBottomSheet(false);
-    if (selectedSongForArt) {
-      try {
-        await updateSong({ ...selectedSongForArt, coverImageUri: undefined, dateModified: new Date().toISOString() });
-        await fetchSongs();
-        setToast({ visible: true, message: 'Cover art removed', type: 'success' });
-      } catch {
-        setToast({ visible: true, message: 'Failed to remove cover', type: 'error' });
-      }
-    }
-  };
-
-  const handleHideSong = async () => {
-    setShowBottomSheet(false);
-    if (selectedSongForArt) {
-      try {
-        await hideSong(selectedSongForArt.id, true);
-        setToast({ visible: true, message: 'Song hidden from library', type: 'success' });
-      } catch {
-        setToast({ visible: true, message: 'Failed to hide song', type: 'error' });
-      }
-    }
-  };
-
-  const handleEditInfo = () => {
-    setShowBottomSheet(false);
-    setEditTitle(selectedSongForArt?.title || '');
-    setEditArtist(selectedSongForArt?.artist || '');
-    setTimeout(() => setShowEditInfoModal(true), 300);
-  };
-
-  const handleOpenVersionSearch = () => {
-    setShowBottomSheet(false);
-    setTimeout(() => setShowVersionSearchModal(true), 300);
-  };
-
-  const handleOpenCoverSearch = () => {
-    setShowBottomSheet(false);
-    setShowCoverSearch(true);
-  };
-
-  const renderItem = useCallback(({ item }: { item: Song }) => {
-    return (
-      <SongListItem
-        song={item}
-        onPress={handleSongPress}
-        onLongPress={handleSongLongPress}
-        addToScanQueue={handleAddToQueue}
-      />
-    );
-  }, [handleSongPress, handleSongLongPress, handleAddToQueue]);
-
-  return (
-    <View style={styles.container}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#000' : colors.background }]} />
-      {isDark && !isSolidBg ? (
-        // Allegra's live shader across the top only, melting into black and
-        // bowing out as the list scrolls up.
-        <AuraBand
-          palette={auraPalette}
-          playing={isPlaying}
-          active={isFocused}
-          height={insets.top + AURA_BAND_HEIGHT}
-          fade={auroraFade}
-        />
-      ) : isDark ? (
-        <Animated.View style={[StyleSheet.absoluteFill, headerAnimatedStyle]}>
-          <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} artworkOpacity={auroraFade} />
-        </Animated.View>
-      ) : null}
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {(
-          <View style={styles.brandHeader}>
-            <Pressable onPress={handleBrandPress} hitSlop={12} style={styles.brandPressable}>
-              <Text style={[styles.brandName, { color: isDark ? '#fff' : colors.textPrimary, textShadowColor: isDark ? 'rgba(0,0,0,0.3)' : 'transparent' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                LuvLyrics
-              </Text>
-            </Pressable>
-            {/* Moved up from the old "All Songs" row so the list starts higher. */}
-            <View style={styles.brandActions}>
-              <Pressable style={styles.brandActionButton} onPress={() => setShowQueueModal(true)}>
-                <Ionicons name="list" size={22} color={isDark ? '#fff' : colors.textSecondary} />
-                {activeDownloadsCount > 0 && (
-                  <View style={styles.brandBadge}>
-                    <Text style={styles.brandBadgeText}>{activeDownloadsCount}</Text>
-                  </View>
-                )}
-              </Pressable>
-              <Pressable style={styles.brandActionButton} onPress={() => (navigation as any).navigate('AudioDownloader')}>
-                <Ionicons name="cloud-download-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
-              </Pressable>
-              <Pressable style={styles.brandActionButton} onPress={() => navigation.navigate('Settings')}>
-                <Ionicons name="settings-outline" size={22} color={isDark ? '#fff' : colors.textSecondary} />
-              </Pressable>
+      <RiseIn style={styles.hero}>
+        <View style={styles.heroRow}>
+          <Sleeve
+            artwork={stageArt}
+            title={stageSong?.title ?? 'Library'}
+            artist={stageSong?.artist}
+            size={112}
+            playing={false}
+            onPress={() => play(0)}
+            label="Play your library"
+          />
+          <View style={styles.heroMeta}>
+            <Text style={styles.meta}>
+              {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'}
+              {totalMinutes > 0 ? ` · ${totalMinutes} min` : ''}
+            </Text>
+            <Text style={styles.metaSoft}>Plays offline, lyrics included</Text>
+            <View style={styles.actions}>
+              <PrimaryButton compact icon="play" label="Play" onPress={() => play(0)} disabled={downloaded.length === 0} />
+              <GlassButton compact icon="shuffle" label="Shuffle" onPress={() => play(0, true)} disabled={downloaded.length === 0} />
             </View>
           </View>
+        </View>
+      </RiseIn>
+
+      {downloaded.length > 0 ? (
+        <>
+          <SectionHeading title="Recently played" />
+          <RecentlyPlayedGrid
+            onSongPress={playSong}
+            onSongLongPress={actions.open}
+            onLikePress={toggleLike}
+            onMagicPress={actions.findLyrics}
+            currentSong={currentSong}
+            style={styles.recent}
+          />
+        </>
+      ) : null}
+
+      {active.length > 0 ? (
+        <>
+          <SectionHeading
+            title="Downloading"
+            subtitle={`${active.length} in progress`}
+            action={doneCount > 0 ? 'Clear done' : undefined}
+            onAction={doneCount > 0 ? clearCompleted : undefined}
+          />
+          {active.map(renderActive)}
+        </>
+      ) : null}
+
+      <View style={styles.filterRow}>
+        <View style={styles.filterField}>
+          <Ionicons name="search" size={16} color={Signal.inkMuted} />
+          <TextInput
+            value={filter}
+            onChangeText={setFilter}
+            placeholder="Filter your songs"
+            placeholderTextColor={Signal.inkFaint}
+            style={styles.filterInput}
+            autoCorrect={false}
+            accessibilityLabel="Filter your songs"
+          />
+        </View>
+      </View>
+      <View style={styles.chips}>
+        {(['recent', 'title', 'artist'] as SortMode[]).map(mode => (
+          <Pressable
+            key={mode}
+            onPress={() => setSort(mode)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sort === mode }}
+            style={[styles.chip, sort === mode && styles.chipActive]}
+          >
+            <Text style={[styles.chipText, sort === mode && styles.chipTextActive]}>
+              {mode === 'recent' ? 'Recently added' : mode === 'title' ? 'Title' : 'Artist'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.screen}>
+      <DynamicAura palette={palette} playing={isPlaying} active={isFocused} dim={0.25} />
+      <FlatList
+        data={downloaded}
+        keyExtractor={s => s.id}
+        ListHeaderComponent={header}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={14}
+        windowSize={9}
+        renderItem={({ item, index }) => (
+          <TrackRow
+            title={item.title}
+            artist={item.artist}
+            artwork={item.coverImageUri}
+            duration={item.duration}
+            meta={item.lyrics?.length ? 'Lyrics' : undefined}
+            isCurrent={currentSongId === item.id}
+            onPress={() => play(index)}
+            onLongPress={() => actions.open(item)}
+          />
         )}
-
-        <AnimatedFlashList
-          ref={flatListRef}
-          data={filteredSongs}
-          keyExtractor={(item: any) => item.id}
-          renderItem={renderItem}
-          estimatedItemSize={80}
-          drawDistance={1200}
-          overrideItemLayout={(layout: any) => { setSongItemLayout(layout); }}
-          getItemType={(_item: any) => 'song'}
-          contentContainerStyle={{
-            // Clears nav bar + mini player + the docked search bar.
-            paddingBottom: 208 + insets.bottom,
-            paddingTop: 10,
-          }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
-          }
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          // Rows/covers dissolve under the brand bar while scrolling. Length is
-          // driven by scrollY so fully-at-top is sharp (no permanent blur).
-          // Android-only; a no-op on iOS.
-          fadingEdgeLength={listEdgeFadeLength}
-          ListEmptyComponent={
-            <LibraryEmptyState
-              onAddPress={handleAddPress}
-              onDownloadPress={() => (navigation as any).navigate('AudioDownloader')}
-              colors={colors}
-            />
-          }
-          ListHeaderComponent={
-            <LibraryHeader
-              hasSongs={filteredSongs.length > 0}
-              onSongPress={handleSongPress}
-              onSongLongPress={handleSongLongPress}
-              onLikePress={toggleLike}
-              onMagicPress={handleAddToQueue}
-              currentSong={playerCurrentSong}
-              recentlyPlayedMode={recentlyPlayedMode}
-            />
-          }
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        />
-      </SafeAreaView>
-
-      <LibraryBottomSheet
-        visible={showBottomSheet}
-        onClose={() => setShowBottomSheet(false)}
-        selectedSong={selectedSongForArt}
-        onShare={handleShareSong}
-        onOpenVersionSearch={handleOpenVersionSearch}
-        onPickImage={pickImage}
-        onOpenCoverSearch={handleOpenCoverSearch}
-        recentArts={recentArts}
-        onSelectRecentArt={selectRecentArt}
-        onRemoveCover={handleRemoveCover}
-        onHideSong={handleHideSong}
-        onEditInfo={handleEditInfo}
-        onDelete={() => { setShowBottomSheet(false); setTimeout(() => setShowDeleteConfirm(true), 300); }}
-        colors={colors}
-      />
-
-      <Modal visible={recentArtVisible} transparent animationType="slide" onRequestClose={() => setRecentArtVisible(false)}>
-        <Pressable style={styles.recentArtOverlay} onPress={() => setRecentArtVisible(false)}>
-          <View style={styles.recentArtContainer}>
-            <Text style={styles.recentArtTitle}>Recent Art</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recentArtScroll}>
-              {recentArts.map((uri, index) => (
-                <Pressable key={index} style={styles.recentArtItem} onPress={() => { selectRecentArt(uri); setRecentArtVisible(false); }}>
-                  <Image source={{ uri }} style={styles.recentArtImage} />
-                </Pressable>
-              ))}
-            </ScrollView>
+        ListEmptyComponent={
+          <View style={styles.emptyCard}>
+            <Ionicons name="cloud-download-outline" size={28} color={Signal.inkMuted} />
+            <Text style={styles.emptyTitle}>{filter ? 'No matches' : 'No songs yet'}</Text>
+            <Text style={styles.emptyBody}>
+              {filter
+                ? 'Try a different title or artist.'
+                : 'Save any song from Stream or Luvs, or add one with lyrics, and it plays offline from here.'}
+            </Text>
           </View>
-        </Pressable>
-      </Modal>
-
-      <ModernDeleteModal
-        visible={showDeleteConfirm}
-        title="Delete Song"
-        message={`Delete "${selectedSongForArt?.title}"? This cannot be undone.`}
-        onConfirm={handleDeleteSong}
-        onCancel={() => setShowDeleteConfirm(false)}
+        }
+        contentContainerStyle={{ paddingBottom: 220 }}
       />
-
-      <SongVersionSearchModal
-        visible={showVersionSearchModal}
-        targetSong={selectedSongForArt}
-        onClose={() => setShowVersionSearchModal(false)}
-        onSuccess={() => {
-          fetchSongs();
-          setToast({ visible: true, message: 'Song updated successfully!', type: 'success' });
-        }}
-      />
-
-      <CoverArtSearchScreen
-        visible={showCoverSearch}
-        initialQuery={selectedSongForArt ? `${selectedSongForArt.title} ${selectedSongForArt.artist}` : ''}
-        onClose={() => setShowCoverSearch(false)}
-        onSelect={async (uri) => {
-          setShowCoverSearch(false);
-          if (selectedSongForArt) {
-            try {
-              await updateSong({ ...selectedSongForArt, coverImageUri: uri, dateModified: new Date().toISOString() });
-              addRecentArt(uri);
-              await fetchSongs();
-              setToast({ visible: true, message: 'Cover art updated!', type: 'success' });
-              setSelectedSongForArt(null);
-            } catch {
-              setToast({ visible: true, message: 'Failed to save cover', type: 'error' });
-            }
-          }
-        }}
-      />
-
-      <LibraryEditModal
-        visible={showEditInfoModal}
-        onClose={() => setShowEditInfoModal(false)}
-        title={editTitle}
-        onTitleChange={setEditTitle}
-        artist={editArtist}
-        onArtistChange={setEditArtist}
-        onSave={handleSaveInfo}
-        primaryColor={colors.primary}
-      />
-
-      {toast && (<Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />)}
-      <DownloadQueueModal visible={showQueueModal} onClose={() => setShowQueueModal(false)} />
+      {actions.element}
+      <DownloadQueueModal visible={queueOpen} onClose={() => setQueueOpen(false)} />
       <PerformanceHUD />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1 },
-  brandHeader: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 8 : 4, paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandPressable: { alignSelf: 'flex-start', flexShrink: 1 },
-  brandActions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexShrink: 0 },
-  brandActionButton: { padding: 4, position: 'relative' },
-  brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
-  brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 1 },
-  recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
-  recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },
-  recentArtScroll: { paddingHorizontal: 20 },
-  recentArtItem: { width: 120, height: 120, borderRadius: 12, overflow: 'hidden', marginRight: 12 },
-  recentArtImage: { width: '100%', height: '100%' },
+  screen: { flex: 1, backgroundColor: Signal.bg },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md + 4 },
+  topActions: { flexDirection: 'row', gap: 8 },
+  pressed: { opacity: 0.7 },
+  badge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: Signal.wave },
+  badgeText: { color: Signal.waveInk, fontSize: 10, fontWeight: '700' },
+  recent: { marginTop: 4 },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Glass.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
+  },
+  hero: { paddingHorizontal: Space.md + 4, marginTop: Space.md },
+  title: { fontWeight: '700', fontSize: 34, lineHeight: 38, color: Signal.ink },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, marginTop: Space.lg },
+  heroMeta: { flex: 1, minWidth: 0 },
+  meta: { fontWeight: '600', fontSize: 16, color: Signal.ink },
+  metaSoft: { fontWeight: '400', fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  filterRow: { paddingHorizontal: Space.md, marginTop: Space.lg },
+  filterField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    height: 42,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.pill,
+    backgroundColor: Glass.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
+  },
+  filterInput: { flex: 1, color: Signal.ink, fontSize: 15, fontWeight: '400', paddingVertical: 0 },
+  chips: { flexDirection: 'row', gap: Space.xs, paddingHorizontal: Space.md, marginTop: Space.sm, marginBottom: Space.xs },
+  chip: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    justifyContent: 'center',
+    backgroundColor: Glass.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
+  },
+  chipActive: { backgroundColor: Signal.wave, borderColor: Signal.wave },
+  chipText: { fontWeight: '600', fontSize: 13, color: Signal.inkSoft },
+  chipTextActive: { color: Signal.waveInk },
+  emptyCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.lg,
+    padding: Space.lg,
+    borderRadius: Radius.panel,
+    backgroundColor: Glass.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  emptyTitle: { fontWeight: '700', fontSize: 18, color: Signal.ink },
+  emptyBody: { fontWeight: '400', fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
 });
 
 export default LibraryScreen;

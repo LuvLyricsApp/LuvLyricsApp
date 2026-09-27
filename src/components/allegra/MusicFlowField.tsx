@@ -186,9 +186,14 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   const colors = useSharedValue(target);
   const targetColors = useSharedValue(target);
 
+  const running = !paused && !reduceMotion;
   useEffect(() => {
     targetColors.value = target;
-  }, [target, targetColors]);
+    // The per-frame easing only runs while frames do. When the field is
+    // resting (paused, off-screen, reduced motion) a new song's colours must
+    // still land — otherwise the room keeps the previous cover's tint.
+    if (!running) colors.value = target;
+  }, [target, targetColors, colors, running]);
 
   useEffect(() => {
     shownEnergy.value = withTiming(energy, { duration: Motion.duration.cinematic * 2, easing: Motion.ease.standard });
@@ -219,10 +224,9 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   }, false);
 
   useEffect(() => {
-    const running = !paused && !reduceMotion;
     frame.setActive(running);
     if (!running) colors.value = targetColors.value;
-  }, [paused, reduceMotion, frame, colors, targetColors]);
+  }, [running, frame, colors, targetColors]);
 
   const renderW = Math.max(1, Math.round(width * RENDER_SCALE));
   const renderH = Math.max(1, Math.round(height * RENDER_SCALE));

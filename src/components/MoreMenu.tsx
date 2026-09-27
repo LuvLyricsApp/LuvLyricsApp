@@ -47,13 +47,12 @@ export interface MoreItem {
 /** The three places people jump to most — big tiles across the top. */
 export const MORE_TILES: readonly MoreItem[] = [
   { key: 'Search', label: 'Search', icon: 'search' },
-  { key: 'Library', label: 'Library', icon: 'library-outline' },
-  { key: 'Downloads', label: 'Downloads', icon: 'arrow-down-circle-outline' },
+  { key: 'Playlists', label: 'Playlists', icon: 'albums-outline' },
+  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline' },
 ];
 
 /** Less frequent destinations, listed below the tiles. */
 export const MORE_ROWS: readonly MoreItem[] = [
-  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline', hint: 'Download any track' },
   { key: 'Settings', label: 'Settings', icon: 'settings-outline', hint: 'Playback, lyrics, look' },
 ];
 
@@ -273,8 +272,9 @@ export const activeMoreKey = (state: TabState): string | null => {
   const route = state.routes[state.index];
   if (!route) return null;
   if (route.name === 'Library') {
+    // The Library tab itself is on the bar; its Playlists screens belong to •••.
     const nested = route.state?.routes?.[route.state.index ?? 0]?.name;
-    return nested === 'Downloads' ? 'Downloads' : 'Library';
+    return nested === 'Playlists' || nested === 'PlaylistDetail' ? 'Playlists' : null;
   }
   return MORE_ITEMS.some(i => i.key === route.name) ? route.name : null;
 };
@@ -291,8 +291,7 @@ export const useMoreMenu = (state: TabState, navigation: TabNavigation) => {
   const close = useCallback(() => setOpen(false), []);
   const select = useCallback((key: string) => {
     setOpen(false);
-    if (key === 'Library') navigation.navigate('Library', { screen: 'PlaylistsHome' });
-    else if (key === 'Downloads') navigation.navigate('Library', { screen: 'Downloads' });
+    if (key === 'Playlists') navigation.navigate('Library', { screen: 'Playlists' });
     else navigation.navigate(key);
   }, [navigation]);
   return { open, toggle, close, select, activeKey: activeMoreKey(state) };

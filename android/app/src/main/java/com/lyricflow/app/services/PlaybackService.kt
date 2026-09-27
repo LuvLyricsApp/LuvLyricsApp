@@ -21,6 +21,9 @@ import com.lyricflow.app.modules.PlayerBridge
 
 private const val TAG = "LyrFlow"
 private const val MAX_RETRIES = 4
+private const val WATCHDOG_MS = 4_000L
+private const val STALL_TICKS = 4 // ~16s without progress while buffering
+private val RETRY_TOKEN = Any()
 
 /**
  * Media3 session-backed playback service.
@@ -39,6 +42,30 @@ class PlaybackService : MediaSessionService() {
     private val retryHandler = Handler(Looper.getMainLooper())
     private var retries = 0
 
+    // Stall watchdog: a connection that stops delivering bytes without erroring
+    // leaves the player buffering forever. If it wants to play, is buffering and
+    // the position hasn't moved for STALL_TICKS checks, reload from where it is.
+    private var lastPosition = -1L
+    private var stalledTicks = 0
+    private val watchdog = object : Runnable {
+        override fun run() {
+            val p = exoPlayer
+            val position = p.currentPosition
+            if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING && position == lastPosition) {
+                stalledTicks++
+                if (stalledTicks >= STALL_TICKS) {
+                    Log.w(TAG, "stream stalled at ${position}ms; reloading")
+                    stalledTicks = 0
+                    p.seekTo(position)
+                }
+            } else {
+                stalledTicks = 0
+            }
+            lastPosition = position
+            retryHandler.postDelayed(this, WATCHDOG_MS)
+        }
+    }
+
     /**
      * A dropped connection mid-stream used to leave the player in an error
      * state with playWhenReady still true: the app showed "playing" while the
@@ -53,9 +80,9 @@ class PlaybackService : MediaSessionService() {
                 val delayMs = 1000L shl retries
                 retries++
                 Log.w(TAG, "playback error ${error.errorCodeName}; retry $retries in ${delayMs}ms")
-                retryHandler.postDelayed({
+                retryHandler.postAtTime({
                     if (exoPlayer.playerError != null) exoPlayer.prepare()
-                }, delayMs)
+                }, RETRY_TOKEN, android.os.SystemClock.uptimeMillis() + delayMs)
             } else {
                 Log.w(TAG, "playback error ${error.errorCodeName}; giving up")
                 exoPlayer.playWhenReady = false
@@ -68,7 +95,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             retries = 0
-            retryHandler.removeCallbacksAndMessages(null)
+            retryHandler.removeCallbacksAndMessages(RETRY_TOKEN)
         }
     }
 
@@ -112,6 +139,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
         exoPlayer.addListener(recovery)
+        retryHandler.postDelayed(watchdog, WATCHDOG_MS)
 
         val sessionActivity = packageManager
             .getLaunchIntentForPackage(packageName)

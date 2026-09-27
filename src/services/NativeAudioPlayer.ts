@@ -13,6 +13,7 @@ type MainPlayerNative = {
   getVolume?: () => number;
   setVolume?: (level: number) => void;
   openOutputSwitcher?: () => boolean;
+  refreshStatus?: () => void;
   addListener: (event: string, cb: (data: any) => void) => { remove: () => void };
 };
 
@@ -85,6 +86,12 @@ export const NativeAudioPlayer = {
   setVolume(level: number) {
     if (!this.isAvailable() || !MainPlayerModule?.setVolume) return;
     try { MainPlayerModule.setVolume(Math.max(0, Math.min(1, level))); } catch { /* no volume control */ }
+  },
+
+  /** Ask native to re-send the playback status (app back in the foreground). */
+  refreshStatus() {
+    if (!this.isAvailable() || !MainPlayerModule?.refreshStatus) return;
+    try { MainPlayerModule.refreshStatus(); } catch { /* older native build */ }
   },
 
   /** Opens the system output picker (speaker / Bluetooth / cast). */

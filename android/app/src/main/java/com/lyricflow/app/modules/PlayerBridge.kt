@@ -17,7 +17,8 @@ object PlayerBridge {
         isPlaying: Boolean,
         playWhenReady: Boolean,
         isBuffering: Boolean,
-        didJustFinish: Boolean
+        didJustFinish: Boolean,
+        suppressed: Boolean
     ) -> Unit)? = null
     var onRemoteCommand: ((command: String) -> Unit)? = null
     /** Fires when Media3 lands on a new item (auto end-of-track or seekToNext). */
@@ -35,6 +36,13 @@ object PlayerBridge {
         // Fires the moment play()/pause() is applied, before buffering resolves.
         // This is what lets JS render the transport state without guessing.
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            emitStatus()
+        }
+
+        // Another app took audio focus for a moment (a call, a voice note, a
+        // video). playWhenReady stays true but nothing plays until it gives
+        // focus back — tell JS so the button stops claiming "playing".
+        override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
             emitStatus()
         }
 
@@ -86,7 +94,8 @@ object PlayerBridge {
             isPlaying,
             player.playWhenReady,
             isBuffering,
-            finished
+            finished,
+            player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE
         )
     }
 

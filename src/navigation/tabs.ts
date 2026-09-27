@@ -1,12 +1,13 @@
 import { Platform } from 'react-native';
 
 /**
- * The everyday tabs — the only routes with an icon in the bottom bar. Search,
- * Library, Downloads, the downloader and Settings are tab routes too (so the
+ * The everyday tabs — the only routes with an icon in the bottom bar, in bar
+ * order: Stream, Luvs, (mic), Library, then •••. Search, Playlists, the
+ * downloader, Settings and the YouTube Music pages are tab routes too (so the
  * bar stays on screen while they're open) but live behind the ••• menu
  * (components/MoreMenu.tsx). Only the full-screen player covers the bar.
  */
-export const VISIBLE_TABS: ReadonlySet<string> = new Set(['Home', 'Stream', 'Luvs']);
+export const VISIBLE_TABS: ReadonlySet<string> = new Set(['Stream', 'Luvs', 'Library']);
 
 /**
  * Height the floating pill bar takes above the safe-area inset, including its

@@ -6,7 +6,7 @@
  * paged columns of songs (YouTube Music), then plain cover shelves. Echo Music's
  * feed decides what's in it (services/stream/homeFeed.ts + recommend.ts).
  * Tapping a song streams it through the normal player queue with radio
- * autoplay; ↓ saves it into Downloads; long-press plays it next.
+ * autoplay; ↓ saves it into the Library; long-press plays it next.
  *
  * The header scrolls away with the content — no collapsing bar. Behind it all
  * runs Allegra's live shader (DynamicAura), tinted by the playing cover.
@@ -205,7 +205,7 @@ const StreamScreen: React.FC = () => {
   const save = useCallback((song: UnifiedSong) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     addToDownloads([song]);
-    setToast(`Saving “${song.title}” to Downloads`);
+    setToast(`Saving “${song.title}” to your library`);
   }, [addToDownloads]);
 
   const queueNext = useCallback((song: UnifiedSong) => {
@@ -215,8 +215,8 @@ const StreamScreen: React.FC = () => {
   }, []);
 
   const openDownloads = useCallback(() => {
-    // Downloads lives inside the Library tab's stack so the tab bar stays put.
-    navigation.navigate('Library', { screen: 'Downloads' });
+    // Downloads are the Library tab now.
+    navigation.navigate('Library', { screen: 'LibraryHome' });
   }, [navigation]);
 
   const ytChips = useMemo(() => ytHome?.chips ?? [], [ytHome]);

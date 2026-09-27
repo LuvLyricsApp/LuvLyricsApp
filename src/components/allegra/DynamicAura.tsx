@@ -2,7 +2,7 @@
  * Allegra's shell-level ambient layer, for React Native.
  *
  *   base    — near-black with two radial glows of the cover's colours
- *   field   — MusicFlowField (reeded-glass light columns), 0.88 opacity; 0.3 paused
+ *   field   — MusicFlowField (reeded-glass light columns), 0.88 opacity; 0.5 paused
  *             (web uses 0.7 with a screen-blended flute layer; RN has no blend
  *             modes, so the field carries a little more of the light itself)
  *   flutes  — faint vertical colour bands
@@ -21,6 +21,8 @@ import { Motion } from '../../constants/allegraTheme';
 import { isLowEndDevice } from '../../utils/performanceTier';
 
 const LOW_END = isLowEndDevice();
+/** Paused, the field rests but still carries the cover's colour. */
+const PAUSED_FIELD = 0.5;
 
 interface DynamicAuraProps {
   palette: AuraPalette;
@@ -49,10 +51,10 @@ export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = fal
       setSize({ width: w, height: h, scale: 1, fontScale: 1 });
     }
   };
-  const fieldOpacity = useSharedValue(playing ? 0.88 : 0.3);
+  const fieldOpacity = useSharedValue(playing ? 0.88 : PAUSED_FIELD);
 
   useEffect(() => {
-    fieldOpacity.value = withTiming(playing ? 0.88 : 0.3, { duration: Motion.duration.crossfade, easing: Motion.ease.standard });
+    fieldOpacity.value = withTiming(playing ? 0.88 : PAUSED_FIELD, { duration: Motion.duration.crossfade, easing: Motion.ease.standard });
   }, [playing, fieldOpacity]);
 
   const fieldStyle = useAnimatedStyle(() => ({ opacity: fieldOpacity.value }));

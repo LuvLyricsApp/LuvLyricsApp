@@ -46,14 +46,15 @@ class MainPlayerModule : Module() {
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
-            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, playWhenReady, isBuffering, didJustFinish ->
+            PlayerBridge.onStatusUpdate = { position, duration, isPlaying, playWhenReady, isBuffering, didJustFinish, suppressed ->
                 sendEvent("onPlaybackStatus", mapOf(
                     "position" to position,
                     "duration" to duration,
                     "isPlaying" to isPlaying,
                     "playWhenReady" to playWhenReady,
                     "isBuffering" to isBuffering,
-                    "didJustFinish" to didJustFinish
+                    "didJustFinish" to didJustFinish,
+                    "suppressed" to suppressed
                 ))
             }
             PlayerBridge.onRemoteCommand = { command ->
@@ -221,9 +222,21 @@ class MainPlayerModule : Module() {
                     // After a stream error the player sits idle; play() alone
                     // would do nothing, so re-prepare at the same position.
                     if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) player.prepare()
+                    // Suppressed by another app's audio focus: playWhenReady is
+                    // already true, so play() would be a no-op. Toggle it so
+                    // ExoPlayer asks for focus again and actually resumes.
+                    if (player.playWhenReady && player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                        player.pause()
+                    }
                     player.play()
                 }
             }
+        }
+
+        /** Re-sends the current status (the app came back to the foreground). */
+        Function("refreshStatus") {
+            mainHandler.post { PlayerBridge.emitStatus() }
+            null
         }
 
         Function("pause") {

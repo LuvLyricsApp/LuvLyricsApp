@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { usePlayerStore, playerControls, setNativeOwnsPlaybackState } from '../store/playerStore';
 import { isStalePlayingEcho } from '../playback/playbackIntent';
@@ -90,7 +90,7 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     const statusSub = NativeAudioPlayer.addListener('onPlaybackStatus', (event: any) => {
-      const { position, duration, isPlaying, playWhenReady, didJustFinish } = event;
+      const { position, duration, isPlaying, playWhenReady, didJustFinish, suppressed } = event;
       const store = usePlayerStore.getState();
 
       if (!isSeeking.value) {
@@ -119,7 +119,9 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Adopted verbatim — no guard. playWhenReady is the user-facing transport
       // state (flips the instant a command lands); isPlaying stays false while
       // buffering. The fallback keeps this working against an older native build.
-      const transportPlaying = typeof playWhenReady === 'boolean' ? playWhenReady : isPlaying;
+      // Suppressed = another app holds audio focus: nothing is coming out, so
+      // show play, and a tap re-requests focus (MainPlayer.play).
+      const transportPlaying = (typeof playWhenReady === 'boolean' ? playWhenReady : isPlaying) && suppressed !== true;
       if (store.isPlaying !== transportPlaying) {
         store.setIsPlaying(transportPlaying);
       }
@@ -142,10 +144,17 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
+    // Back from another app: get the real state at once instead of trusting
+    // whatever the UI last showed.
+    const appStateSub = AppState.addEventListener('change', state => {
+      if (state === 'active') NativeAudioPlayer.refreshStatus();
+    });
+
     return () => {
       statusSub.remove();
       advancedSub.remove();
       commandSub.remove();
+      appStateSub.remove();
     };
   }, [endHandledForSongIdRef]);
 

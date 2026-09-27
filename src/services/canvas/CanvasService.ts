@@ -20,12 +20,19 @@ const inFlight = new Map<string, Promise<CanvasArtwork | null>>();
 
 type Step = (q: CanvasQuery, c: CanvasCredentials) => Promise<CanvasArtwork | null>;
 
-const CASCADE: Step[] = [
+/** Keyless sources (Echo Canvas manifest, ArchiveTune artist video) — tried per artist spelling. */
+const FREE: Step[] = [
   q => fetchEchoCanvas(q),
   q => fetchArtistVideoCanvas(q),
+];
+/** Sources that need the listener's own token from Settings. */
+const KEYED: Step[] = [
   (q, c) => fetchTidalCanvas(q, c),
   (q, c) => fetchAppleMusicCanvas(q, c),
 ];
+
+/** "A, B & C" -> "A": archives file a song under its lead artist. */
+const leadArtist = (artist: string): string => artist.split(/,|&| feat\.? | ft\.? | x /i)[0].trim();
 
 /** Strips "(Official Video)", "[Lyrics]", "(feat. X)" etc. that break matching. */
 export const cleanTitleForLookup = (title: string): string =>
@@ -33,6 +40,8 @@ export const cleanTitleForLookup = (title: string): string =>
     .replace(/\.(mp3|m4a|flac|wav|ogg|opus)$/i, '')
     .replace(/[([](official|lyrics?|audio|video|visuali[sz]er|mv|hd|4k)[^)\]]*[)\]]/gi, '')
     .replace(/[([](feat\.?|ft\.?|featuring)[^)\]]*[)\]]/gi, '')
+    // Official YouTube Music titles: 'Marandhaye (From "Teddy")'.
+    .replace(/[([]from\s[^)\]]*[)\]]/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -55,8 +64,16 @@ export const CanvasService = {
     const pending = inFlight.get(key);
     if (pending) return pending;
 
+    const lead = leadArtist(artist);
+    const spellings = lead && lead !== artist ? [q, { ...q, artist: lead }] : [q];
     const run = (async () => {
-      for (const step of CASCADE) {
+      for (const spelling of spellings) {
+        for (const step of FREE) {
+          const hit = await step(spelling, creds);
+          if (hit) return hit;
+        }
+      }
+      for (const step of KEYED) {
         const hit = await step(q, creds);
         if (hit) return hit;
       }

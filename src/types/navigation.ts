@@ -34,7 +34,6 @@ export type AudioDownloaderParams = {
 
 // Bottom Tab Navigator
 export type TabParamList = {
-  Home: undefined; // Was Library
   Stream: undefined; // catalog streaming + Echo-style home feed
   Luvs: undefined;
   Library: NavigatorScreenParams<LibraryStackParamList> | undefined; // Was Playlists
@@ -59,9 +58,10 @@ export type BrowseStackParamList = {
  * playlist — a root-stack sibling covers the tab navigator entirely.
  */
 export type LibraryStackParamList = {
-  PlaylistsHome: undefined;
+  /** Your songs: the Downloads layout with the old Home's tools. */
+  LibraryHome: undefined;
+  Playlists: undefined;
   PlaylistDetail: { playlistId: string };
-  Downloads: undefined;
 };
 
 // Screen Props
