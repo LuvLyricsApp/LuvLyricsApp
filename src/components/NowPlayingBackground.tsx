@@ -86,11 +86,16 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {style !== 'glow' ? (
-        <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn && !canvasShown} />
+        // The cover stays under the canvas: the canvas fades in over it, and
+        // when the canvas fades out (song change, loop seam) the cover is what
+        // shows through — never an empty gap.
+        <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} />
       ) : null}
 
-      {canvasAllowed ? (
+      {canvas || canvasShown ? (
         // The canvas plays inside the hero and dissolves exactly like the cover.
+        // It stays mounted while leaving, so CanvasVideoLayer can fade it out
+        // (lyrics opened, song changed) instead of cutting it.
         <MaskedView
           style={[styles.hero, { height: heroH }]}
           maskElement={
@@ -101,7 +106,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
             />
           }
         >
-          <CanvasVideoLayer canvas={canvas} playing={playing} onVisibleChange={onVisibleChange} scrimStrength={0} />
+          <CanvasVideoLayer canvas={canvasAllowed ? canvas : null} playing={playing && canvasAllowed} onVisibleChange={onVisibleChange} scrimStrength={0} />
         </MaskedView>
       ) : null}
 
