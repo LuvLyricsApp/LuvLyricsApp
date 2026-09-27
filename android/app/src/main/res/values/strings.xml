@@ -3,4 +3,6 @@
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">dark</string>
+  <string name="widget_nowplaying_description" translatable="false">The song that\'s playing, with play, skip and like</string>
+  <string name="widget_playlist_description" translatable="false">A playlist you can scroll and play from</string>
 </resources>

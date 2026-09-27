@@ -63,7 +63,38 @@
           "photosPermission": "Allow LuvLyrics to access your photos so you can set custom playlist covers."
         }
       ],
-      "./plugins/withLuvLyricsLanDiscovery"
+      "./plugins/withLuvLyricsLanDiscovery",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "NowPlaying",
+              "label": "Now playing",
+              "description": "The song that's playing, with play, skip and like",
+              "minWidth": "180dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 3,
+              "maxResizeWidth": "360dp",
+              "maxResizeHeight": "360dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            },
+            {
+              "name": "Playlist",
+              "label": "Playlist",
+              "description": "A playlist you can scroll and play from",
+              "minWidth": "250dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 3,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {
