@@ -250,14 +250,14 @@ const SettingsScreen: React.FC<Props> = () => {
             label="Player background"
             hint={bgHint[settings.playerBackground]}
             value={settings.playerBackground}
-            options={[{ value: 'blend', label: 'Blend' }, { value: 'apple', label: 'Apple Music' }, { value: 'glow', label: 'Glow' }]}
+            options={[{ value: 'blend', label: 'Blend' }, { value: 'apple', label: 'Apple Music' }, { value: 'glow', label: 'Glow animated' }]}
             onChange={settings.setPlayerBackground}
           />
           <Choice<MiniPlayerBackground>
             label="Mini player background"
             hint={settings.miniPlayerBackground === 'glow' ? 'Two glows drifting in the cover\u2019s colours.' : 'A calm tone of the cover.'}
             value={settings.miniPlayerBackground}
-            options={[{ value: 'glow', label: 'Glow' }, { value: 'tint', label: 'Cover tint' }]}
+            options={[{ value: 'glow', label: 'Glow animated' }, { value: 'tint', label: 'Cover tint' }]}
             onChange={settings.setMiniPlayerBackground}
           />
           <Kit.Switch
@@ -327,12 +327,6 @@ const SettingsScreen: React.FC<Props> = () => {
               thumbTintColor={Signal.wave}
             />
           </Row>
-          <Kit.Switch
-            label="Hide controls while lyrics play"
-            hint="The controls fade after a few seconds without a touch."
-            value={settings.autoHideControls}
-            onChange={settings.setAutoHideControls}
-          />
         </Section>
 
         <Section icon="navigate-outline" title="Navigation and voice" lead="The bar at the bottom and the mic in it." onLayout={at('nav')}>

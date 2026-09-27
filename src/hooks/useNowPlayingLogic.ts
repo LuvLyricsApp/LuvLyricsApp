@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert, Dimensions } from 'react-native';
 // Navigation handled by screen component
 import { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useAnimatedReaction, withRepeat, Easing, withSequence } from 'react-native-reanimated';
-import * as GestureHandler from 'react-native-gesture-handler';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
@@ -16,7 +15,6 @@ import { SynchronizedLyricsRef } from '../components/SynchronizedLyrics';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 
-const { Gesture } = GestureHandler;
 const { width } = Dimensions.get('window');
 
 export function useNowPlayingLogic(songId: string, initialLyrics = false) {
@@ -34,8 +32,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
 
   const toggleLike = useSongsStore(state => state.toggleLike);
   const addRecentArt = useArtHistoryStore(state => state.addRecentArt);
-  const autoHideControls = useSettingsStore(state => state.autoHideControls);
-  const setAutoHideControls = useSettingsStore(state => state.setAutoHideControls);
   const animateBackground = useSettingsStore(state => state.animateBackground);
   const setAnimateBackground = useSettingsStore(state => state.setAnimateBackground);
 
@@ -44,47 +40,14 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
   // Apple Music (and Echo) open on the cover — where the canvas plays —
   // and lyrics are one tap away. Opening on lyrics hid the canvas entirely.
   const [showLyrics, setShowLyrics] = useState(initialLyrics);
 
-  // Auto-hide controls
-  const controlsOpacity = useSharedValue(1);
-  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const resetHideTimer = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    controlsOpacity.value = withTiming(1, { duration: 200 });
-    setControlsVisible(true);
-
-    if (autoHideControls && storePlaying) {
-      hideTimerRef.current = setTimeout(() => {
-        controlsOpacity.value = withTiming(0, { duration: 500 });
-      }, 3500);
-    }
-  }, [autoHideControls, storePlaying, controlsOpacity]);
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetY(20)
-    .failOffsetY(-20)
-    .simultaneousWithExternalGesture()
-    .onUpdate((e) => {
-      if (e.translationY > 50 && controlsOpacity.value < 0.5) {
-        runOnJS(resetHideTimer)();
-      }
-    });
-
-  useEffect(() => {
-    resetHideTimer();
-    return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    };
-  }, [storePlaying, autoHideControls, resetHideTimer]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: controlsOpacity.value,
-  }));
+  // The transport never hides itself. It used to fade out 3.5s into playback
+  // and only came back on a downward drag, which read as the player vanishing.
+  const controlsVisible = true;
+  const animatedStyle = { opacity: 1 } as const;
 
   const handleMenuPress = (event: any) => {
     const { nativeEvent } = event;
@@ -299,7 +262,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   const playButtonScale = useSharedValue(1);
 
   const togglePlay = () => {
-    resetHideTimer();
     if (!player) return;
     playButtonScale.value = withSequence(
       withTiming(0.8, { duration: 100 }),
@@ -313,12 +275,10 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   }));
 
   const skipForward = async () => {
-    resetHideTimer();
     await usePlayerStore.getState().nextInPlaylist();
   };
 
   const skipBackward = async () => {
-    resetHideTimer();
     if (!player) return;
     if (positionSV.value > 3) {
       isSeeking.value = true;
@@ -344,7 +304,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   }, [player, requestPlayback]);
 
   const handleLyricTap = async (timestamp: number) => {
-    resetHideTimer();
     if (!player) return;
     isSeeking.value = true;
     positionSV.value = timestamp;
@@ -394,12 +353,10 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
     handleMenuPress,
     showCoverSearch,
     setShowCoverSearch,
-    controlsOpacity,
     controlsVisible,
     animatedStyle,
     showLyrics,
     setShowLyrics,
-    panGesture,
     blob1Style,
     blob2Style,
     blob3Style,
@@ -417,13 +374,10 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
     isDynamicTheme,
     updateCurrentSong,
     addRecentArt,
-    autoHideControls,
-    setAutoHideControls,
     animateBackground,
     setAnimateBackground,
     loadedAudioId,
     storePlaying,
-    resetHideTimer,
     toggleLike,
     isUserScrolling,
     scrollTimeoutRef,

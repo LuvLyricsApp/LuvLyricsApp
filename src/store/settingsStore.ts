@@ -34,7 +34,6 @@ interface SettingsState {
   navBarStyle: 'classic' | 'modern-pill'; // NEW: Navbar style
   voiceMode: 'hold' | 'tap';
   micEnabled: boolean;
-  autoHideControls: boolean; // Toggle for hiding controls after 3.5s
   libraryBackgroundMode: 'daily' | 'aurora' | 'current' | 'black' | 'grey' | 'theme-blue' | 'purest-black' | 'theme-subtle';
   islandBgMode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
   classicBarBgMode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue';
@@ -69,7 +68,6 @@ interface SettingsState {
   setNavBarStyle: (style: 'classic' | 'modern-pill') => void; // NEW: Navbar action
   setVoiceMode: (mode: 'hold' | 'tap') => void;
   setMicEnabled: (enabled: boolean) => void;
-  setAutoHideControls: (enabled: boolean) => void;
   setLibraryBackgroundMode: (mode: 'daily' | 'aurora' | 'current' | 'black' | 'grey' | 'theme-blue' | 'purest-black' | 'theme-subtle') => void;
   setIslandBgMode: (mode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue') => void;
   setClassicBarBgMode: (mode: 'album-art' | 'song-gradient' | 'aurora' | 'purest-black' | 'grey' | 'theme-subtle' | 'theme-blue') => void;
@@ -143,7 +141,6 @@ const DEFAULT_SETTINGS = {
   navBarStyle: 'modern-pill' as const, // Default to modern pill navbar
   voiceMode: 'tap' as const,
   micEnabled: true,
-  autoHideControls: true, // Default enabled
   libraryBackgroundMode: 'daily' as const,
   islandBgMode: 'album-art' as const,
   classicBarBgMode: 'album-art' as const,
@@ -192,7 +189,6 @@ export const useSettingsStore = create<SettingsState>()(
       setNavBarStyle: (navBarStyle) => set({ navBarStyle }),
       setVoiceMode: (voiceMode) => set({ voiceMode }),
       setMicEnabled: (micEnabled) => set({ micEnabled }),
-      setAutoHideControls: (autoHideControls) => set({ autoHideControls }),
       setLibraryBackgroundMode: (libraryBackgroundMode) => set({ libraryBackgroundMode }),
       setIslandBgMode: (islandBgMode) => set({ islandBgMode }),
       setClassicBarBgMode: (classicBarBgMode) => set({ classicBarBgMode }),
