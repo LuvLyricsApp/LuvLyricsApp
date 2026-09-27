@@ -731,6 +731,55 @@ const SettingsScreen: React.FC<Props> = () => {
             </Text>
           </View>
         )}
+        <SettingsRowSwitch icon="film-outline" label="Canvas: Motion Artwork" value={settings.canvasEnabled} onToggle={settings.setCanvasEnabled} />
+        {settings.canvasEnabled && (
+          <View style={styles.apiKeyContainer}>
+            <Text style={styles.apiKeyHint}>
+              Looping video behind the player, from the Echo Canvas library and ArchiveTune. Add
+              your own tokens below to also search Apple Music and Tidal motion artwork.
+            </Text>
+            {([
+              {
+                label: 'Apple MusicKit Token',
+                value: settings.appleMusicToken,
+                onChange: settings.setAppleMusicToken,
+                placeholder: 'eyJhbGciOiJFUzI1NiIs...',
+                hint: 'A developer token from your Apple Developer account (MusicKit key). Stored on this device only.',
+              },
+              {
+                label: 'Tidal Client Token',
+                value: settings.tidalToken,
+                onChange: settings.setTidalToken,
+                placeholder: 'Tidal client token',
+                hint: 'Optional. Unlocks Tidal album video covers. Stored on this device only.',
+              },
+            ] as const).map(field => (
+              <View key={field.label} style={{ marginTop: 12 }}>
+                <View style={styles.apiKeyHeader}>
+                  <Ionicons name="key-outline" size={16} color="#d9e66a" />
+                  <Text style={styles.apiKeyLabel}>{field.label}</Text>
+                  {field.value ? (
+                    <View style={styles.apiKeySaved}>
+                      <Ionicons name="checkmark-circle" size={14} color="#30D158" />
+                      <Text style={styles.apiKeySavedText}>Saved</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <TextInput
+                  style={styles.apiKeyInput}
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  placeholder={field.placeholder}
+                  placeholderTextColor="#555"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Text style={styles.apiKeyHint}>{field.hint}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
