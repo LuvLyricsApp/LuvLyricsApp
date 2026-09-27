@@ -49,6 +49,12 @@ import { UnifiedSong } from '../types/song';
 import { LuvsVaultModal } from '../components/LuvsVaultModal';
 import { PerformanceHUD } from '../components/PerformanceHUD';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
+import { StreamService } from '../services/stream/StreamService';
+import { streamIdFor } from '../services/stream/streamSong';
+import { hookOffsetSeconds } from '../services/luvsHook';
+import { useSettingsStore } from '../store/settingsStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -60,7 +66,9 @@ const SKIP_THRESHOLD_SECONDS = 3;
 
 const LuvsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isFocused = useIsFocused();
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const colors = useThemeColors();
   const isDark = useIsDark();
 
@@ -251,7 +259,17 @@ const LuvsScreen: React.FC = () => {
       luvsEngine.setCurrentIndex(newIndex);
       // ALWAYS FORCE PLAY ON SWIPE
       setIsPlaying(true);
-      luvsBufferManager.updateActiveIndex(newIndex, feedSongs, true);
+      const nextSong = feedSongs[newIndex];
+      luvsBufferManager.updateActiveIndex(newIndex, feedSongs, true)
+        .then(() => {
+          // Spotify-style: open the clip on the hook, not the intro. Skipped if
+          // the listener already swiped on while the track was loading.
+          if (!useSettingsStore.getState().luvsStartAtHook) return;
+          if (viewTrackingRef.current !== newIndex) return;
+          const offset = hookOffsetSeconds(nextSong?.duration);
+          if (offset > 0) luvsBufferManager.seekTo(offset * 1000);
+        })
+        .catch(() => {});
 
       if (newIndex >= feedSongs.length - 2) {
         loadMoreSongs();
@@ -317,10 +335,24 @@ const LuvsScreen: React.FC = () => {
     }
   }, []);
 
+  // "Save" downloads the song into the library (it then plays offline from
+  // Downloads). "Luv" stays the lightweight vault bookmark.
   const handleDownloadPress = useCallback((song: UnifiedSong) => {
-    // Also toggle vault status since "Save" is currently linked to Vault
-    handleLikePress(song);
-  }, [handleLikePress]);
+    if (savedIds.has(song.id)) return;
+    StreamService.save(song);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSavedIds(prev => new Set(prev).add(song.id));
+  }, [savedIds]);
+
+  // Spotify's "play full song": hand the clip to the main player with the rest
+  // of the feed as the queue, then open Now Playing.
+  const handlePlayFullPress = useCallback(async (song: UnifiedSong) => {
+    const idx = feedSongs.findIndex(s => s.id === song.id);
+    await luvsBufferManager.pause();
+    setIsPlaying(false);
+    StreamService.play(idx >= 0 ? feedSongs.slice(idx) : [song], 0);
+    rootNavigation.navigate('NowPlaying', { songId: streamIdFor(song) });
+  }, [feedSongs, rootNavigation]);
 
   const handlePlayPause = useCallback(async () => {
     if (isPlaying) {
@@ -360,6 +392,8 @@ const LuvsScreen: React.FC = () => {
           onLike={handleLikePress}
           onShare={handleSharePress}
           onDownload={handleDownloadPress}
+          onPlayFull={handlePlayFullPress}
+          isSaved={savedIds.has(item.id)}
           onPlayPause={handlePlayPause}
           onScrubStateChange={setIsScrubbing}
           luvHeight={LUV_HEIGHT}
@@ -371,7 +405,7 @@ const LuvsScreen: React.FC = () => {
         />
       );
     },
-    [currentIndex, isPlaying, isInVault, handleLikePress, handleSharePress, handleDownloadPress, handlePlayPause, currentIndexSV]
+    [currentIndex, isPlaying, isInVault, handleLikePress, handleSharePress, handleDownloadPress, handlePlayFullPress, savedIds, handlePlayPause, currentIndexSV]
   );
 
   const renderItem = useCallback(

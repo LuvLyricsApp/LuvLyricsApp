@@ -785,6 +785,7 @@ const SettingsScreen: React.FC<Props> = () => {
       <BottomSheet visible={activeSheet === 'playback'} title="Playback" onClose={closeSheet}>
         <SettingsRowSwitch icon="play-outline" label="Auto-Scroll Lyrics" value={true} onToggle={() => {}} />
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
+        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
         {settings.navBarStyle === 'classic' && (
           <SettingsRow
             icon="layers-outline" label="Mini Player Style"
@@ -862,6 +863,7 @@ const SettingsScreen: React.FC<Props> = () => {
           />
         )}
         <SettingsRowSwitch icon="musical-note-outline" label="Play in Mini Player Only" value={settings.playInMiniPlayerOnly} onToggle={settings.setPlayInMiniPlayerOnly} />
+        <SettingsRowSwitch icon="flash-outline" label="Luvs: Start Clips at the Hook" value={settings.luvsStartAtHook} onToggle={settings.setLuvsStartAtHook} />
       </BottomSheet>
 
       <BottomSheet visible={activeSheet === 'library'} title="Library" onClose={closeSheet}>

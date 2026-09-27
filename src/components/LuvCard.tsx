@@ -30,7 +30,9 @@ import { analyzeImageBrightness } from '../utils/imageAnalyzer';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
 import TimelineScrubber from './TimelineScrubber';
 import { luvsEngine } from '../services/luvsEngine';
-
+import CanvasVideoLayer from './CanvasVideoLayer';
+import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
+import { Glass, Radius, Signal } from '../constants/allegraTheme';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ART_SIZE = SCREEN_WIDTH * 0.72;
 const PROGRESS_W = SCREEN_WIDTH - 40;
@@ -117,7 +119,7 @@ const HeartParticle = ({ angle, trigger }: { angle: number; trigger: number }) =
 
   return (
     <Animated.View style={[{ position: 'absolute', width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }, style]} pointerEvents="none">
-      <Ionicons name="heart" size={13} color="#FF2D55" />
+      <Ionicons name="heart" size={13} color={Signal.accent} />
     </Animated.View>
   );
 };
@@ -196,8 +198,9 @@ const LuvsProgressController = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
+  // scaleX from the left edge — Allegra motion rule: transform, never width.
   const fillStyle = useAnimatedStyle(() => ({
-    width: Math.min(progress.value, 1) * PROGRESS_W,
+    transform: [{ scaleX: Math.max(0, Math.min(progress.value, 1)) }],
   }));
 
   if (!isActive) return null;
@@ -232,6 +235,10 @@ interface LuvCardProps {
   onLike: (song: UnifiedSong) => void;
   onShare: (song: UnifiedSong) => void;
   onDownload: (song: UnifiedSong) => void;
+  /** Hands the clip to the main player as a full song (Spotify's "play full song"). */
+  onPlayFull?: (song: UnifiedSong) => void;
+  /** Already queued for download this session. */
+  isSaved?: boolean;
   onPlayPause: () => void;
   /** Lets the feed suspend ViewPager2 paging while the timeline is being dragged. */
   onScrubStateChange?: (scrubbing: boolean) => void;
@@ -255,9 +262,12 @@ interface LuvCardProps {
 
 export const LuvCard = React.memo<LuvCardProps>(
   ({ song, isActive, isLiked, isPlaying, onLike, onShare, onDownload,
-     onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
+     onPlayFull, isSaved = false, onPlayPause, onScrubStateChange, luvHeight, index, currentIndex, isNearActive,
      isMounted = true, nativeDepth = false }) => {
     const insets = useSafeAreaInsets();
+    // Only the card on screen looks up and decodes a canvas.
+    const canvas = useCanvasArtwork(isActive ? { title: song.title, artist: song.artist, duration: song.duration } : null);
+    const [canvasVisible, setCanvasVisible] = useState(false);
     const [burstTrigger, setBurstTrigger] = useState(0);
     const [isMagicActive, setIsMagicActive] = useState(false);
     const [gradientOpacity, setGradientOpacity] = useState(0.9);
@@ -330,6 +340,7 @@ export const LuvCard = React.memo<LuvCardProps>(
 
     const handleShare = useCallback(() => onShare(song), [onShare, song]);
     const handleDownload = useCallback(() => onDownload(song), [onDownload, song]);
+    const handlePlayFull = useCallback(() => onPlayFull?.(song), [onPlayFull, song]);
 
     const handleMagic = useCallback(() => {
       setIsMagicActive(true);
@@ -387,6 +398,11 @@ export const LuvCard = React.memo<LuvCardProps>(
             />
           )}
 
+          {/* Motion canvas: full-bleed like Spotify's feed; artwork steps aside once it lands */}
+          {isActive ? (
+            <CanvasVideoLayer canvas={canvas} playing={isPlaying} scrimStrength={0.55} onVisibleChange={setCanvasVisible} />
+          ) : null}
+
           {/* Cinematic vignette */}
           <LinearGradient
             colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.04)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.1)']}
@@ -394,17 +410,21 @@ export const LuvCard = React.memo<LuvCardProps>(
             style={StyleSheet.absoluteFillObject}
           />
 
-          {/* Glow halo behind art */}
-          <Animated.View style={[styles.artGlow, glowStyle]} />
+          {!(isActive && canvasVisible) ? (
+            <>
+              {/* Glow halo behind art */}
+              <Animated.View style={[styles.artGlow, glowStyle]} />
 
-          {/* Album art */}
-          {song.highResArt ? (
-            <Image source={{ uri: song.highResArt }} style={styles.coverArt} resizeMode="cover" />
-          ) : (
-            <View style={styles.coverArtFallback}>
-              <Ionicons name="musical-note" size={64} color="rgba(255,255,255,0.3)" />
-            </View>
-          )}
+              {/* Album art */}
+              {song.highResArt ? (
+                <Image source={{ uri: song.highResArt }} style={styles.coverArt} resizeMode="cover" />
+              ) : (
+                <View style={styles.coverArtFallback}>
+                  <Ionicons name="musical-note" size={64} color="rgba(255,255,255,0.3)" />
+                </View>
+              )}
+            </>
+          ) : null}
 
           {/* Play/pause flash */}
           <Animated.View style={[styles.ppOverlay, ppStyle]} pointerEvents="none">
@@ -432,8 +452,8 @@ export const LuvCard = React.memo<LuvCardProps>(
                 <ActionBtn
                   icon={isLiked ? 'heart' : 'heart-outline'}
                   label={isLiked ? "Luv'd" : 'Luv'}
-                  iconColor={isLiked ? '#FF2D55' : '#fff'}
-                  labelColor={isLiked ? '#FF2D55' : undefined}
+                  iconColor={isLiked ? Signal.accent : '#fff'}
+                  labelColor={isLiked ? Signal.accent : undefined}
                   iconSize={33}
                   iconStyle={heartStyle}
                   onPress={handleLike}
@@ -443,15 +463,22 @@ export const LuvCard = React.memo<LuvCardProps>(
               <ActionBtn
                 icon="sparkles"
                 label={isMagicActive ? 'Learning…' : 'Magic'}
-                iconColor={isMagicActive ? '#4CD964' : '#fff'}
-                labelColor={isMagicActive ? '#4CD964' : undefined}
+                iconColor={isMagicActive ? Signal.wave : '#fff'}
+                labelColor={isMagicActive ? Signal.wave : undefined}
                 iconSize={28}
                 onPress={handleMagic}
                 disabled={isMagicActive}
               />
 
               <ActionBtn icon="share-outline" label="Share" onPress={handleShare} />
-              <ActionBtn icon="bookmark-outline" label="Save" onPress={handleDownload} />
+              <ActionBtn
+                icon={isSaved ? 'checkmark-circle' : 'arrow-down-circle-outline'}
+                label={isSaved ? 'Saved' : 'Save'}
+                iconColor={isSaved ? Signal.wave : '#fff'}
+                labelColor={isSaved ? Signal.wave : undefined}
+                onPress={handleDownload}
+                disabled={isSaved}
+              />
             </View>
 
             {/* Bottom song info */}
@@ -477,6 +504,18 @@ export const LuvCard = React.memo<LuvCardProps>(
                     </Text>
                   </View>
                 </View>
+                {onPlayFull ? (
+                  <Pressable
+                    onPress={handlePlayFull}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Play full song ${song.title}`}
+                    style={({ pressed }) => [styles.playFull, pressed && styles.playFullPressed]}
+                  >
+                    <Ionicons name="play" size={14} color={Signal.waveInk} style={styles.playFullGlyph} />
+                    <Text style={styles.playFullText}>Full song</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </LinearGradient>
           </View>
@@ -567,9 +606,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   topBarFill: {
+    width: PROGRESS_W,
     height: 3,
-    backgroundColor: '#fff',
+    backgroundColor: Signal.wave,
     borderRadius: 2,
+    transformOrigin: 'left',
   },
 
   scrubberWrap: {
@@ -620,11 +661,32 @@ const styles = StyleSheet.create({
   songCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 18,
+    backgroundColor: Glass.fill,
+    borderRadius: Radius.panel,
     padding: 12,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
+  },
+  playFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+    borderRadius: Radius.pill,
+    backgroundColor: Signal.wave,
+  },
+  playFullPressed: {
+    transform: [{ scale: 0.94 }],
+  },
+  playFullGlyph: {
+    marginLeft: 1,
+  },
+  playFullText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Signal.waveInk,
   },
   miniArt: {
     width: 50,
@@ -671,7 +733,7 @@ const styles = StyleSheet.create({
   },
   eqBar: {
     width: 3,
-    backgroundColor: '#FF2D55',
+    backgroundColor: Signal.wave,
     borderRadius: 2,
   },
 });

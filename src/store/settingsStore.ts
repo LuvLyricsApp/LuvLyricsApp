@@ -104,6 +104,10 @@ interface SettingsState {
   tidalToken: string;
   setTidalToken: (token: string) => void;
 
+  /** Luvs clips open on the song's hook instead of the intro (Spotify-style). */
+  luvsStartAtHook: boolean;
+  setLuvsStartAtHook: (enabled: boolean) => void;
+
   resetToDefaults: () => void;
 }
 
@@ -140,6 +144,7 @@ const DEFAULT_SETTINGS = {
   canvasEnabled: true,
   appleMusicToken: '',
   tidalToken: '',
+  luvsStartAtHook: true,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -211,6 +216,8 @@ export const useSettingsStore = create<SettingsState>()(
       setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
       tidalToken: '',
       setTidalToken: (tidalToken) => set({ tidalToken: tidalToken.trim() }),
+      luvsStartAtHook: true,
+      setLuvsStartAtHook: (luvsStartAtHook) => set({ luvsStartAtHook }),
     }),
     {
       name: 'lyricflow-settings',
