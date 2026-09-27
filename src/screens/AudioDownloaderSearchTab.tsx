@@ -14,11 +14,9 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import { useDownloaderTabStore, SearchTab as SearchTabState } from '../store/downloaderTabStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
-import {
-    DownloadGridCard,
-    BulkSwapModal,
-    PlaylistSelectionModal,
-} from '../components';
+import { DownloadGridCard } from '../components/DownloadGridCard';
+import { BulkSwapModal } from '../components/BulkSwapModal';
+import { PlaylistSelectionModal } from '../components/PlaylistSelectionModal';
 import * as Clipboard from 'expo-clipboard';
 import { BulkItem } from '../store/downloaderTabStore';
 import stringSimilarity from 'string-similarity';

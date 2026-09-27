@@ -11,7 +11,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { usePlaylistStore } from '../store/playlistStore';
 import { usePlayerStore } from '../store/playerStore';
-import { CustomMenu } from '../components';
+import { CustomMenu } from '../components/CustomMenu';
 import { MosaicCover } from '../components/MosaicCover';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { useSettingsStore } from '../store/settingsStore';

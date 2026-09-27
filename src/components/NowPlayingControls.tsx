@@ -189,7 +189,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
             hitSlop={8}
             pressScale={0.88}
             accessibilityRole="button"
-            accessibilityLabel="More"
+            accessibilityLabel="Song options"
             style={styles.roundGlass}
           >
             <Ionicons name="ellipsis-vertical" size={18} color={INK} />

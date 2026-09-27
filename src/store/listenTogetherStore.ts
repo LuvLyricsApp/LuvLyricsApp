@@ -80,4 +80,3 @@ export const useListenTogetherStore = create<ListenTogetherState>()(
   ),
 );
 
-export const isInRoom = (): boolean => useListenTogetherStore.getState().room !== null;

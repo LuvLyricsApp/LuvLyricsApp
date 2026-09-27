@@ -28,7 +28,6 @@ import {
   RoomSettingsPayload,
   SuggestionReceivedPayload,
   SyncStatePayload,
-  TrackInfo,
   UserPayload,
 } from './protocol';
 
@@ -484,10 +483,6 @@ export const sendBufferReady = (trackId: string): void => {
 
 export const requestSync = (): void => {
   send(MessageTypes.REQUEST_SYNC);
-};
-
-export const suggestTrack = (track: TrackInfo): void => {
-  send(MessageTypes.SUGGEST_TRACK, { track_info: { ...track } });
 };
 
 export const approveSuggestion = (suggestionId: string): SuggestionReceivedPayload | undefined => {
