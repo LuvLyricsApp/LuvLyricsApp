@@ -16,6 +16,8 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+  <!-- Player menu → Set as ringtone (the user grants it on the system "modify settings" page). -->
+  <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>

@@ -7,6 +7,7 @@ import { usePositionStore } from '../store/positionStore';
 import { shouldPreservePlayingStateDuringSeek, shouldAdoptNativePlayingState } from './playerStatusGuard';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
+import { usePlaybackModesStore } from '../store/playbackModesStore';
 
 const PlayerContext = createContext<any>(null);
 
@@ -174,6 +175,12 @@ const IosPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const player = useAudioPlayer();
   const status = useAudioPlayerStatus(player);
 
+  // Player menu → Repeat. Android loops natively (Media3); here expo-audio does.
+  const repeatOne = usePlaybackModesStore(s => s.repeatOne);
+  useEffect(() => {
+    if (player) player.loop = repeatOne;
+  }, [player, repeatOne]);
+
   useEffect(() => {
     if (!player) return;
     playerControls.play = () => setTimeout(() => player.play(), 0);
@@ -247,6 +254,7 @@ const IosPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       durationSV.value > 0 &&
       positionSV.value >= Math.max(0, durationSV.value - 0.35);
     const shouldAdvance =
+      !usePlaybackModesStore.getState().repeatOne &&
       !justSought &&
       (didJustFinish || isNearEndFallback) &&
       !!activeSongId &&

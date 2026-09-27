@@ -1,26 +1,35 @@
 package com.lyricflow.app.modules
 
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.MediaRouter2
+import android.media.RingtoneManager
+import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import com.lyricflow.app.services.PlaybackService
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "LyrFlow"
 private const val META_MAX = 500
@@ -123,6 +132,104 @@ class MainPlayerModule : Module() {
                 runCatching {
                     context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }.isSuccess
+            }
+        }
+
+        /** Player menu → Advanced: tempo and pitch (Echo's tempo & pitch dialog). */
+        Function("setPlaybackParameters") { speed: Double, pitch: Double ->
+            val player = PlayerBridge.getPlayer() ?: return@Function false
+            val params = PlaybackParameters(
+                speed.toFloat().coerceIn(0.25f, 3f),
+                pitch.toFloat().coerceIn(0.25f, 3f)
+            )
+            mainHandler.post { player.playbackParameters = params }
+            true
+        }
+
+        /** Player menu → Repeat: loop the current song. Media3 then never ends
+         *  the item, so the staged "next" is not advanced into. */
+        Function("setRepeatOne") { on: Boolean ->
+            val player = PlayerBridge.getPlayer() ?: return@Function false
+            mainHandler.post { player.repeatMode = if (on) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF }
+            true
+        }
+
+        /** Player menu → Equalizer: the phone's own audio-effect panel, bound to our session. */
+        Function("openEqualizer") {
+            val context = appContext.reactContext ?: return@Function false
+            val player = PlayerBridge.getPlayer()
+            val session = AtomicInteger(C.AUDIO_SESSION_ID_UNSET)
+            if (player != null) {
+                // ExoPlayer is single-threaded: read it on its own looper.
+                val latch = CountDownLatch(1)
+                mainHandler.post {
+                    session.set(player.audioSessionId)
+                    latch.countDown()
+                }
+                latch.await(1, TimeUnit.SECONDS)
+            }
+            val extras = { i: Intent ->
+                i.putExtra(AudioEffect.EXTRA_AUDIO_SESSION, session.get())
+                    .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+                    .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+            }
+            runCatching { context.sendBroadcast(extras(Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION))) }
+            runCatching {
+                context.startActivity(
+                    extras(Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.isSuccess
+        }
+
+        /**
+         * Player menu → Set as ringtone, for a song saved on the phone.
+         * Returns "ok", "permission" (the system's "modify settings" page was
+         * opened — try again after allowing), "unsupported", "missing" or "error".
+         */
+        AsyncFunction("setRingtone") { path: String, title: String ->
+            val context = appContext.reactContext ?: return@AsyncFunction "error"
+            if (!Settings.System.canWrite(context)) {
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                return@AsyncFunction "permission"
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@AsyncFunction "unsupported"
+            val src = File(Uri.parse(path).path ?: path)
+            if (!src.isFile) return@AsyncFunction "missing"
+            val ext = src.extension.lowercase().ifEmpty { "mp3" }
+            val mime = when (ext) {
+                "m4a", "mp4", "aac" -> "audio/mp4"
+                "ogg", "opus" -> "audio/ogg"
+                "flac" -> "audio/flac"
+                "wav" -> "audio/wav"
+                else -> "audio/mpeg"
+            }
+            val safeTitle = title.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(60).ifEmpty { "LuvLyrics" }
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "$safeTitle.$ext")
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES)
+                put(MediaStore.Audio.Media.IS_RINGTONE, true)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return@AsyncFunction "error"
+            try {
+                resolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+                    ?: throw IllegalStateException("no output stream")
+                resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, uri)
+                "ok"
+            } catch (e: Exception) {
+                Log.w(TAG, "setRingtone failed: ${e.message}")
+                runCatching { resolver.delete(uri, null, null) }
+                "error"
             }
         }
 

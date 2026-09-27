@@ -18,12 +18,15 @@ import * as Haptics from '../../utils/haptics';
 
 interface PlayerSheetProps {
   visible: boolean;
-  title: string;
+  /** Leave out for a sheet that starts straight with its content (the ••• menu). */
+  title?: string;
+  /** Room for a long list (the menu, Listen together): up to 88% of the screen. */
+  tall?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }
 
-export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, onClose, children }) => {
+export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall = false, onClose, children }) => {
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
   const shown = useSharedValue(0);
@@ -40,7 +43,8 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, onClos
   }, [visible, mounted, shown]);
 
   const scrim = useAnimatedStyle(() => ({ opacity: shown.value }));
-  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - shown.value) * 520 }] }));
+  const travel = tall ? 900 : 520;
+  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - shown.value) * travel }] }));
 
   if (!mounted) return null;
   return (
@@ -48,10 +52,10 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, onClos
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrim]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       </Animated.View>
-      <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }, sheet]}>
+      <Animated.View style={[styles.sheet, tall && styles.tall, { paddingBottom: insets.bottom + 12 }, sheet]}>
         <Frosted radius={28} intensity={70} tint={0.5} />
         <View style={styles.grabber} />
-        <Text style={styles.title}>{title}</Text>
+        {title ? <Text style={styles.title}>{title}</Text> : <View style={styles.untitled} />}
         {children}
       </Animated.View>
     </View>
@@ -135,6 +139,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
   },
+  tall: { maxHeight: '88%' },
+  untitled: { height: 12 },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.35)' },
   title: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8, marginLeft: 4 },
   list: { flexGrow: 0 },

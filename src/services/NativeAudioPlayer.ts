@@ -14,10 +14,16 @@ type MainPlayerNative = {
   setVolume?: (level: number) => void;
   openOutputSwitcher?: () => boolean;
   refreshStatus?: () => void;
+  setPlaybackParameters?: (speed: number, pitch: number) => boolean;
+  setRepeatOne?: (on: boolean) => boolean;
+  openEqualizer?: () => boolean;
+  setRingtone?: (path: string, title: string) => Promise<RingtoneResult>;
   addListener: (event: string, cb: (data: any) => void) => { remove: () => void };
 };
 
 const MainPlayerModule = getNativeModule<MainPlayerNative>('MainPlayer');
+
+export type RingtoneResult = 'ok' | 'permission' | 'unsupported' | 'missing' | 'error';
 
 export type PlayerMetadata = {
   title: string;
@@ -98,6 +104,30 @@ export const NativeAudioPlayer = {
   openOutputSwitcher(): boolean {
     if (!this.isAvailable() || !MainPlayerModule?.openOutputSwitcher) return false;
     try { return MainPlayerModule.openOutputSwitcher(); } catch { return false; }
+  },
+
+  /** Tempo and pitch (1 = normal). False on a build without the native call. */
+  setPlaybackParameters(speed: number, pitch: number): boolean {
+    if (!this.isAvailable() || !MainPlayerModule?.setPlaybackParameters) return false;
+    try { return MainPlayerModule.setPlaybackParameters(speed, pitch); } catch { return false; }
+  },
+
+  /** Loop the current song natively (Media3 REPEAT_MODE_ONE). */
+  setRepeatOne(on: boolean): boolean {
+    if (!this.isAvailable() || !MainPlayerModule?.setRepeatOne) return false;
+    try { return MainPlayerModule.setRepeatOne(on); } catch { return false; }
+  },
+
+  /** The phone's equalizer panel for our audio session. False when there is none. */
+  openEqualizer(): boolean {
+    if (!this.isAvailable() || !MainPlayerModule?.openEqualizer) return false;
+    try { return MainPlayerModule.openEqualizer(); } catch { return false; }
+  },
+
+  /** Copies a saved song into Ringtones and makes it the phone's ringtone. */
+  async setRingtone(path: string, title: string): Promise<RingtoneResult> {
+    if (!this.isAvailable() || !MainPlayerModule?.setRingtone) return 'unsupported';
+    try { return await MainPlayerModule.setRingtone(path, title); } catch { return 'error'; }
   },
 
   addListener(
