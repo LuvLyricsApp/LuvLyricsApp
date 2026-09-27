@@ -2,7 +2,7 @@
  * The mic in the middle of the tab bar. It answers every stage of a voice
  * search with its own motion, so a finger on it always knows what's happening:
  *
- *   idle       a light disc with the mic glyph
+ *   idle       a frosted glass bead: translucent body, specular cap, lit rim
  *   press      sinks under the finger (spring) + a firm haptic
  *   listening  blooms into the signal colour and grows slightly; a halo tracks
  *              the voice level, a slow ring pulses outward, bars dance inside
@@ -14,7 +14,7 @@
  * pulse, spin and shake.
  */
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -28,6 +28,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useVoiceCommands } from '../hooks/useVoiceCommands';
 import { useSettingsStore } from '../store/settingsStore';
 import { useVoiceSearchStore } from '../store/voiceSearchStore';
@@ -191,11 +193,25 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
         accessibilityState={{ busy: isThinking, expanded: isListening }}
       >
         <Animated.View style={[styles.disc, { width: size, height: size, borderRadius: size / 2 }, discStyle]}>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.idle, idleLayer]} />
+          {/* Glass body: frosted on iOS (real blur is cheap there); on Android a
+              translucent pane — a live blur on always-visible chrome would
+              re-render with every scroll frame. */}
+          <Animated.View style={[StyleSheet.absoluteFill, styles.idle, idleLayer]}>
+            {Platform.OS === 'ios' ? <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} /> : null}
+          </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, styles.live, liveLayer]} />
           <Animated.View style={[StyleSheet.absoluteFill, styles.error, errorLayer]} />
+          {/* Gloss: a specular cap on top and a faint lift at the bottom edge —
+              what makes a flat disc read as a glass bead. */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255, 255, 255, 0.42)', 'rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.12)']}
+            locations={[0, 0.45, 0.72, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.rim, { borderRadius: size / 2 }]} />
           <Animated.View style={[styles.glyph, idleLayer]}>
-            <Ionicons name="mic" size={iconSize} color={Signal.bg} />
+            <Ionicons name="mic" size={iconSize} color={Signal.ink} />
           </Animated.View>
           <Animated.View style={[styles.glyph, styles.bars, liveLayer]}>
             {BAR_SHAPE.map((w, i) => (
@@ -229,8 +245,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  idle: { backgroundColor: Signal.ink },
-  live: { backgroundColor: Signal.wave },
+  idle: { backgroundColor: 'rgba(255, 255, 255, 0.16)' },
+  // Slightly translucent so the gloss and rim still read as glass when lit.
+  live: { backgroundColor: 'rgba(217, 230, 106, 0.92)' },
+  // Lit from above: bright top edge, soft sides, almost none at the bottom.
+  rim: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderTopColor: 'rgba(255, 255, 255, 0.55)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
   error: { backgroundColor: ERROR_RED },
   glyph: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   bars: { flexDirection: 'row', gap: 3 },
