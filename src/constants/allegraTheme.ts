@@ -7,6 +7,7 @@
  * a single edit restyles every player surface.
  */
 import { Easing } from 'react-native-reanimated';
+import { Fonts } from './fonts';
 
 /** Stable product colors. Artwork tints the ambient layer, never these. */
 export const Signal = {
@@ -67,11 +68,13 @@ export const Space = {
 } as const;
 
 /** Apple-Music-style type ramp for the player. */
+// Inter faces carry their weight in the family name, so no fontWeight here
+// (Android would otherwise synthesise a second, faux-bold pass).
 export const PlayerType = {
-  title: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4 },
-  artist: { fontSize: 18, fontWeight: '500' as const, letterSpacing: -0.2 },
-  meta: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.9 },
-  time: { fontSize: 12, fontWeight: '600' as const, fontVariant: ['tabular-nums' as const] },
+  title: { fontFamily: Fonts.interBold, fontSize: 22, letterSpacing: -0.5 },
+  artist: { fontFamily: Fonts.interMedium, fontSize: 18, letterSpacing: -0.2 },
+  meta: { fontFamily: Fonts.interSemiBold, fontSize: 11, letterSpacing: 0.9 },
+  time: { fontFamily: Fonts.interSemiBold, fontSize: 12, fontVariant: ['tabular-nums' as const] },
 } as const;
 
 /**

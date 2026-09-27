@@ -143,3 +143,29 @@ favorites". The Dynamic Island mini player now shows on Stream as well as Home.
 - **Save** now downloads the song. **Luv** stays the vault bookmark.
 - **Full song** hands the clip, plus the rest of the feed as the queue, to the
   main player and opens Now Playing.
+
+## The Allegra look (live ambient + home composition)
+
+`src/components/allegra/` ports Allegra's frontend to React Native:
+
+- **`MusicFlowField`** — Allegra's `MusicFlowShader` (reeded-glass light
+  columns, flutes, catch-light, film grain) rewritten in SkSL and run by Skia on
+  the GPU. It renders at half resolution and scales up, eases between song
+  palettes every frame, never leaps after a stall, stops when its screen loses
+  focus, and holds a still frame under Reduce Motion. Like Allegra, it leaves
+  the orb out.
+- **`DynamicAura`** — the same layer stack as Allegra's `.dynamic-aura`: radial
+  cover glows, the field (0.88 opacity playing / 0.3 paused, a little brighter
+  than web because React Native has no `screen` blend), flutes, vignette and
+  scrim.
+- **Palette** — Android's native Palette swatches go through Allegra's rules:
+  vivify colours into a readable range, fall back to lighter/darker stops of
+  the primary for one-colour covers, and use a quiet neutral for greyscale
+  covers. Eyebrows use `accentInk` (the primary mixed 38 % toward white).
+- **Home blocks** (`home.tsx`) mirror the web CSS: spotlight wash (a Skia
+  masked blur that dissolves into the field), a sleeve of two tilted glass
+  plates behind a -2° cover, the chartreuse play bubble, the quick-card rail,
+  tiles, ranked chart rows, mood cards, and primary/glass buttons.
+- **Motion** — `RiseIn` is Allegra's `riseIn` (opacity 0→1, y 18→0,
+  scale 0.97→1, 400 ms decelerate, 40 ms stagger); `Tactile` is the press
+  spring (stiffness 400, damping 30). Transform and opacity only.

@@ -1,6 +1,6 @@
 /**
- * Allegra-styled building blocks for the Stream and Downloads pages: a track
- * row, an artwork card, a section header and a loading shimmer. Everything
+ * Allegra-styled track row and loading shimmer for the Stream and Downloads
+ * pages (the home blocks live in components/allegra/home.tsx). Everything
  * sits on the frosted material and the shared radius family.
  */
 import React, { useEffect } from 'react';
@@ -15,6 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Glass, Motion, Radius, Signal, Space } from '../../constants/allegraTheme';
+import { Fonts } from '../../constants/fonts';
 
 const formatDuration = (seconds?: number): string => {
   if (!seconds || seconds <= 0) return '';
@@ -22,25 +23,6 @@ const formatDuration = (seconds?: number): string => {
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 };
-
-export const SectionHeader: React.FC<{ title: string; subtitle?: string; action?: string; onAction?: () => void }> = ({
-  title,
-  subtitle,
-  action,
-  onAction,
-}) => (
-  <View style={styles.sectionHeader}>
-    <View style={{ flex: 1 }}>
-      {subtitle ? <Text style={styles.sectionEyebrow}>{subtitle.toUpperCase()}</Text> : null}
-      <Text style={styles.sectionTitle} numberOfLines={1}>{title}</Text>
-    </View>
-    {action && onAction ? (
-      <Pressable onPress={onAction} hitSlop={8} accessibilityRole="button" style={({ pressed }) => [styles.sectionAction, pressed && styles.pressed]}>
-        <Text style={styles.sectionActionText}>{action}</Text>
-      </Pressable>
-    ) : null}
-  </View>
-);
 
 interface TrackRowProps {
   title: string;
@@ -118,42 +100,6 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
   </Pressable>
 ));
 
-interface ArtworkCardProps {
-  title: string;
-  subtitle?: string;
-  eyebrow?: string;
-  artwork?: string;
-  size?: number;
-  onPress: () => void;
-  onLongPress?: () => void;
-}
-
-export const ArtworkCard: React.FC<ArtworkCardProps> = React.memo(({ title, subtitle, eyebrow, artwork, size = 148, onPress, onLongPress }) => (
-  <Pressable
-    onPress={onPress}
-    onLongPress={onLongPress}
-    accessibilityRole="button"
-    accessibilityLabel={title}
-    style={({ pressed }) => [{ width: size }, pressed && styles.pressed]}
-  >
-    <View style={[styles.cardArtFrame, { width: size, height: size }]}>
-      {artwork ? (
-        <Image source={{ uri: artwork }} style={StyleSheet.absoluteFill} contentFit="cover" transition={Motion.duration.base} />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, styles.artFallback]}>
-          <Ionicons name="musical-notes" size={size * 0.24} color={Signal.inkFaint} />
-        </View>
-      )}
-      <View style={styles.cardPlay}>
-        <Ionicons name="play" size={14} color={Signal.waveInk} style={{ marginLeft: 2 }} />
-      </View>
-    </View>
-    {eyebrow ? <Text style={styles.cardEyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
-    <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
-    {subtitle ? <Text style={styles.cardSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
-  </Pressable>
-));
-
 /** Opacity-only shimmer — the one motion Reduce Motion keeps (as a still). */
 export const ShimmerBlock: React.FC<{ width: number | `${number}%`; height: number; radius?: number }> = ({ width, height, radius = Radius.well }) => {
   const reduce = useReducedMotion();
@@ -167,39 +113,6 @@ export const ShimmerBlock: React.FC<{ width: number | `${number}%`; height: numb
 };
 
 export const styles = StyleSheet.create({
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: Space.md + 4,
-    marginTop: Space.xl,
-    marginBottom: Space.sm,
-  },
-  sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.9,
-    color: Signal.inkMuted,
-    marginBottom: 2,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    color: Signal.ink,
-  },
-  sectionAction: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-    backgroundColor: Glass.fillLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
-  },
-  sectionActionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Signal.inkSoft,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,12 +156,13 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
+    fontFamily: Fonts.interSemiBold,
     fontSize: 16,
-    fontWeight: '600',
     color: Signal.ink,
     letterSpacing: -0.2,
   },
   rowMeta: {
+    fontFamily: Fonts.interRegular,
     fontSize: 13,
     color: Signal.inkMuted,
     marginTop: 2,
@@ -273,42 +187,6 @@ export const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cardArtFrame: {
-    borderRadius: Radius.art,
-    overflow: 'hidden',
-    backgroundColor: Signal.bgSubtle,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
-  },
-  cardPlay: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Signal.wave,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardEyebrow: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: Signal.wave,
-    marginTop: 8,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Signal.ink,
-    marginTop: 6,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: Signal.inkMuted,
-    marginTop: 2,
   },
   pressed: {
     opacity: 0.8,

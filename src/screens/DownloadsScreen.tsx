@@ -7,13 +7,18 @@
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import DynamicAura from '../components/allegra/DynamicAura';
+import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
+import { accentInk } from '../components/allegra/palette';
+import { RiseIn } from '../components/allegra/motion';
+import { Eyebrow, GlassButton, PrimaryButton, SectionHeading, Sleeve } from '../components/allegra/home';
+import { Fonts } from '../constants/fonts';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
-import { SectionHeader, TrackRow } from '../components/stream/StreamItems';
+import { TrackRow } from '../components/stream/StreamItems';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
 import { QueueItem, useDownloadQueueStore } from '../store/downloadQueueStore';
@@ -38,6 +43,9 @@ const DownloadsScreen: React.FC = () => {
   const retryItem = useDownloadQueueStore(s => s.retryItem);
   const clearCompleted = useDownloadQueueStore(s => s.clearCompleted);
   const currentSongId = usePlayerStore(s => s.currentSongId);
+  const currentCover = usePlayerStore(s => s.currentSong?.coverImageUri);
+  const isPlaying = usePlayerStore(s => s.isPlaying);
+  const isFocused = useIsFocused();
   const [sort, setSort] = useState<SortMode>('recent');
   const [filter, setFilter] = useState('');
 
@@ -48,6 +56,11 @@ const DownloadsScreen: React.FC = () => {
       .filter(s => !needle || s.title.toLowerCase().includes(needle) || (s.artist ?? '').toLowerCase().includes(needle))
       .sort(sorters[sort]);
   }, [songs, sort, filter]);
+
+  // The room takes the colour of what's playing, else of the newest download.
+  const stageArt = currentCover ?? downloaded.find(s => s.coverImageUri)?.coverImageUri;
+  const palette = useArtworkPalette(stageArt);
+  const eyebrowInk = accentInk(palette);
 
   const active = useMemo(() => queue.filter(q => q.status !== 'completed'), [queue]);
   const doneCount = queue.length - active.length;
@@ -98,41 +111,36 @@ const DownloadsScreen: React.FC = () => {
         </Pressable>
       </View>
 
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>ON THIS DEVICE</Text>
+      <RiseIn style={styles.hero}>
+        <Eyebrow accent={eyebrowInk} icon="phone-portrait-outline">On this device</Eyebrow>
         <Text style={styles.title}>Downloads</Text>
-        <Text style={styles.meta}>
-          {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'}
-          {totalMinutes > 0 ? ` · ${totalMinutes} min` : ''} · plays offline
-        </Text>
-        <View style={styles.actions}>
-          <Pressable
+        <View style={styles.heroRow}>
+          <Sleeve
+            artwork={stageArt}
+            size={112}
+            playing={false}
             onPress={() => play(0)}
-            disabled={downloaded.length === 0}
-            accessibilityRole="button"
-            accessibilityLabel="Play all downloads"
-            style={({ pressed }) => [styles.primary, pressed && styles.pressed, downloaded.length === 0 && styles.disabled]}
-          >
-            <Ionicons name="play" size={18} color={Signal.waveInk} />
-            <Text style={styles.primaryText}>Play</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => play(0, true)}
-            disabled={downloaded.length === 0}
-            accessibilityRole="button"
-            accessibilityLabel="Shuffle downloads"
-            style={({ pressed }) => [styles.secondary, pressed && styles.pressed, downloaded.length === 0 && styles.disabled]}
-          >
-            <Ionicons name="shuffle" size={18} color={Signal.ink} />
-            <Text style={styles.secondaryText}>Shuffle</Text>
-          </Pressable>
+            label="Play all downloads"
+          />
+          <View style={styles.heroMeta}>
+            <Text style={styles.meta}>
+              {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'}
+              {totalMinutes > 0 ? ` · ${totalMinutes} min` : ''}
+            </Text>
+            <Text style={styles.metaSoft}>Plays offline, lyrics included</Text>
+            <View style={styles.actions}>
+              <PrimaryButton compact icon="play" label="Play" onPress={() => play(0)} disabled={downloaded.length === 0} />
+              <GlassButton compact icon="shuffle" label="Shuffle" onPress={() => play(0, true)} disabled={downloaded.length === 0} />
+            </View>
+          </View>
         </View>
-      </View>
+      </RiseIn>
 
       {active.length > 0 ? (
         <>
-          <SectionHeader
-            subtitle={`${active.length} in progress`}
+          <SectionHeading
+            eyebrow={`${active.length} in progress`}
+            accent={eyebrowInk}
             title="Downloading"
             action={doneCount > 0 ? 'Clear done' : undefined}
             onAction={doneCount > 0 ? clearCompleted : undefined}
@@ -175,11 +183,7 @@ const DownloadsScreen: React.FC = () => {
 
   return (
     <View style={styles.screen}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(217, 230, 106, 0.10)', 'rgba(123, 175, 212, 0.06)', 'rgba(10, 11, 14, 0)']}
-        style={styles.backdrop}
-      />
+      <DynamicAura palette={palette} playing={isPlaying} active={isFocused} dim={0.25} />
       <FlatList
         data={downloaded}
         keyExtractor={s => s.id}
@@ -217,7 +221,6 @@ const DownloadsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Signal.bg },
-  backdrop: { ...StyleSheet.absoluteFillObject, height: 380 },
   topBar: { flexDirection: 'row', paddingHorizontal: Space.sm },
   iconButton: {
     width: 44,
@@ -230,36 +233,12 @@ const styles = StyleSheet.create({
     borderColor: Glass.hairline,
   },
   hero: { paddingHorizontal: Space.md + 4, marginTop: Space.md },
-  eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1, color: Signal.inkMuted },
-  title: { fontSize: 34, fontWeight: '800', letterSpacing: -1, color: Signal.ink },
-  meta: { fontSize: 14, color: Signal.inkMuted, marginTop: 4 },
-  actions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.md },
-  primary: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.pill,
-    backgroundColor: Signal.wave,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  primaryText: { fontSize: 16, fontWeight: '700', color: Signal.waveInk },
-  secondary: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.pill,
-    backgroundColor: Glass.fill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairlineStrong,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  secondaryText: { fontSize: 16, fontWeight: '700', color: Signal.ink },
-  pressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
-  disabled: { opacity: 0.4 },
+  title: { fontFamily: Fonts.interBold, fontSize: 34, lineHeight: 38, letterSpacing: -1.4, color: Signal.ink },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, marginTop: Space.lg },
+  heroMeta: { flex: 1, minWidth: 0 },
+  meta: { fontFamily: Fonts.interSemiBold, fontSize: 16, color: Signal.ink },
+  metaSoft: { fontFamily: Fonts.interRegular, fontSize: 13, color: Signal.inkMuted, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 14 },
   filterRow: { paddingHorizontal: Space.md, marginTop: Space.lg },
   filterField: {
     flexDirection: 'row',
@@ -272,7 +251,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Glass.hairline,
   },
-  filterInput: { flex: 1, color: Signal.ink, fontSize: 15, paddingVertical: 0 },
+  filterInput: { flex: 1, color: Signal.ink, fontSize: 15, fontFamily: Fonts.interRegular, paddingVertical: 0 },
   chips: { flexDirection: 'row', gap: Space.xs, paddingHorizontal: Space.md, marginTop: Space.sm, marginBottom: Space.xs },
   chip: {
     height: 32,
@@ -284,7 +263,7 @@ const styles = StyleSheet.create({
     borderColor: Glass.hairline,
   },
   chipActive: { backgroundColor: Signal.wave, borderColor: Signal.wave },
-  chipText: { fontSize: 13, fontWeight: '600', color: Signal.inkSoft },
+  chipText: { fontFamily: Fonts.interSemiBold, fontSize: 13, color: Signal.inkSoft },
   chipTextActive: { color: Signal.waveInk },
   emptyCard: {
     marginHorizontal: Space.md,
@@ -297,8 +276,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Signal.ink },
-  emptyBody: { fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
+  emptyTitle: { fontFamily: Fonts.interBold, fontSize: 18, color: Signal.ink },
+  emptyBody: { fontFamily: Fonts.interRegular, fontSize: 14, color: Signal.inkMuted, textAlign: 'center' },
 });
 
 export default DownloadsScreen;
