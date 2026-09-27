@@ -44,8 +44,10 @@ float bell(float x, float center, float width) {
 }
 
 float3 lightField(float2 uv) {
-  float tempo = 0.35 + uEnergy * 0.85;
-  float t = uTime * tempo;
+  // Constant tempo. Scaling time by energy (the old uTime * tempo) turned any
+  // energy change into a burst of speed, because the phase jump grows with
+  // how long the clock has run. Energy now shapes brightness and height only.
+  float t = uTime * 0.78;
   float aspect = uResolution.x / uResolution.y;
 
   float y = uv.y;
@@ -54,7 +56,7 @@ float3 lightField(float2 uv) {
   // Slow drift in place of the web pointer.
   x += 0.012 * sin(uTime * 0.21);
 
-  float flow = sin(uv.y * 6.0 - uTime * (1.2 + uEnergy * 2.0) + uMood) * 0.018 * (0.35 + uEnergy);
+  float flow = sin(uv.y * 6.0 - uTime * 2.2 + uMood) * 0.018 * (0.35 + uEnergy);
   x += flow;
 
   float dome = 0.5 + 0.5 * cos((x - 0.5) * 3.14159265 * 1.05);
@@ -105,7 +107,7 @@ half4 main(float2 fragCoord) {
   float ramp = phase - 0.5;
   float bevel = sin(ramp * 3.14159265);
   float lens = (0.55 * ramp + 0.225 * bevel) * 0.05 * glass;
-  lens += 0.004 * sin(uv.y * 18.0 - uTime * (1.4 + uEnergy * 2.0)) * glass * uEnergy;
+  lens += 0.004 * sin(uv.y * 18.0 - uTime * 2.4) * glass * uEnergy;
   float2 refracted = uv + float2(lens, ramp * 0.012 * glass);
 
   float3 color = lightField(refracted);
@@ -187,9 +189,11 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
     // Clamped step: a stall or a trip to the background never makes time leap.
     const dt = Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
     clock.value += dt;
+    // Time-based easing: the colour glides over ~1.5s at 60Hz and 120Hz alike.
+    const k = 1 - Math.exp(-dt * 2.2);
     const next = colors.value.slice();
     const goal = targetColors.value;
-    for (let i = 0; i < next.length; i++) next[i] += (goal[i] - next[i]) * 0.05;
+    for (let i = 0; i < next.length; i++) next[i] += (goal[i] - next[i]) * k;
     colors.value = next;
   }, false);
 

@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
 import AppleArtworkStage from './AppleArtworkStage';
-import Artwork from './allegra/Artwork';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Theme context used via props
 type ProcessedLyric = { timestamp: number; text: string };
 
 const { width } = Dimensions.get('window');
+const HEADER_CLEARANCE = 56;
+const CONTROLS_CLEARANCE = 250;
 
 interface NowPlayingLyricsAreaProps {
   showLyrics: boolean;
@@ -48,6 +50,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   onCoverLongPress,
   canvasVisible = false,
 }) => {
+  const insets = useSafeAreaInsets();
   if (!showLyrics) {
     return (
       <View style={styles.artworkContainer}>
@@ -66,56 +69,42 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
     );
   }
 
+  // Apple Music's lyrics view: the lines own the space between the header and
+  // the controls, and the sung line rides a third of the way down — not in
+  // the middle of a list whose lower half sits under the controls.
   return (
-    <SynchronizedLyrics
-      ref={flatListRef}
-      lyrics={processedLyrics || []}
-      currentTime={currentTime}
-      onLyricPress={onLyricPress}
-      songTitle={songTitle}
-      isUserScrolling={isUserScrollingRef.current}
-      onScrollStateChange={(isScrolling) => {
-        isUserScrollingRef.current = isScrolling;
-        if (!isScrolling) {
-          if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-          scrollTimeoutRef.current = setTimeout(() => {
-            isUserScrollingRef.current = false;
-          }, 4000);
-        } else {
-          if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-        }
-      }}
-      headerContent={
-        canvasVisible ? <View style={styles.topSpacer} /> : (
-        <View style={styles.topSpacer}>
-          <Pressable
-            onLongPress={onCoverLongPress}
-            style={({ pressed }) => [
-              styles.mainCoverContainer,
-              pressed && { opacity: 0.8 },
-            ]}
-          >
-            <Artwork uri={coverImageUri} title={songTitle ?? 'Untitled'} artist={songArtist} size={250} priority="high" style={styles.mainCover} />
-          </Pressable>
-        </View>
-        )
-      }
-    />
+    <View style={[styles.lyricsFrame, { paddingTop: insets.top + HEADER_CLEARANCE }]}>
+      <SynchronizedLyrics
+        ref={flatListRef}
+        lyrics={processedLyrics || []}
+        currentTime={currentTime}
+        onLyricPress={onLyricPress}
+        songTitle={songTitle}
+        activeLinePosition={0.3}
+        topSpacerHeight={24}
+        edgeFade={56}
+        isUserScrolling={isUserScrollingRef.current}
+        onScrollStateChange={(isScrolling) => {
+          isUserScrollingRef.current = isScrolling;
+          if (!isScrolling) {
+            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+            scrollTimeoutRef.current = setTimeout(() => {
+              isUserScrollingRef.current = false;
+            }, 4000);
+          } else {
+            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+          }
+        }}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  topSpacer: {
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  mainCoverContainer: {},
-  mainCover: {
-    width: 250,
-    height: 250,
-    borderRadius: 16,
+  lyricsFrame: {
+    flex: 1,
+    // The controls (meta, scrubber, transport) float over the bottom.
+    marginBottom: CONTROLS_CLEARANCE,
   },
   artworkContainer: {
     flex: 1,

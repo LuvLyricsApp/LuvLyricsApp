@@ -4,10 +4,10 @@ import { parseVoiceIntent, songQueryOf } from '../utils/voiceIntentParser';
 import { usePlayerStore } from '../store/playerStore';
 import { useSongsStore } from '../store/songsStore';
 import { useVoiceSearchStore } from '../store/voiceSearchStore';
-import { searchMusic } from '../services/MultiSourceSearchService';
+import { searchOfficial } from '../services/stream/officialSearch';
 import { UnifiedSong } from '../types/song';
 
-const catalog = (query: string): Promise<UnifiedSong[]> => searchMusic(query);
+const catalog = (query: string): Promise<UnifiedSong[]> => searchOfficial(query, 10);
 const voice = () => useVoiceSearchStore.getState();
 
 export interface VoiceCommandsState {

@@ -1,6 +1,7 @@
 import { oddElements, parseNext, parseRelatedSongs, parseSearchSongs, parseTime, splitBySeparator, YTSong } from './parsers';
 import { matchScore, normalizeTitle, resolveMany, resolveToCatalog, clearResolverCache } from './resolver';
 import { clearRecommendCache, findSeedVideoId, recommendFor, RecommendDeps } from '../stream/recommend';
+import { searchOfficial } from '../stream/officialSearch';
 import { UnifiedSong } from '../../types/song';
 
 // ─── Fixture builders mirroring InnerTube WEB_REMIX renderers ──────────────
@@ -188,6 +189,25 @@ describe('resolveToCatalog / resolveMany', () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it('shows YouTube Music\'s official title, artists and art over the catalog audio', async () => {
+    const search = jest.fn(async () => [{ ...catalog('saavn1', 'Kesariya (From "Brahmastra")', 'Pritam, Arijit Singh', 268), highResArt: 'https://saavn/other-art.jpg' }]);
+    const song = await resolveToCatalog({ ...yt('k2', 'Kesariya', ['Arijit Singh'], 268), thumbnail: 'https://yt/official=w544-h544' }, search);
+    expect(song).toEqual(expect.objectContaining({
+      id: 'saavn1', downloadUrl: 'https://cdn/saavn1.mp4',
+      title: 'Kesariya', artist: 'Arijit Singh', highResArt: 'https://yt/official=w544-h544',
+    }));
+  });
+
+  it('rejects covers, lofi and other versions unless the title asked for one', async () => {
+    const yts = yt('p', 'Pasoori', ['Ali Sethi', 'Shae Gill'], 224);
+    expect(matchScore(yts, catalog('1', 'Pasoori (Lofi)', 'Ali Sethi', 224))).toBeNull();
+    expect(matchScore(yts, catalog('2', 'Pasoori - Female Version', 'Ali Sethi', 224))).toBeNull();
+    expect(matchScore(yts, catalog('3', 'Pasoori (Slowed + Reverb)', 'Ali Sethi', 224))).toBeNull();
+    expect(matchScore(yts, catalog('4', 'Pasoori', 'Ali Sethi, Shae Gill', 224))).not.toBeNull();
+    const unplugged = yt('u', 'Pasoori (Unplugged)', ['Ali Sethi'], 224);
+    expect(matchScore(unplugged, catalog('5', 'Pasoori Unplugged', 'Ali Sethi', 224))).not.toBeNull();
+  });
+
   it('stops at the limit and keeps radio order', async () => {
     const search = jest.fn(async (q: string) => [catalog(q.split(' ')[0], q.split(' ')[0], 'A', 200)]);
     const mix = ['s1', 's2', 's3', 's4', 's5'].map(id => yt(id, id, ['A'], 200));
@@ -239,5 +259,34 @@ describe('recommendFor', () => {
     const d = deps({ searchYT: jest.fn(async () => { throw new Error('blocked'); }) });
     const recs = await recommendFor(seed, 10, d);
     expect(recs.map(r => r.id)).toEqual(['saavn-radio']);
+  });
+});
+
+describe('searchOfficial', () => {
+  beforeEach(() => clearResolverCache());
+
+  it('lists YouTube Music songs with their official art, matched from the query\'s own catalog results', async () => {
+    const yts = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({ ...yt(id, `Song ${id}`, ['Artist'], 200 + i), thumbnail: `https://yt/${id}` }));
+    const catalogResults = [
+      catalog('k', 'Song a (Lofi)', 'Someone', 200),
+      ...yts.map(s => catalog(`c${s.videoId}`, s.title, 'Artist', s.duration)),
+    ];
+    const searchCatalog = jest.fn(async () => catalogResults);
+    const found = await searchOfficial('songs', 20, { searchYT: async () => yts, searchCatalog });
+    expect(found.map(s => s.id)).toEqual(['ca', 'cb', 'cc', 'cd', 'ce']);
+    expect(found[0].highResArt).toBe('https://yt/a');
+    expect(searchCatalog).toHaveBeenCalledTimes(1); // every song matched from the primed results
+  });
+
+  it('falls back to catalog results without unasked-for versions when YouTube Music is unreachable', async () => {
+    const found = await searchOfficial('pasoori', 20, {
+      searchYT: async () => { throw new Error('offline'); },
+      searchCatalog: async () => [
+        catalog('1', 'Pasoori (Lofi)', 'Someone', 200),
+        catalog('2', 'Pasoori', 'Ali Sethi, Shae Gill', 224),
+        catalog('3', 'Pasoori - Female Version', 'Someone', 210),
+      ],
+    });
+    expect(found.map(s => s.id)).toEqual(['2']);
   });
 });

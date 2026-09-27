@@ -45,6 +45,21 @@ class PaletteModule : Module() {
             val scheme = uri.scheme
             if (scheme == "file" || scheme == null) {
                 BitmapFactory.decodeFile(uri.path, opts)
+            } else if (scheme == "http" || scheme == "https") {
+                // Streamed songs have web covers. ContentResolver can't open
+                // those, so extraction used to fail and the player fell back to
+                // the default colours instead of the song's. AsyncFunction runs
+                // off the main thread, so a short blocking fetch is fine here.
+                val conn = (java.net.URL(uriStr).openConnection() as java.net.HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    conn.inputStream.use { stream -> BitmapFactory.decodeStream(stream, null, opts) }
+                } finally {
+                    conn.disconnect()
+                }
             } else {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     BitmapFactory.decodeStream(stream, null, opts)

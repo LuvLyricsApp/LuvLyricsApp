@@ -10,7 +10,7 @@
  */
 import React, { useState } from 'react';
 import { View, Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { SharedValue } from 'react-native-reanimated';

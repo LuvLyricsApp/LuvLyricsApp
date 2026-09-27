@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -38,7 +38,7 @@ import { RiseIn } from '../components/allegra/motion';
 import { PrimaryButton, SectionHeading } from '../components/allegra/home';
 import { CoverShelf, GUTTER, MoodChips, QuickPicks, ShortcutGrid, SongRow, TrackItem } from '../components/stream/StreamHome';
 import { ShimmerBlock } from '../components/stream/StreamItems';
-import { searchMusic } from '../services/MultiSourceSearchService';
+import { searchOfficial } from '../services/stream/officialSearch';
 import { recommendFor } from '../services/stream/recommend';
 import { buildHomeFeed, HomeFeed } from '../services/stream/homeFeed';
 import { StreamService } from '../services/stream/StreamService';
@@ -106,7 +106,7 @@ const StreamScreen: React.FC = () => {
   const loadFeed = useCallback(async () => {
     const next = await buildHomeFeed(
       { localSongs: localRef.current, history: historyRef.current, languages: preferred },
-      { searchMusic: q => searchMusic(q), recommend: seed => recommendFor(seed, 12) },
+      { searchMusic: q => searchOfficial(q), recommend: seed => recommendFor(seed, 12) },
     ).catch(() => null);
     setFeed(next);
   }, [preferred]);
@@ -134,7 +134,7 @@ const StreamScreen: React.FC = () => {
     const seq = ++searchSeq.current;
     setSearching(true);
     setResults([]);
-    const found = await searchMusic(q).catch(() => []);
+    const found = await searchOfficial(q).catch(() => []);
     if (seq !== searchSeq.current) return; // a newer search won
     setResults(found);
     setSearching(false);

@@ -681,6 +681,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // more than one GestureDetector (each carries its own handler tag). The classic
   // bar needs the same stage-drag behaviour at three mount points — the transport
   // row and the two edge rails — so each gets its own instance.
+  // The gestures are built before openNowPlaying exists; they reach it
+  // through this ref instead of capturing it.
+  const openNowPlayingRef = useRef<() => void>(() => {});
+  const requestOpenNowPlaying = useCallback(() => openNowPlayingRef.current(), []);
+
   const buildStageGesture = () => Gesture.Pan()
     .activeOffsetY([-5, 5])
     .activeOffsetX([-80, 80])
@@ -762,6 +767,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         } else if (event.translationX > 60 || event.velocityX > 600) {
           runOnJS(skipBackward)();
         }
+        return;
+      }
+
+      // Swipe up opens the full Now Playing screen, as in Apple Music.
+      if (!expandedSV.value && (event.translationY < -40 || event.velocityY < -500)) {
+        runOnJS(requestOpenNowPlaying)();
         return;
       }
 
@@ -856,25 +867,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const stageRailLeftGesture = buildStageGesture();
   const stageRailRightGesture = buildStageGesture();
 
-  const toggleExpand = useCallback(() => {
-    if (expanded) {
-      expansionProgress.value = withSpring(0);
-      lyricExpansionProgress.value = withSpring(0);
-      fullExpansionProgress.value = withSpring(0);
-      classicFullProgress.value = withSpring(0);
-      setExpanded(false);
-      setLyricExpanded(false);
-      setFullLyricExpanded(false);
-      setClassicFullExpanded(false);
-      return;
-    }
-    
-    // Canonical HALF pair — pin both, never assume classicFullProgress is already 0.
-    expansionProgress.value = withSpring(1);
-    classicFullProgress.value = withSpring(0);
-    setExpanded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
+  // The bar opens the Apple-style Now Playing screen, never the old
+  // half-height sheet that sat the lyrics at the bottom of the screen.
+  const onBarPress = useCallback(() => openNowPlayingRef.current(), []);
 
   const openNowPlaying = useCallback(() => {
     if (currentSong) {
@@ -891,6 +886,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, setMiniPlayerHidden, navigation]);
+  openNowPlayingRef.current = openNowPlaying;
 
   const handleLyricPress = useCallback((timestamp: number) => {
       if (!fullLyricExpanded) {
@@ -1049,7 +1045,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       )}
       
       <AnimatedPressable 
-        onPress={!expanded ? toggleExpand : undefined} 
+        onPress={!expanded ? onBarPress : undefined} 
         pointerEvents={(!isIsland && expanded) ? 'box-none' : 'auto'}
         style={[
           styles.content, 
@@ -1236,7 +1232,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         coverImageUri={currentSong.coverImageUri}
                         isIsland={isIsland}
                         onPress={openNowPlaying}
-                        onBodyPress={toggleExpand}
+                        onBodyPress={onBarPress}
                     />
                     <PlaybackControls
                         variant="island-collapsed"
@@ -1269,7 +1265,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             coverImageUri={currentSong.coverImageUri}
                             isIsland={isIsland}
                             onPress={openNowPlaying}
-                            onBodyPress={toggleExpand}
+                            onBodyPress={onBarPress}
                         />
                         {/* Like the currently playing song without leaving the bar. */}
                         <Pressable

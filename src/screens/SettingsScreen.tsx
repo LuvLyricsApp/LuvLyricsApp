@@ -807,6 +807,7 @@ const SettingsScreen: React.FC<Props> = () => {
           />
         )}
         <SettingsRowSwitch icon="sunny-outline" label="Keep Screen On" value={settings.keepScreenOn} onToggle={settings.setKeepScreenOn} />
+        <SettingsRowSwitch icon="phone-portrait-outline" label="Haptics" value={settings.hapticsEnabled ?? true} onToggle={settings.setHapticsEnabled} />
         <View style={styles.sliderRow}>
           <View style={styles.sliderHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>

@@ -9,7 +9,6 @@ import {
   Modal,
   ScrollView,
   Platform,
-  Vibration,
   InteractionManager,
   Image,
 } from 'react-native';
@@ -50,6 +49,7 @@ import LibraryHeader from '../components/LibraryHeader';
 import LibraryEmptyState from '../components/LibraryEmptyState';
 import LibraryBottomSheet from '../components/LibraryBottomSheet';
 import LibraryEditModal from '../components/LibraryEditModal';
+import * as Haptics from '../utils/haptics';
 
 const AnimatedFlashList = Animated.createAnimatedComponent(FlashList) as any;
 
@@ -191,14 +191,14 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
     if (existing) {
       if (existing.status === 'failed' || isPlainResult) {
         addToScanQueue(song, isPlainResult);
-        Vibration.vibrate(50);
+        Haptics.vibrate(50);
         setToast({ visible: true, message: isPlainResult ? `Retrying for synced lyrics: "${song.title}"` : `Retrying: "${song.title}"`, type: 'info' });
       } else {
         setToast({ visible: true, message: `Already searching for "${song.title}"`, type: 'info' });
       }
     } else {
       addToScanQueue(song);
-      Vibration.vibrate(50);
+      Haptics.vibrate(50);
       setToast({ visible: true, message: `Searching lyrics for "${song.title}"...`, type: 'success' });
     }
   }, [addToScanQueue]);
@@ -208,7 +208,7 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
       setToast({ visible: true, message: 'Play a song first to open artist mode', type: 'info' });
       return;
     }
-    Vibration.vibrate(10);
+    Haptics.vibrate(10);
     setRecentlyPlayedMode((currentMode) => currentMode === 'recent' ? 'artist' : 'recent');
   }, [playerCurrentSongId]);
 

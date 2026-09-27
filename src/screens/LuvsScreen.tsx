@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
   ViewToken,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../utils/haptics';
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -71,6 +71,7 @@ const LuvsScreen: React.FC = () => {
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const colors = useThemeColors();
   const isDark = useIsDark();
+  const hapticsEnabled = useSettingsStore(s => s.hapticsEnabled ?? true);
 
   // Field selectors, not the whole store. Destructuring the store re-rendered this
   // screen — and with it every mounted card — whenever any unrelated field moved.
@@ -422,7 +423,7 @@ const LuvsScreen: React.FC = () => {
           onPageScrollStateChanged={handleNativeScrollState}
           offscreenPages={2}
           depthEffect
-          hapticsOnSettle
+          hapticsOnSettle={hapticsEnabled}
           // ViewPager2 intercepts drags before RNGH sees them, so a scrub on the
           // timeline reads as a page swipe. Disable paging for the drag's duration.
           scrollEnabled={!isScrubbing}

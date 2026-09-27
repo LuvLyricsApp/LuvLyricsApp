@@ -24,6 +24,7 @@ interface SettingsState {
   scrollSpeed: ScrollSpeed;
   skipDuration: 10 | 15 | 30;
   keepScreenOn: boolean;
+  hapticsEnabled: boolean;
   showTimeRemaining: boolean;
   playInMiniPlayerOnly: boolean;
   miniPlayerStyle: 'bar' | 'island'; // New setting
@@ -58,6 +59,7 @@ interface SettingsState {
   setScrollSpeed: (speed: ScrollSpeed) => void;
   setSkipDuration: (duration: 10 | 15 | 30) => void;
   setKeepScreenOn: (enabled: boolean) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
   setShowTimeRemaining: (show: boolean) => void;
   setPlayInMiniPlayerOnly: (enabled: boolean) => void;
   setMiniPlayerStyle: (style: 'bar' | 'island') => void; // New action
@@ -119,6 +121,7 @@ const DEFAULT_SETTINGS = {
   scrollSpeed: 'medium' as ScrollSpeed,
   skipDuration: 15 as const,
   keepScreenOn: true,
+  hapticsEnabled: true,
   showTimeRemaining: true,
   playInMiniPlayerOnly: false,
   miniPlayerStyle: 'bar' as const, // the island mini player is retired; see TabNavigator
@@ -163,6 +166,7 @@ export const useSettingsStore = create<SettingsState>()(
       setScrollSpeed: (scrollSpeed) => set({ scrollSpeed }),
       setSkipDuration: (skipDuration) => set({ skipDuration }),
       setKeepScreenOn: (keepScreenOn) => set({ keepScreenOn }),
+      setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setShowTimeRemaining: (showTimeRemaining) => set({ showTimeRemaining }),
       setPlayInMiniPlayerOnly: (playInMiniPlayerOnly) => set({ playInMiniPlayerOnly }),
       setMiniPlayerStyle: (miniPlayerStyle) => set({ miniPlayerStyle }),
