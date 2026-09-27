@@ -80,6 +80,9 @@ unmounts mid-load.
 | Player state | `src/store/playerStore.ts` |
 | Main UI | `src/components/MiniPlayer.tsx`, `src/screens/NowPlayingScreen.tsx` |
 | Lyrics | `src/components/SynchronizedLyrics.tsx`, `src/components/LyricsLine.tsx` |
+| Lyrics providers | `src/services/lyrics/` — Echo Music cascade (YouLyPlus, Paxsenix, Unison, BetterLyrics, SimpMusic, LRCLIB, KuGou), runs before the Lyrica backend in `LyricaService.fetchLyrics` |
+| Canvas (motion artwork) | `src/services/canvas/`, `src/hooks/useCanvasArtwork.ts`, `src/components/CanvasVideoLayer.tsx` — see `docs/canvas-and-providers.md` |
+| Design tokens | `src/constants/allegraTheme.ts` — Allegra "Soft Signal" colors, radius, motion |
 | Scrubber | `src/components/TimelineScrubber.tsx` |
 | Downloads | `src/services/DownloadManager.ts`, `src/components/BackgroundDownloader.tsx` |
 | Desktop bridge | `src/services/DesktopBridgeService.ts` — **live**, auto-starts at boot via `App.tsx` → `desktopBridgeSettingsStore.load()` |
@@ -92,6 +95,8 @@ unmounts mid-load.
 - No mock DB in tests — always hit real SQLite
 - Don't introduce shadow styles on NowPlayingScreen — intentionally removed for clean look
 - `DesktopBridgeService` is **enabled and auto-starts at boot** when the Settings toggle is on. It is 1300+ lines and reachable — treat removing or disabling it as a product decision, not cleanup. If you change `start()`, check `stop()` tears down symmetrically.
+- Every provider call (canvas, lyrics) goes through `src/services/net/fetchWithTimeout.ts` — timeout + returns null, never throws, so one dead provider can't stop a cascade
+- The canvas video is decorative: muted, `audioMixingMode: 'mixWithOthers'`, no now-playing notification. It must never take audio focus from the music player
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 
 ## Branch naming
@@ -109,7 +114,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 13 suites / 165 tests passing
+node_modules\.bin\jest.cmd                  # expect 17 suites / 220 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

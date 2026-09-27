@@ -13,6 +13,7 @@ import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
+import { Glass, Radius, Signal } from '../constants/allegraTheme';
 
 const MIC_WRAPPER_SIZE = 56;
 
@@ -84,13 +85,18 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
       <Pressable
         key={route.key}
         onPress={onPress}
-        style={styles.tabItem}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name}
+        style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
       >
         {options.tabBarIcon?.({
           focused: isFocused,
           color: isFocused ? activeIconColor : inactiveIconColor,
           size: 24,
         })}
+        {/* Allegra route marker: the stable signal color, never artwork-tinted. */}
+        <View style={[styles.activeMarker, { opacity: isFocused ? 1 : 0 }]} />
       </Pressable>
     );
   };
@@ -123,6 +129,9 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
           )}
           <LinearGradient colors={gradientColors} style={StyleSheet.absoluteFill} />
         </View>
+
+        {/* Inset top highlight — the frosted-glass edge from the Allegra material recipe. */}
+        {isDark && <View pointerEvents="none" style={styles.glassHighlight} />}
 
         <BlurView intensity={60} tint={isDark ? 'dark' : 'light'} style={styles.blur}>
           <View style={styles.tabsRow}>
@@ -164,7 +173,7 @@ const styles = StyleSheet.create({
   pillContainer: {
     width: '85%',
     maxWidth: 400,
-    borderRadius: 32,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
@@ -202,9 +211,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderRadius: Radius.pill,
     minWidth: 48,
+    minHeight: 44,
+  },
+  tabPressed: {
+    transform: [{ scale: 0.92 }],
+  },
+  activeMarker: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 4,
+    backgroundColor: Signal.wave,
+  },
+  glassHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Glass.highlight,
+    zIndex: 2,
   },
 });
 

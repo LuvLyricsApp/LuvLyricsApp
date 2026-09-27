@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Pressable, StyleSheet, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
-import { RotatingVinyl } from './VinylRecord';
+import AppleArtworkStage from './AppleArtworkStage';
 // Theme context used via props
 type ProcessedLyric = { timestamp: number; text: string };
 
@@ -25,6 +25,8 @@ interface NowPlayingLyricsAreaProps {
     textMuted: string;
   };
   onCoverLongPress: () => void;
+  /** A motion canvas fills the screen: step the artwork aside so it shows. */
+  canvasVisible?: boolean;
 }
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
@@ -41,11 +43,19 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   isDark,
   colors,
   onCoverLongPress,
+  canvasVisible = false,
 }) => {
   if (!showLyrics) {
     return (
-      <View style={styles.vinylContainer}>
-        <RotatingVinyl imageUri={coverImageUri} size={width * 0.75} isPlaying={storePlaying} />
+      <View style={styles.artworkContainer}>
+        {canvasVisible ? null : (
+          <AppleArtworkStage
+            uri={coverImageUri}
+            size={width - 64}
+            playing={storePlaying}
+            onLongPress={onCoverLongPress}
+          />
+        )}
       </View>
     );
   }
@@ -70,6 +80,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
         }
       }}
       headerContent={
+        canvasVisible ? <View style={styles.topSpacer} /> : (
         <View style={styles.topSpacer}>
           <Pressable
             onLongPress={onCoverLongPress}
@@ -87,6 +98,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
             )}
           </Pressable>
         </View>
+        )
       }
     />
   );
@@ -103,13 +115,13 @@ const styles = StyleSheet.create({
   mainCover: {
     width: 250,
     height: 250,
-    borderRadius: 12,
+    borderRadius: 16,
   },
-  vinylContainer: {
+  artworkContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 200,
+    paddingBottom: 260,
   },
 });
 

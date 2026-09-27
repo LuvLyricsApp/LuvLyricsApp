@@ -12,6 +12,8 @@ import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
 import InstrumentalWaveform, { isInstrumentalLyric } from './InstrumentalWaveform';
 import TimelineScrubber from './TimelineScrubber';
+import CanvasVideoLayer from './CanvasVideoLayer';
+import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 const { Gesture, GestureDetector } = GestureHandler;
 import Animated, {
   useAnimatedStyle,
@@ -330,6 +332,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // Per-style background mode (island vs classic bar each have their own setting)
   const activeBgMode = isIsland ? islandBgMode : classicBarBgMode;
   const useThemeBg = activeBgMode !== 'album-art';
+
+  // Motion canvas only once the player is opened — a collapsed bar never
+  // decodes video. Album-art backgrounds only; theme gradients stay flat.
+  const canvas = useCanvasArtwork(expanded && !useThemeBg ? currentSong : null);
 
   const themePlayerColors: [string, string, string] = (() => {
     switch (activeBgMode) {
@@ -1000,6 +1006,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
           )}
+          <CanvasVideoLayer canvas={canvas} playing={storePlaying} scrimStrength={0.85} />
         </View>
       )}
 
@@ -1063,6 +1070,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                   /* Solid fallback when no cover art — prevents transparent look */
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#111111' : '#e8e8f0' }]} />
                )}
+
+              <CanvasVideoLayer canvas={canvas} playing={storePlaying} scrimStrength={0.7} />
 
               {/* Vignette — stronger top/bottom so half & full lyric expand don't
                   leave a sharp cover-art edge at the pill rim. */}

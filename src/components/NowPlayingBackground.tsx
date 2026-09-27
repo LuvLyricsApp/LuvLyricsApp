@@ -3,6 +3,8 @@ import { View, StyleSheet, Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated from 'react-native-reanimated';
 import { AuroraHeader } from './AuroraHeader';
+import CanvasVideoLayer from './CanvasVideoLayer';
+import { CanvasArtwork } from '../services/canvas/types';
 
 interface NowPlayingBackgroundProps {
   isDynamicTheme: boolean;
@@ -13,11 +15,18 @@ interface NowPlayingBackgroundProps {
   blob2Style: any;
   blob3Style: any;
   isDark: boolean;
+  /** Motion canvas; drawn over the ambient layer once its first frame lands. */
+  canvas?: CanvasArtwork | null;
+  playing?: boolean;
+  onCanvasVisibleChange?: (visible: boolean) => void;
 }
 
 const { width } = Dimensions.get('window');
 
-const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
+type AmbientProps = Omit<NowPlayingBackgroundProps, 'canvas' | 'playing' | 'onCanvasVisibleChange'>;
+
+/** Artwork-aware ambient field. It stays underneath as the canvas's fallback. */
+const Ambient: React.FC<AmbientProps> = ({
   isDynamicTheme,
   coverImageUri,
   gradientColors,
@@ -77,5 +86,17 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
     </View>
   );
 };
+
+const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
+  canvas = null,
+  playing = false,
+  onCanvasVisibleChange,
+  ...ambientProps
+}) => (
+  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Ambient {...ambientProps} />
+    <CanvasVideoLayer canvas={canvas} playing={playing} onVisibleChange={onCanvasVisibleChange} />
+  </View>
+);
 
 export default React.memo(NowPlayingBackground);
