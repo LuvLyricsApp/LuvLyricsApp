@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import {
   StyleSheet,
   View,
@@ -22,6 +22,8 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useArtHistoryStore } from '../store/artHistoryStore';
 import { useDailyStatsStore } from '../store/dailyStatsStore';
 import { AuroraHeader } from '../components/AuroraHeader';
+import AuraBand from '../components/allegra/AuraBand';
+import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import { Toast } from '../components/Toast';
 import { DownloadQueueModal } from '../components/DownloadQueueModal';
 import { ModernDeleteModal } from '../components/ModernDeleteModal';
@@ -62,6 +64,7 @@ const setSongItemLayout = (layout: SongItemLayout) => {
 // Short on purpose — a small flick should resolve it fully, and scrolling back
 // to the top brings it straight back.
 const AURORA_FADE_DISTANCE = 140;
+const AURA_BAND_HEIGHT = 340; // below the status bar
 
 // Android list top-edge dissolve under the sticky "LuvLyrics" brand bar.
 // Must be 0 at rest — a fixed length keeps the top row faded even when fully
@@ -76,6 +79,8 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   const colors = useThemeColors();
   const isDark = useIsDark();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
+  const isPlaying = usePlayerStore(state => state.isPlaying);
   const songs = useSongsStore(state => state.songs);
   const fetchSongs = useSongsStore(state => state.fetchSongs);
   const updateSong = useSongsStore(state => state.updateSong);
@@ -131,6 +136,9 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   // fades (see AuroraHeader's artworkOpacity). Fading the whole layer dissolved
   // the fade-to-black gradient along with the colour, which broke the blend.
   const headerAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 0 }] }));
+
+  // The shader band takes the colours of the song on show (or playing).
+  const auraPalette = useArtworkPalette(activeImageUri ?? playerCurrentCover);
 
   const auroraFade = useDerivedValue(() =>
     isSolidBg
@@ -416,16 +424,26 @@ const LibraryScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#000' : colors.background }]} />
-      {isDark && (
+      {isDark && !isSolidBg ? (
+        // Allegra's live shader across the top only, melting into black and
+        // bowing out as the list scrolls up.
+        <AuraBand
+          palette={auraPalette}
+          playing={isPlaying}
+          active={isFocused}
+          height={insets.top + AURA_BAND_HEIGHT}
+          fade={auroraFade}
+        />
+      ) : isDark ? (
         <Animated.View style={[StyleSheet.absoluteFill, headerAnimatedStyle]}>
           <AuroraHeader palette="library" colors={activeThemeColors} imageUri={activeImageUri} isSolid={isSolidBg} artworkOpacity={auroraFade} />
         </Animated.View>
-      )}
+      ) : null}
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {(
           <View style={styles.brandHeader}>
             <Pressable onPress={handleBrandPress} hitSlop={12} style={styles.brandPressable}>
-              <Text style={[styles.brandName, { color: isDark ? '#fff' : colors.textPrimary, textShadowColor: isDark ? 'rgba(0,0,0,0.3)' : 'transparent' }]} numberOfLines={1}>
+              <Text style={[styles.brandName, { color: isDark ? '#fff' : colors.textPrimary, textShadowColor: isDark ? 'rgba(0,0,0,0.3)' : 'transparent' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 LuvLyrics
               </Text>
             </Pressable>
@@ -592,7 +610,7 @@ const styles = StyleSheet.create({
   brandActionButton: { padding: 4, position: 'relative' },
   brandBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#2E2E2E', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1, borderColor: '#000' },
   brandBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 0 },
+  brandName: { fontSize: 34, fontFamily: Fonts.brand, fontWeight: Fonts.brandWeight, color: '#fff', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, paddingRight: 10, marginLeft: 6, marginTop: 5, flexShrink: 1 },
   recentArtOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   recentArtContainer: { backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 20, paddingBottom: 40 },
   recentArtTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', paddingHorizontal: 20, marginBottom: 16 },
