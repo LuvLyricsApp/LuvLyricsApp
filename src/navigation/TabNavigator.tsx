@@ -15,6 +15,8 @@ import LuvsScreen from '../screens/LuvsScreen';
 import PlaylistsScreen from '../screens/PlaylistsScreen';
 import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
+import StreamScreen from '../screens/StreamScreen';
+import DownloadsScreen from '../screens/DownloadsScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const LibraryStack = createNativeStackNavigator<LibraryStackParamList>();
@@ -30,6 +32,7 @@ const LibraryStackScreen: React.FC = () => (
   >
     <LibraryStack.Screen name="PlaylistsHome" component={PlaylistsScreen} />
     <LibraryStack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
+    <LibraryStack.Screen name="Downloads" component={DownloadsScreen} options={{ animation: 'slide_from_right' }} />
   </LibraryStack.Navigator>
 );
 
@@ -37,6 +40,10 @@ const LibraryStackScreen: React.FC = () => (
 
 const HomeIcon = ({ color, focused }: { color: string; focused: boolean }) => (
   <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+);
+
+const StreamIcon = ({ color, focused }: { color: string; focused: boolean }) => (
+  <Ionicons name={focused ? 'radio' : 'radio-outline'} size={24} color={color} />
 );
 
 const LuvsIcon = ({ color, focused }: { color: string; focused: boolean }) => (
@@ -85,6 +92,7 @@ export const TabNavigator: React.FC = () => {
       }}
     >
       <Tab.Screen name="Home" component={LibraryScreen} options={{ tabBarLabel: 'Home', tabBarIcon: HomeIcon }} />
+      <Tab.Screen name="Stream" component={StreamScreen} options={{ tabBarLabel: 'Stream', tabBarIcon: StreamIcon }} />
       <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
       <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />

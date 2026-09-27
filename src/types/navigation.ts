@@ -4,7 +4,7 @@
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { CompositeScreenProps } from '@react-navigation/native';
+import { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 
 // Root Stack Navigator
 export type RootStackParamList = {
@@ -34,8 +34,9 @@ export type RootStackParamList = {
 // Bottom Tab Navigator
 export type TabParamList = {
   Home: undefined; // Was Library
+  Stream: undefined; // catalog streaming + Echo-style home feed
   Luvs: undefined;
-  Library: undefined; // Was Playlists
+  Library: NavigatorScreenParams<LibraryStackParamList> | undefined; // Was Playlists
   Search: undefined; // replaced Settings in the tab bar
 };
 
@@ -47,6 +48,7 @@ export type TabParamList = {
 export type LibraryStackParamList = {
   PlaylistsHome: undefined;
   PlaylistDetail: { playlistId: string };
+  Downloads: undefined;
 };
 
 // Screen Props

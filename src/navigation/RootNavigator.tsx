@@ -22,20 +22,25 @@ import { BackgroundDownloader } from '../components/BackgroundDownloader';
 import { useSettingsStore } from '../store/settingsStore';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
+import { useStreamSession } from '../hooks/useStreamSession';
+
+// Tabs whose layout leaves room for the Dynamic Island mini player up top.
+const ISLAND_ROUTES = new Set(['Home', 'Stream']);
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
   const [currentRoute, setCurrentRoute] = React.useState<string | undefined>();
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
+  useStreamSession();
 
-  // Island mode: only render MiniPlayer on the Home tab.
+  // Island mode: only render MiniPlayer on the Home and Stream tabs.
   // Classic bar mode: render MiniPlayer on every tab/screen — except Luvs, which is
   // a full-bleed reels feed running its own audio pool. The bar used to paint over
   // it and its transport controlled a different player than the one you could hear.
   const showMiniPlayer = currentRoute !== 'Luvs' && (
     miniPlayerStyle === 'island'
-      ? currentRoute === 'Home'
+      ? ISLAND_ROUTES.has(currentRoute ?? '')
       : true
   );
 
@@ -101,8 +106,8 @@ export const RootNavigator: React.FC = () => {
           />
         </Stack.Navigator>
         
-        {/* Island mode: Home tab only. Bar mode: all tabs. */}
-        {showMiniPlayer && <MiniPlayer isHomeTab={currentRoute === 'Home'} />}
+        {/* Island mode: Home + Stream. Bar mode: all tabs. */}
+        {showMiniPlayer && <MiniPlayer isHomeTab={ISLAND_ROUTES.has(currentRoute ?? '')} />}
         <BackgroundDownloader />
       </View>
     </NavigationContainer>

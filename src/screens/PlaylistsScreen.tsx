@@ -22,6 +22,7 @@ import { getGradientColors } from '../constants/gradients';
 import { AuroraHeader } from '../components/AuroraHeader';
 import { DarkColors } from '../constants/colors';
 import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
+import { Glass, Radius, Signal } from '../constants/allegraTheme';
 import { Playlist, Song } from '../types/song';
 
 export const PlaylistsScreen: React.FC = () => {
@@ -215,6 +216,23 @@ export const PlaylistsScreen: React.FC = () => {
           </Pressable>
         </View>
 
+        {/* Downloads: every song that plays offline, one tap from the library. */}
+        <Pressable
+          onPress={() => navigation.navigate('Downloads')}
+          accessibilityRole="button"
+          accessibilityLabel="Open downloads"
+          style={({ pressed }) => [styles.downloadsEntry, pressed && { opacity: 0.8 }]}
+        >
+          <View style={styles.downloadsIcon}>
+            <Ionicons name="arrow-down" size={18} color={Signal.waveInk} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.downloadsTitle}>Downloads</Text>
+            <Text style={styles.downloadsMeta}>Songs on this device · play offline</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Signal.inkMuted} />
+        </Pressable>
+
         {isLoading && playlists.length === 0 ? (
              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                  <ActivityIndicator size="large" color={colors.primary} />
@@ -268,6 +286,29 @@ export const PlaylistsScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  downloadsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: Radius.panel,
+    backgroundColor: Glass.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
+  },
+  downloadsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Signal.wave,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadsTitle: { fontSize: 16, fontWeight: '700', color: Signal.ink },
+  downloadsMeta: { fontSize: 12, color: Signal.inkMuted, marginTop: 2 },
   container: {
     flex: 1,
     backgroundColor: '#000',
