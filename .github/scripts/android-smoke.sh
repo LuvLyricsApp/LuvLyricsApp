@@ -5,6 +5,12 @@
 #   player-cover.png     Now Playing on the cover (Apple Music style + canvas)
 #   player-cover-2.png   the same 12s later (canvas / glow motion)
 #   player-lyrics.png    Now Playing on lyrics (glow in the blend style)
+#   after-close.png      back from the player: the mini pill must be showing
+#   player-reopened.png  the player opened again from the pill
+#   player-menu.png      the ••• menu sheet
+#   listen-together.png  the Listen together sheet
+#   after-close-2.png    back from the player a second time
+#   transition-*.png     frames taken during page changes (no white flashes)
 #   library.png, settings.png
 #   playback.txt         media session state before/after 45s in the background
 #   diag.txt             the app's [diag:*] lines (canvas, Apple token, player)
@@ -17,6 +23,33 @@ mkdir -p "$OUT"
 link() { adb shell am start -W -a android.intent.action.VIEW -d "$1" "$PKG" >/dev/null 2>&1; }
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
 session() { adb shell dumpsys media_session | grep -E "package=|state=PlaybackState" | head -n 6; }
+
+# Taps the first view whose accessibility label starts with $1 (uiautomator);
+# logs what happened to taps.txt. Continuous animations can keep uiautomator
+# from ever seeing an idle UI, so each dump is retried.
+tap_desc() {
+  local b=""
+  for _ in 1 2 3; do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1
+    b=$(grep -o "content-desc=\"$1[^\"]*\"[^>]*bounds=\"\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]\"" "$OUT/ui.xml" 2>/dev/null \
+      | head -n 1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9][0-9]*' | tr '\n' ' ')
+    [ -n "$b" ] && break
+    sleep 2
+  done
+  if [ -z "$b" ]; then echo "tap '$1': not found" >> "$OUT/taps.txt"; return 1; fi
+  set -- $b
+  local x=$(( ($1 + $3) / 2 )) y=$(( ($2 + $4) / 2 ))
+  adb shell input tap "$x" "$y"
+  echo "tap '$1' at $x,$y" >> "$OUT/taps.txt"
+}
+
+# A burst of frames while a page changes, to catch a white flash.
+burst() {
+  local name="$1"; shift
+  "$@"
+  for i in 1 2 3; do shot "transition-$name-$i"; done
+}
 
 adb install -r "$APK"
 adb logcat -c
@@ -43,14 +76,31 @@ link "lyricflow://play?q=Levitating%20Dua%20Lipa&lyrics=1"
 sleep 35
 shot player-lyrics
 
+# Back from the player: the sheet falls away and the mini pill must be there.
 adb shell input keyevent KEYCODE_BACK
-sleep 2
-link "lyricflow://open/library"
+sleep 3
+shot after-close
+
+# Open the player again from the pill, then its ••• menu and Listen together.
+tap_desc "Now playing:" && sleep 3
+shot player-reopened
+tap_desc "Song options" && sleep 2
+shot player-menu
+tap_desc "Listen together" && sleep 2
+shot listen-together
+adb shell input keyevent KEYCODE_BACK
+sleep 3
+shot after-close-2
+
+burst library link "lyricflow://open/library"
 sleep 6
 shot library
-link "lyricflow://open/settings"
+burst settings link "lyricflow://open/settings"
 sleep 6
 shot settings
+burst stream link "lyricflow://open/stream"
+sleep 4
+shot stream-back
 
 adb logcat -d -v time > "$OUT/logcat.txt"
 grep -F "[diag:" "$OUT/logcat.txt" > "$OUT/diag.txt" || true

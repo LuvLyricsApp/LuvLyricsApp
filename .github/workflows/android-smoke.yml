@@ -9,7 +9,7 @@ name: Android smoke test
 
 on:
   push:
-    branches: [main, claude/luvlyricsapp-ui-redesign-njxgnc]
+    branches: [main, claude/luvlyricsapp-ui-redesign-njxgnc, claude/luvlyricsapp-ui-ux-overhaul-o7eggn]
     paths: ['src/**', 'android/**', 'index.ts', 'App.tsx', 'app.json', 'package.json', 'package-lock.json', '.github/**']
   workflow_dispatch:
 
