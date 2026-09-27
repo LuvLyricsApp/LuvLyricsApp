@@ -70,7 +70,10 @@ jobs:
 
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        # gradlew was committed from Windows without the executable bit.
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/release/app-release.apk LuvLyrics.apk
