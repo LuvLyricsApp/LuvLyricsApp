@@ -37,11 +37,12 @@ tap_desc() {
     [ -n "$b" ] && break
     sleep 2
   done
-  if [ -z "$b" ]; then echo "tap '$1': not found" >> "$OUT/taps.txt"; return 1; fi
+  local label="$1"
+  if [ -z "$b" ]; then echo "tap '$label': not found" >> "$OUT/taps.txt"; return 1; fi
   set -- $b
   local x=$(( ($1 + $3) / 2 )) y=$(( ($2 + $4) / 2 ))
   adb shell input tap "$x" "$y"
-  echo "tap '$1' at $x,$y" >> "$OUT/taps.txt"
+  echo "tap '$label' at $x,$y" >> "$OUT/taps.txt"
 }
 
 # A burst of frames while a page changes, to catch a white flash.
@@ -84,9 +85,13 @@ shot after-close
 # Open the player again from the pill, then its ••• menu and Listen together.
 tap_desc "Now playing:" && sleep 3
 shot player-reopened
-tap_desc "Song options" && sleep 2
+# The canvas video keeps uiautomator from seeing an idle UI inside the player,
+# so the sheets are opened with the app's own links.
+link "lyricflow://player?sheet=menu"
+sleep 3
 shot player-menu
-tap_desc "Listen together" && sleep 2
+link "lyricflow://together?code=TEST42"
+sleep 3
 shot listen-together
 adb shell input keyevent KEYCODE_BACK
 sleep 3
