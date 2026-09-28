@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { usePlayer } from '../contexts/PlayerContext';
+import { diag } from '../utils/diag';
 import { usePlayerStore, beginAudioLoad, endAudioLoad, playerControls, prepareNextInQueue, takeResumePosition } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { useSongsStore } from '../store/songsStore';
@@ -41,7 +42,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
 
   // Song loading
   useEffect(() => {
-    let cancelled = false;
     const load = async () => {
       try {
         const targetSongId = songId;
@@ -71,13 +71,18 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
           if (!beginAudioLoad(targetSongId)) return;
           if (__DEV__) console.log('[NowPlaying] Loading audio:', songToPlay.title);
           await player?.replace(songToPlay.audioUri);
-          if (cancelled) { endAudioLoad(targetSongId); return; }
+          // Give up only if another song took over while this one loaded. A
+          // dependency change (the lyrics landing mid-load) re-runs this effect,
+          // and bailing on `cancelled` here left the song loaded but never
+          // started: the re-run couldn't claim the load that was still held.
+          if (usePlayerStore.getState().currentSongId !== targetSongId) { endAudioLoad(targetSongId); return; }
           setLoadedAudioId(targetSongId);
           prepareNextInQueue();
           const resumeAt = takeResumePosition(targetSongId);
           if (resumeAt !== null) playerControls.seekTo(resumeAt);
           didAutoPlayRef.current = true;
           requestPlayback(true);
+          diag('audio', `player loaded "${songToPlay.title}", play requested`);
           endAudioLoad(targetSongId);
         }
 
@@ -95,7 +100,6 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
       }
     };
     load();
-    return () => { cancelled = true; };
     // storePlaying is deliberately not a dep — this effect loads audio, it must
     // never react to play/pause state.
     // eslint-disable-next-line react-hooks/exhaustive-deps

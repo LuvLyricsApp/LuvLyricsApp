@@ -29,6 +29,7 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
+import { diag } from '../utils/diag';
 import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue, takeRestoredLoad, takeResumePosition } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
@@ -396,7 +397,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           // The last-played song restored at launch waits for a tap; anything
           // the listener picked plays. (Keyed to that song: a fresh install
           // used to swallow its first pick because it was the "first load".)
-          if (!takeRestoredLoad(songId)) requestPlayback(true);
+          const restored = takeRestoredLoad(songId);
+          if (!restored) requestPlayback(true);
+          diag('audio', `pill loaded "${currentSong.title}", ${restored ? 'restored, waits for a tap' : 'play requested'}`);
         } catch (error) {
           if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
         } finally {
@@ -406,8 +409,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
 
     syncAudio();
+    // audioUri too: a streamed song can arrive before its audio link resolves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, requestPlayback]);
+  }, [currentSong?.id, currentSong?.audioUri, player, loadedAudioId, setLoadedAudioId, requestPlayback]);
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
