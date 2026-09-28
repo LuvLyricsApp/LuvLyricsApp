@@ -5,6 +5,7 @@
 #   player-cover.png     Now Playing on the cover (Apple Music style + canvas)
 #   player-cover-2.png   the same 12s later (canvas / glow motion)
 #   player-lyrics.png    Now Playing on lyrics (glow in the blend style)
+#   player-lyrics-2.png  the same 5s later: the list has glided to the sung line
 #   after-close.png      back from the player: the mini pill must be showing
 #   player-reopened.png  the player opened again from the pill
 #   player-nudged.png    a small pull let go: the player springs back open
@@ -35,7 +36,10 @@ step() {
   echo "== $(date -u +%H:%M:%S) $1"
   if ! alive; then echo "== emulator is gone — stopping here"; finish; exit 0; fi
 }
-link() { adb shell am start -W -a android.intent.action.VIEW -d "$1" "$PKG" >/dev/null 2>&1; }
+# adb joins its arguments into one command for the device's shell, so the URL
+# is quoted again for that shell — a bare `&` in `?q=…&lyrics=1` ended the
+# command there and the link lost everything after it.
+link() { adb shell "am start -W -a android.intent.action.VIEW -d '$1' $PKG" >/dev/null 2>&1; }
 shot() {
   adb exec-out screencap -p > "$OUT/$1.png"
   # An empty file (device gone mid-capture) breaks the release upload.
@@ -127,6 +131,8 @@ step "playing Levitating"
 link "lyricflow://play?q=Levitating%20Dua%20Lipa&lyrics=1"
 sleep 35
 shot player-lyrics
+sleep 5
+shot player-lyrics-2
 
 step "closing the player"
 # Back from the player: the sheet falls away and the mini pill must be there.
