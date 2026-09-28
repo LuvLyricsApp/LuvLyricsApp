@@ -167,6 +167,9 @@ const LuvsScreen: React.FC = () => {
   useFocusEffect(useCallback(() => {
     StatusBar.setHidden(true);
     setPlaying(true);
+    // The library song stops as Luvs opens, not ducked under it until the
+    // first card's audio arrives.
+    if (usePlayerStore.getState().isPlaying) usePlayerStore.getState().requestPlayback(false);
     return () => {
       StatusBar.setHidden(false);
       luvsBufferManager.stopAll();
