@@ -102,9 +102,10 @@ const LuvsScreen: React.FC = () => {
   const camX = useSharedValue(laneIndex);
 
   // ── Layout: the card fills what the header, rail, controls and bar leave ──
-  const cardW = Math.round(Math.min(screenW * 0.8, 440));
   const controlsH = 58 + 46 + 84;
   const available = screenH - insets.top - 58 - 52 - controlsH - (TAB_BAR_CLEARANCE + insets.bottom) - 34;
+  // A short screen narrows the card rather than letting it run into the title.
+  const cardW = Math.round(Math.min(screenW * 0.8, 440, Math.max(160, available / 0.9)));
   const cardH = Math.round(Math.max(cardW * 0.9, Math.min(cardW * 1.3, available)));
 
   // ── Lanes ────────────────────────────────────────────────────────────────
