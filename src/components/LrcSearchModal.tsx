@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LyricsRepository, SearchResult } from '../services/LyricsRepository';
-import { useThemeColors } from '../contexts/ThemeContext';
+import { Glass, Radius, Signal } from '../constants/allegraTheme';
 
 interface LrcSearchModalProps {
   visible: boolean;
@@ -18,7 +18,6 @@ interface LrcSearchModalProps {
 export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
   visible, onClose, onSelect, initialQuery, autoPick = false
 }) => {
-  const colors = useThemeColors();
   const [artistName, setArtistName] = useState(initialQuery.artist);
   const [songName, setSongName] = useState(initialQuery.title);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -32,7 +31,7 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
     const artistToUse = overrideArtist !== undefined ? overrideArtist : artistName;
     if (!titleToUse.trim()) return;
     setLoading(true);
-    setStatusMessage('Searching global databases...');
+    setStatusMessage('Searching the lyrics sources…');
     setResults([]);
     try {
       const searchResults = await LyricsRepository.searchSmart(
@@ -46,8 +45,8 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
         if (bestSynced) { onSelect(bestSynced); return; }
       }
     } catch (error) {
-      console.error('Search failed:', error);
-      Alert.alert('Error', 'Failed to fetch lyrics. Please try again.');
+      if (__DEV__) console.warn('Search failed:', error);
+      Alert.alert('Couldn’t search', 'The lyrics sources didn’t answer. Try again in a moment.');
     } finally {
       setLoading(false);
       setStatusMessage('');
@@ -98,19 +97,19 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
           </View>
           {item.type === 'synced' && (
             <View style={[styles.badge, styles.badgeSynced]}>
-              <Ionicons name="time" size={10} color="#fff" style={{ marginRight: 2 }} />
-              <Text style={styles.badgeText}>Synced</Text>
+              <Ionicons name="time" size={10} color={Signal.waveInk} style={{ marginRight: 2 }} />
+              <Text style={[styles.badgeText, styles.badgeTextOn]}>Synced</Text>
             </View>
           )}
           {item.matchScore > 0 && (
             <View style={[styles.badge, item.matchScore > 80 ? styles.badgeHigh : styles.badgeLow]}>
-              <Text style={styles.badgeText}>{Math.round(item.matchScore)}% Match</Text>
+              <Text style={styles.badgeText}>{Math.round(item.matchScore)}% match</Text>
             </View>
           )}
         </View>
         {item.matchReason ? <Text style={styles.matchReason}>{item.matchReason}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#666" />
+      <Ionicons name="chevron-forward" size={18} color={Signal.inkMuted} />
     </TouchableOpacity>
   );
 
@@ -118,23 +117,23 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Fetch Lyrics</Text>
+          <Text style={styles.headerTitle}>Choose a source</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#fff" />
+            <Ionicons name="close" size={20} color={Signal.ink} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.searchContainer}>
           <View style={styles.inputRow}>
             <TextInput style={styles.searchInput} value={songName} onChangeText={setSongName}
-              placeholder="Song name" placeholderTextColor="#666" onSubmitEditing={() => handleSearch()} returnKeyType="search" />
+              placeholder="Song title" placeholderTextColor={Signal.inkFaint} selectionColor={Signal.wave} onSubmitEditing={() => handleSearch()} returnKeyType="search" />
           </View>
           <View style={styles.inputRow}>
             <TextInput style={styles.searchInput} value={artistName} onChangeText={setArtistName}
-              placeholder="Artist name" placeholderTextColor="#666" onSubmitEditing={() => handleSearch()} returnKeyType="search" />
+              placeholder="Artist" placeholderTextColor={Signal.inkFaint} selectionColor={Signal.wave} onSubmitEditing={() => handleSearch()} returnKeyType="search" />
           </View>
-          <TouchableOpacity onPress={() => handleSearch()} style={[styles.searchButton, { backgroundColor: colors.primary }]}>
-            <Ionicons name="search" size={20} color="#fff" />
+          <TouchableOpacity onPress={() => handleSearch()} style={styles.searchButton}>
+            <Ionicons name="search" size={18} color={Signal.waveInk} />
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
@@ -143,10 +142,10 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
           <View style={styles.previewContainer}>
             <View style={styles.previewHeader}>
               <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Ionicons name="chevron-back" size={22} color={Signal.ink} />
                 <Text style={styles.backButtonText}>Back</Text>
               </TouchableOpacity>
-              <Text style={styles.previewTitle}>Preview Lyrics</Text>
+              <Text style={styles.previewTitle}>Preview</Text>
               <View style={{ width: 60 }} />
             </View>
             <View style={styles.previewContent}>
@@ -162,7 +161,7 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
                     <Text style={styles.badgeText}>{previewItem.source}</Text>
                   </View>
                   <View style={[styles.badge, previewItem.type === 'synced' ? styles.badgeSynced : styles.badgeLow]}>
-                    <Text style={styles.badgeText}>{previewItem.type === 'synced' ? 'Synced Lyrics' : 'Plain Lyrics'}</Text>
+                    <Text style={[styles.badgeText, previewItem.type === 'synced' && styles.badgeTextOn]}>{previewItem.type === 'synced' ? 'Synced' : 'Not synced'}</Text>
                   </View>
                 </View>
               </View>
@@ -172,15 +171,14 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
               </ScrollView>
             </View>
             <View style={styles.previewFooter}>
-              <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.primary }]} onPress={handleApply}>
-                <Text style={styles.applyButtonText}>Apply Edited Lyrics</Text>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginLeft: 8 }} />
+              <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+                <Text style={styles.applyButtonText}>Use these lyrics</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={Signal.wave} />
             <Text style={styles.loadingText}>{statusMessage}</Text>
           </View>
         ) : (
@@ -189,9 +187,9 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons name="musical-notes-outline" size={48} color="#333" />
-                <Text style={styles.emptyText}>No results found</Text>
-                <Text style={styles.emptySubText}>Try a different search query</Text>
+                <Ionicons name="musical-notes-outline" size={40} color={Signal.inkFaint} />
+                <Text style={styles.emptyText}>No lyrics found</Text>
+                <Text style={styles.emptySubText}>Try the title without extras like “(From …)”</Text>
               </View>
             }
           />
@@ -202,49 +200,50 @@ export const LrcSearchModal: React.FC<LrcSearchModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#333' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-  closeButton: { padding: 4 },
-  searchContainer: { padding: 16, gap: 12 },
+  container: { flex: 1, backgroundColor: Signal.bg },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: Signal.ink },
+  closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  searchContainer: { paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
   inputRow: { flexDirection: 'row' },
-  searchInput: { flex: 1, backgroundColor: '#1c1c1e', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, color: '#fff', fontSize: 16 },
-  searchButton: { borderRadius: 8, paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  searchButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  searchInput: { flex: 1, backgroundColor: Glass.fillLight, borderRadius: Radius.well, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline, paddingHorizontal: 16, paddingVertical: 12, color: Signal.ink, fontSize: 16 },
+  searchButton: { borderRadius: Radius.pill, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Signal.wave },
+  searchButtonText: { color: Signal.waveInk, fontSize: 15, fontWeight: '700' },
   listContent: { padding: 16 },
-  resultItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1c1c1e', borderRadius: 12, padding: 16, marginBottom: 12 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: Glass.fill, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline, padding: 16, marginBottom: 10 },
   resultContent: { flex: 1, marginRight: 12 },
-  resultTitle: { fontSize: 16, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
-  resultArtist: { fontSize: 14, color: '#888', marginBottom: 8 },
+  resultTitle: { fontSize: 16, fontWeight: '600', color: Signal.ink, marginBottom: 3 },
+  resultArtist: { fontSize: 13, color: Signal.inkMuted, marginBottom: 8 },
   badgesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
-  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center' },
-  badgeLrc: { backgroundColor: '#0A84FF' },
-  badgeSaavn: { backgroundColor: '#24D366' },
-  badgeLyrica: { backgroundColor: '#1A1A1A' },
-  badgeGenius: { backgroundColor: '#FFD60A' },
-  badgeSynced: { backgroundColor: '#30D158' },
-  badgeHigh: { backgroundColor: 'rgba(48,209,88,0.2)', borderWidth: 1, borderColor: '#30D158' },
-  badgeLow: { backgroundColor: 'rgba(255,69,58,0.2)', borderWidth: 1, borderColor: '#FF453A' },
-  badgeText: { fontSize: 10, fontWeight: 'bold', color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 1 },
-  matchReason: { fontSize: 11, color: '#666', fontStyle: 'italic' },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill, flexDirection: 'row', alignItems: 'center', backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  badgeLrc: {},
+  badgeSaavn: {},
+  badgeLyrica: {},
+  badgeGenius: {},
+  badgeSynced: { backgroundColor: Signal.wave, borderColor: Signal.wave },
+  badgeHigh: {},
+  badgeLow: {},
+  badgeText: { fontSize: 11, fontWeight: '600', color: Signal.inkSoft },
+  badgeTextOn: { color: Signal.waveInk },
+  matchReason: { fontSize: 12, color: Signal.inkMuted },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { color: '#888', marginTop: 12, fontSize: 14 },
+  loadingText: { color: Signal.inkMuted, marginTop: 12, fontSize: 14 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 16 },
-  emptySubText: { color: '#666', marginTop: 8 },
-  previewContainer: { flex: 1, backgroundColor: '#000' },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#333', backgroundColor: '#1c1c1e' },
-  backButton: { flexDirection: 'row', alignItems: 'center' },
-  backButtonText: { color: '#fff', fontSize: 16, marginLeft: 4 },
-  previewTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  previewContent: { flex: 1, padding: 16 },
-  previewMeta: { marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#333', paddingBottom: 16 },
-  previewTrack: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  previewArtist: { color: '#aaa', fontSize: 16 },
+  emptyText: { color: Signal.ink, fontSize: 17, fontWeight: '600', marginTop: 14 },
+  emptySubText: { color: Signal.inkMuted, marginTop: 6, textAlign: 'center' },
+  previewContainer: { flex: 1, backgroundColor: Signal.bg },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
+  backButton: { flexDirection: 'row', alignItems: 'center', padding: 4 },
+  backButtonText: { color: Signal.ink, fontSize: 16, marginLeft: 2 },
+  previewTitle: { color: Signal.ink, fontSize: 17, fontWeight: '600' },
+  previewContent: { flex: 1, paddingHorizontal: 16 },
+  previewMeta: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Glass.hairline },
+  previewTrack: { color: Signal.ink, fontSize: 20, fontWeight: '700', marginBottom: 3 },
+  previewArtist: { color: Signal.inkSoft, fontSize: 15, marginBottom: 8 },
   previewScroll: { flex: 1 },
   previewScrollContent: { paddingBottom: 24 },
-  previewInput: { color: '#ddd', fontSize: 14, lineHeight: 22, fontFamily: 'monospace', minHeight: 300, padding: 0 },
-  previewFooter: { padding: 16, borderTopWidth: 1, borderTopColor: '#333', backgroundColor: '#1c1c1e' },
-  applyButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12 },
-  applyButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  previewInput: { color: Signal.inkSoft, fontSize: 15, lineHeight: 23, minHeight: 300, padding: 0 },
+  previewFooter: { padding: 16 },
+  applyButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: Radius.pill, backgroundColor: Signal.wave },
+  applyButtonText: { color: Signal.waveInk, fontSize: 16, fontWeight: '700' },
 });

@@ -13,7 +13,8 @@ export type PlayerSheetName = 'menu' | 'together' | 'queue' | 'timer';
 export type RootStackParamList = {
   Main: NavigatorScreenParams<TabParamList> | undefined;
   NowPlaying: { songId: string; lyrics?: boolean; sheet?: PlayerSheetName };
-  AddEditLyrics: { songId?: string }; // undefined = add new, string = edit existing
+  /** Lyrics editor for a song saved on the phone. */
+  EditLyrics: { songId: string };
   YoutubeBrowser: undefined;
   LuvsVault: undefined; // Luvs liked songs vault
   CreatePlaylist: { playlistId?: string, initialName?: string } | undefined; // Create or Edit playlist modal

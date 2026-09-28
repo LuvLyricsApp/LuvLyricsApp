@@ -516,7 +516,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           {currentSong ? (
             <SongDetails
               song={currentSong}
-              onEditLyrics={() => { closeSheet(); navigation.navigate('AddEditLyrics', { songId: currentSong.id }); }}
+              onEditLyrics={() => { closeSheet(); navigation.navigate('EditLyrics', { songId: currentSong.id }); }}
               onChangeCover={() => { closeSheet(); setShowCoverSearch(true); }}
             />
           ) : null}

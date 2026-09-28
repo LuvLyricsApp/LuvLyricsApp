@@ -127,9 +127,6 @@ const LibraryScreen: React.FC = () => {
       <View style={styles.topBar}>
         <Text style={styles.title} accessibilityRole="header">Library</Text>
         <View style={styles.topActions}>
-          <Pressable onPress={() => navigation.navigate('AddEditLyrics', {})} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add lyrics" style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-            <Ionicons name="add" size={22} color={Signal.ink} />
-          </Pressable>
           <Pressable onPress={() => setQueueOpen(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Download queue" style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
             <Ionicons name="arrow-down" size={20} color={Signal.ink} />
             {active.length > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{active.length}</Text></View> : null}

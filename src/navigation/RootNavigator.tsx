@@ -14,7 +14,7 @@ import { navTheme, SCREEN_BG, stackContentStyle } from './theme';
 // Import navigators and screens
 import TabNavigator from './TabNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
-import AddEditLyricsScreen from '../screens/AddEditLyricsScreen';
+import LyricsEditorScreen from '../screens/LyricsEditorScreen';
 import { YoutubeBrowserScreen } from '../screens/YoutubeBrowserScreen';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { MoreMenuHost } from '../components/MoreMenu';
@@ -79,8 +79,8 @@ export const RootNavigator: React.FC = () => {
             }}
           />
           <Stack.Screen
-            name="AddEditLyrics"
-            component={AddEditLyricsScreen}
+            name="EditLyrics"
+            component={LyricsEditorScreen}
           />
           <Stack.Screen
             name="CreatePlaylist"
