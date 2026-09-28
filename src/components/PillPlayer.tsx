@@ -43,6 +43,7 @@ import { useGlowColors } from './player/useGlowColors';
 import { useSettingsStore } from '../store/settingsStore';
 import { PILL_PLAYER_HEIGHT, pillPlayerInset } from '../navigation/tabs';
 import { playerSheetProgress } from '../navigation/sheetProgress';
+import { lastSongDirection } from '../store/playerStore';
 
 export { PILL_PLAYER_HEIGHT };
 
@@ -94,6 +95,8 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   title, artist, coverImageUri, playing, bottom, sheetUp = false, onOpen, onTogglePlay, onNext, onPrevious,
 }) => {
   const side = pillPlayerInset(Dimensions.get('window').width);
+  // Read at render: when the title changes this is the way the skip went.
+  const songDirection = lastSongDirection();
 
   // ── Colour: cross-fade from the last song's tone to this one's ────────────
   const palette = useArtworkPalette(coverImageUri);
@@ -212,14 +215,14 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
               />
             </Svg>
             <Animated.View style={[styles.disc, discStyle]}>
-              <Artwork uri={coverImageUri} title={title} artist={artist} size={DISC} priority="high" style={styles.discArt} />
+              <Artwork uri={coverImageUri} title={title} artist={artist} size={DISC} priority="high" continuous style={styles.discArt} />
               <View style={styles.spindle} />
             </Animated.View>
           </View>
 
           <View style={styles.meta}>
-            <SwapText style={styles.title} numberOfLines={1}>{title}</SwapText>
-            {artist ? <Text style={styles.artist} numberOfLines={1}>{artist}</Text> : null}
+            <SwapText style={styles.title} numberOfLines={1} direction={songDirection}>{title}</SwapText>
+            {artist ? <SwapText style={styles.artist} numberOfLines={1} direction={songDirection}>{artist}</SwapText> : null}
           </View>
 
           <Tactile onPress={previous} hitSlop={8} pressScale={0.85} accessibilityRole="button" accessibilityLabel="Previous" style={styles.skip}>

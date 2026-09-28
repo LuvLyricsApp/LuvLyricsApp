@@ -109,24 +109,32 @@ interface ArtworkProps {
   priority?: 'low' | 'normal' | 'high';
   /** Fade duration for the real cover over the placeholder. */
   transition?: number;
+  /**
+   * A cover that changes in place (the playing song): keep the old cover up
+   * until the new one has loaded, then cross-dissolve straight to it. Without
+   * this the view resets per cover, and the next song's generated placeholder
+   * flashed in between. Leave off in recycled list rows.
+   */
+  continuous?: boolean;
 }
 
-export const Artwork: React.FC<ArtworkProps> = ({ uri, title, artist, size = 160, style, priority = 'normal', transition = Motion.duration.base }) => {
-  const [failed, setFailed] = useState(false);
-  const showImage = !!uri && !failed;
+export const Artwork: React.FC<ArtworkProps> = ({ uri, title, artist, size = 160, style, priority = 'normal', transition = Motion.duration.base, continuous = false }) => {
+  const [failed, setFailed] = useState<string | null>(null);
+  // A failure belongs to one cover; the next song's cover gets its own try.
+  const showImage = !!uri && failed !== uri;
   return (
     <View style={[styles.frame, style]}>
       <GeneratedArtwork title={title || 'Untitled'} artist={artist} size={size} />
       {showImage ? (
         <Image
           source={{ uri }}
-          recyclingKey={uri}
+          recyclingKey={continuous ? undefined : uri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={{ duration: transition, effect: 'cross-dissolve' }}
+          transition={{ duration: continuous ? Math.max(transition, Motion.duration.slow) : transition, effect: 'cross-dissolve' }}
           priority={priority}
           cachePolicy="memory-disk"
-          onError={() => setFailed(true)}
+          onError={() => setFailed(uri ?? null)}
         />
       ) : null}
     </View>

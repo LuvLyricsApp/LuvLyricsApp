@@ -31,6 +31,7 @@ import { PlayerType } from '../constants/allegraTheme';
 import { formatTimeSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
 import { useSettingsStore } from '../store/settingsStore';
+import { lastSongDirection } from '../store/playerStore';
 
 interface NowPlayingControlsProps {
   animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
@@ -146,6 +147,8 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   compact = false,
 }) => {
   const insets = useSafeAreaInsets();
+  // Read at render: when the title changes this is the way the skip went.
+  const songDirection = lastSongDirection();
   const hideVolume = useSettingsStore(s => s.appleMusicInspired && s.hidePlayerVolume);
   const [backNudge, setBackNudge] = useState(0);
   const [forwardNudge, setForwardNudge] = useState(0);
@@ -177,10 +180,10 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         <View style={styles.metaRow}>
           <Pressable style={styles.metaText} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
             <View style={styles.swapLine}>
-              <SwapText style={styles.title} numberOfLines={1}>{currentSongTitle || 'Not playing'}</SwapText>
+              <SwapText style={styles.title} numberOfLines={1} direction={songDirection}>{currentSongTitle || 'Not playing'}</SwapText>
             </View>
             <View style={styles.swapLineSmall}>
-              <SwapText style={styles.artist} numberOfLines={1}>{currentSongArtist || 'Unknown artist'}</SwapText>
+              <SwapText style={styles.artist} numberOfLines={1} direction={songDirection}>{currentSongArtist || 'Unknown artist'}</SwapText>
             </View>
           </Pressable>
 

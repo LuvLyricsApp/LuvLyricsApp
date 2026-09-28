@@ -49,7 +49,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
     const size = Math.min(width - 64, 380);
     return (
       <View style={[styles.cardArea, { paddingTop: insets.top + HEADER_CLEARANCE + 24 }]}>
-        <Artwork uri={coverImageUri} title={songTitle ?? ''} artist={songArtist} size={size} priority="high" style={[styles.card, { width: size, height: size }]} />
+        <Artwork uri={coverImageUri} title={songTitle ?? ''} artist={songArtist} size={size} priority="high" continuous style={[styles.card, { width: size, height: size }]} />
       </View>
     );
   }

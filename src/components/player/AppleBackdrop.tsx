@@ -137,6 +137,9 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
   }, [showHero, hero]);
   const heroOpacity = useDerivedValue(() => hero.value);
   const fadeOpacity = useDerivedValue(() => fade.value);
+  // The new cover settles into place as it fades in (104% → 100%), so a song
+  // change reads as the next cover arriving rather than a flat dissolve.
+  const settle = useDerivedValue(() => [{ scale: 1 + 0.04 * (1 - fade.value) }]);
 
   const room = (
     <>
@@ -147,7 +150,7 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
       <Fill color="rgba(0,0,0,0.35)" />
       {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} /> : null}
       {layers.next ? (
-        <Group opacity={fadeOpacity}>
+        <Group opacity={fadeOpacity} transform={settle} origin={vec(width / 2, heroH / 2)}>
           <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} />
         </Group>
       ) : null}

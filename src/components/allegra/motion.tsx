@@ -110,14 +110,42 @@ const swapExit = (_v: ExitAnimationsValues) => {
   };
 };
 
+// Song changes move sideways with the skip: next comes in from the right and
+// the old line leaves to the left, previous the other way — the same
+// direction the finger (or the button) went, so the change reads as travel.
+const sideEnter = (direction: number) => (_v: EntryAnimationsValues) => {
+  'worklet';
+  const t = { duration: Motion.duration.slow, easing: Motion.ease.decelerate };
+  return {
+    initialValues: { opacity: 0, transform: [{ translateX: 28 * direction }] },
+    animations: { opacity: withTiming(1, t), transform: [{ translateX: withTiming(0, t) }] },
+  };
+};
+
+const sideExit = (direction: number) => (_v: ExitAnimationsValues) => {
+  'worklet';
+  const t = { duration: Motion.duration.base, easing: Motion.ease.accelerate };
+  return {
+    initialValues: { opacity: 1, transform: [{ translateX: 0 }] },
+    animations: { opacity: withTiming(0, t), transform: [{ translateX: withTiming(-22 * direction, t) }] },
+  };
+};
+
 /**
  * Text that changes in place (song title, artist): the old line lifts away,
  * the new one rises in — Allegra's swapVariants. Keyed by the text itself.
  */
-export const SwapText: React.FC<TextProps & { children: string }> = ({ children, ...rest }) => {
+export const SwapText: React.FC<TextProps & {
+  children: string;
+  /** A song change: 1 = forward, -1 = back (moves sideways), 0 or unset = rises in place. */
+  direction?: number;
+}> = ({ children, direction = 0, ...rest }) => {
   const reduce = useReducedMotion();
+  const sideways = direction === 1 || direction === -1;
+  const entering = reduce ? undefined : sideways ? sideEnter(direction) : swapEnter;
+  const exiting = reduce ? undefined : sideways ? sideExit(direction) : swapExit;
   return (
-    <Animated.Text key={children} entering={reduce ? undefined : swapEnter} exiting={reduce ? undefined : swapExit} {...rest}>
+    <Animated.Text key={children} entering={entering} exiting={exiting} {...rest}>
       {children}
     </Animated.Text>
   );

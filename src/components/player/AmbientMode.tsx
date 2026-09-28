@@ -42,7 +42,7 @@ const AmbientMode: React.FC<AmbientModeProps> = ({ song, canvas, playing, onExit
       <Pressable style={StyleSheet.absoluteFill} onPress={onExit} accessibilityRole="button" accessibilityLabel="Leave ambient mode">
         {/* The cover stays under the canvas, so the clip fades in over it, never over black. */}
         <View style={styles.center}>
-          <Artwork uri={song.coverImageUri} title={song.title} artist={song.artist} size={size} priority="high" style={[styles.art, { width: size, height: size }]} />
+          <Artwork uri={song.coverImageUri} title={song.title} artist={song.artist} size={size} priority="high" continuous style={[styles.art, { width: size, height: size }]} />
         </View>
         {canvas ? <CanvasVideoLayer canvas={canvas} playing={playing} scrimStrength={0.45} /> : null}
         <View style={[styles.meta, { paddingBottom: insets.bottom + 36 }]} pointerEvents="none">

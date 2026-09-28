@@ -59,6 +59,13 @@ export function endAudioLoad(songId: string): void {
   if (audioLoadInFlight === songId) audioLoadInFlight = null;
 }
 
+// Which way the last song change went, so titles and covers can move with it:
+// 1 = forward (next, auto-advance), -1 = back (previous), 0 = a song picked.
+let songDirection: -1 | 0 | 1 = 0;
+export function lastSongDirection(): -1 | 0 | 1 {
+  return songDirection;
+}
+
 // A reload that should carry on from where the song stopped (recovery after
 // the player gave up, the menu's Refetch) rather than start from zero. The
 // loader seeks before it plays, so there is no blip from the top.
@@ -187,6 +194,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const idx = queue.findIndex(s => s.id === mediaId);
     if (idx < 0) return;
     const song = queue[idx];
+    songDirection = 1;
     set({
       currentQueueIndex: idx,
       currentSong: song,
@@ -256,6 +264,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   // Playlist queue management
   setPlaylistQueue: (playlistId: string, songs: Song[], startIndex: number) => {
+    songDirection = 0;
     const startSongId = songs[startIndex]?.id;
     set({ 
       playlistQueue: songs,
@@ -338,6 +347,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     const freshState = get();
     if (!freshState.playlistQueue) return;
+    songDirection = 1;
     const nextIndex = (freshState.currentQueueIndex + 1) % freshState.playlistQueue.length;
     const nextSong = freshState.playlistQueue[nextIndex];
 
@@ -383,6 +393,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const state = get();
     if (!state.playlistQueue || state.playlistQueue.length === 0) return;
 
+    songDirection = -1;
     const prevIndex = (state.currentQueueIndex - 1 + state.playlistQueue.length) % state.playlistQueue.length;
     const prevSong = state.playlistQueue[prevIndex];
 
