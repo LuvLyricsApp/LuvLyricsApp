@@ -32,7 +32,7 @@ export const LrcLibService = {
       }
 
       const searchUrl = `${BASE_URL}${queryPath}`;
-      console.log('[LrcLibService] Searching LRCLIB:', searchUrl);
+      if (__DEV__) console.log('[LrcLibService] Searching LRCLIB:', searchUrl);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
@@ -76,7 +76,7 @@ export const LrcLibService = {
       if (albumName) url += `&album_name=${encodeURIComponent(albumName)}`;
       if (duration) url += `&duration=${duration}`;
       
-      console.log('[LrcLibService] Getting lyrics from:', url);
+      if (__DEV__) console.log('[LrcLibService] Getting lyrics from:', url);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout

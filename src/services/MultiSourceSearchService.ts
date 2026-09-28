@@ -89,7 +89,7 @@ const mapProviderSong = (song: SaavnGaanaSongResponse, source: ProviderSource): 
  */
 async function searchGaana(query: string): Promise<UnifiedSong[]> {
   try {
-    console.log(`[Gaana] Searching (Fallback): ${query}`);
+    if (__DEV__) console.log(`[Gaana] Searching (Fallback): ${query}`);
     const searchUrl = `${GAANA_API}/search/songs?query=${encodeURIComponent(query)}&limit=20`;
 
     const timeoutPromise = createTimeout(25000);
@@ -124,7 +124,7 @@ async function searchGaana(query: string): Promise<UnifiedSong[]> {
  */
 async function searchSaavn(query: string): Promise<UnifiedSong[]> {
   try {
-    console.log(`[Saavn] Searching: ${query}`);
+    if (__DEV__) console.log(`[Saavn] Searching: ${query}`);
     const searchUrl = `${SAAVN_API}/search/songs?query=${encodeURIComponent(query)}&limit=20`;
 
     const timeoutPromise = createTimeout(25000);
@@ -162,7 +162,7 @@ async function searchSaavn(query: string): Promise<UnifiedSong[]> {
  * Now exclusively uses Saavn for reliability
  */
 export async function searchMusic(query: string, artistName?: string, onProgress?: (status: string) => void): Promise<UnifiedSong[]> {
-  console.log(`[SearchEngine] 🚀 Searching JioSaavn. Query: "${query}"`);
+  if (__DEV__) console.log(`[SearchEngine] 🚀 Searching JioSaavn. Query: "${query}"`);
   onProgress?.('Searching JioSaavn...');
 
   try {
@@ -170,7 +170,7 @@ export async function searchMusic(query: string, artistName?: string, onProgress
       
       // FALLBACK TO GAANA
       if (results.length === 0) {
-          console.log(`[SearchEngine] ⚠️ Saavn returned 0 results. Trying Gaana...`);
+          if (__DEV__) console.log(`[SearchEngine] ⚠️ Saavn returned 0 results. Trying Gaana...`);
           onProgress?.('Saavn empty. Trying Gaana...');
           const gaanaResults = await searchGaana(query);
           results = gaanaResults;

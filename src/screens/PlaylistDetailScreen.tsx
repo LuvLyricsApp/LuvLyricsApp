@@ -235,7 +235,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                  setSortDirection(direction);
              }
          } catch (e) {
-             console.log('Failed to load sort settings', e);
+             if (__DEV__) console.log('Failed to load sort settings', e);
          }
      };
      loadSort();
@@ -299,7 +299,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         if (needsLoad) {
            if (currentSong.audioUri) {
                try {
-                   console.log(`[InlinePlayer] Loading audio for: ${currentSong.title}`);
+                   if (__DEV__) console.log(`[InlinePlayer] Loading audio for: ${currentSong.title}`);
                    await player.replace(currentSong.audioUri);
                    state.setLoadedAudioId(currentSong.id);
                    if (isPlaying) {
@@ -307,7 +307,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                        setTimeout(() => player.play(), 100);
                    }
                } catch (e) {
-                   console.log('[InlinePlayer] Load failed', e);
+                   if (__DEV__) console.log('[InlinePlayer] Load failed', e);
                }
            }
         }

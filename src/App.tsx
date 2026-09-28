@@ -94,7 +94,7 @@ const App: React.FC = () => {
 
       while (retries > 0) {
         try {
-          console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
+          if (__DEV__) console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
 
           // Parallel: preload native data + audio mode + fonts (all while Hermes parsed the bundle)
           const [preloaded] = await Promise.all([
@@ -160,7 +160,7 @@ const App: React.FC = () => {
           // Build/verify FTS5 search index in background (Android only; no-op on iOS)
           ensureSearchIndex().catch(() => {});
 
-          console.log('[APP] Initialization successful');
+          if (__DEV__) console.log('[APP] Initialization successful');
           setIsReady(true);
           
           // Run playlist migration AFTER UI renders (prevents startup freeze)
@@ -178,7 +178,7 @@ const App: React.FC = () => {
           
           retries--;
           if (retries > 0) {
-            console.log(`[APP] Retrying in 2 seconds...`);
+            if (__DEV__) console.log(`[APP] Retrying in 2 seconds...`);
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }

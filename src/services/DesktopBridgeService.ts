@@ -587,7 +587,7 @@ class DesktopBridgeService {
       socket.on('close', () => {
         this.clients.delete(id);
         this.handleDesktopDisconnected('socket_close');
-        console.log('[DesktopBridge] Client disconnected:', id);
+        if (__DEV__) console.log('[DesktopBridge] Client disconnected:', id);
       });
 
       socket.on('error', () => {
@@ -611,7 +611,7 @@ class DesktopBridgeService {
           settled = true;
           resolve();
         }
-        console.log('[DesktopBridge] WS server listening on', this.controlPort);
+        if (__DEV__) console.log('[DesktopBridge] WS server listening on', this.controlPort);
       });
     });
   }
@@ -707,7 +707,7 @@ class DesktopBridgeService {
           const now = Date.now();
           if (now - this.pingLogAt > 3000) {
             this.pingLogAt = now;
-            console.log('[DesktopBridge] ping request');
+            if (__DEV__) console.log('[DesktopBridge] ping request');
           }
           const payload = JSON.stringify({
             deviceId: this.deviceId,
@@ -786,7 +786,7 @@ class DesktopBridgeService {
           const currentSongId = state.currentSong?.id ?? null;
           if (Date.now() - this.coverLogAt > 1200) {
             this.coverLogAt = Date.now();
-            console.log(
+            if (__DEV__) console.log(
               '[DesktopBridge] cover resolution',
               JSON.stringify({
                 requestedSongId,
@@ -825,7 +825,7 @@ class DesktopBridgeService {
           settled = true;
           resolve();
         }
-        console.log('[DesktopBridge] HTTP server listening on', HTTP_PORT);
+        if (__DEV__) console.log('[DesktopBridge] HTTP server listening on', HTTP_PORT);
       });
     });
   }
@@ -908,7 +908,7 @@ class DesktopBridgeService {
       const localIp = await this.getLocalIp();
       this.lastKnownIp = localIp;
       if (localIp) {
-        console.log('[DesktopBridge] Local WiFi IP:', localIp);
+        if (__DEV__) console.log('[DesktopBridge] Local WiFi IP:', localIp);
       } else {
         console.warn('[DesktopBridge] Could not determine local IP; mDNS may not include address');
       }
@@ -916,7 +916,7 @@ class DesktopBridgeService {
       if (!this.zeroconf) {
         this.zeroconf = new Zeroconf();
         this.zeroconf.on('published', (service: any) => {
-          console.log('[DesktopBridge] mDNS published:', JSON.stringify(service));
+          if (__DEV__) console.log('[DesktopBridge] mDNS published:', JSON.stringify(service));
         });
         this.zeroconf.on('error', (error: Error) => {
           console.error('[DesktopBridge] mDNS error:', error);
@@ -967,7 +967,7 @@ class DesktopBridgeService {
       );
       if (Date.now() - this.mdnsPublishLogAt > 800) {
         this.mdnsPublishLogAt = Date.now();
-        console.log(
+        if (__DEV__) console.log(
           '[DesktopBridge] mDNS publish payload',
           JSON.stringify({
             reason,
