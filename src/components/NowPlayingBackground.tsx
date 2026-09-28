@@ -7,6 +7,8 @@
  *            canvas playing inside that same dissolving hero (Canvas on).
  *   blend  — "Apple + glow": apple while the cover is on show, gliding into
  *            Echo's drifting glow when lyrics open (the two cross-fade).
+ *   youtube — YouTube Music: the cover's colour washing down into black, the
+ *            artwork as a card (NowPlayingLyricsArea), no canvas.
  *
  * With "Apple Music inspired" off, the sharp hero is left out and the player
  * shows a floating artwork card instead (NowPlayingLyricsArea).
@@ -16,6 +18,7 @@ import { View, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import AppleBackdrop, { heroHeight, usePlayerFrame } from './player/AppleBackdrop';
 import GlowBackground from './player/GlowBackground';
+import YouTubeBackdrop from './player/YouTubeBackdrop';
 import { useGlowColors } from './player/useGlowColors';
 import { useArtworkPalette } from './allegra/useArtworkPalette';
 import CanvasVideoLayer from './CanvasVideoLayer';
@@ -50,7 +53,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   const palette = useArtworkPalette(coverImageUri, gradientColors);
 
   const glowOn = style === 'blend' && showLyrics;
-  const glowColors = useGlowColors(style === 'apple' ? null : coverImageUri);
+  const glowColors = useGlowColors(style === 'blend' ? coverImageUri : null);
 
   // Apple <-> glow cross-fade.
   const glowOpacity = useSharedValue(glowOn ? 1 : 0);
@@ -61,7 +64,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
 
   // Echo shows the sharp cover (and the canvas inside it) only on the cover
   // view of the Apple Music player.
-  const heroOn = appleInspired && !showLyrics && !glowOn;
+  const heroOn = appleInspired && style !== 'youtube' && !showLyrics && !glowOn;
   const canvasAllowed = heroOn;
 
   const [canvasShown, setCanvasShown] = useState(false);
@@ -78,6 +81,14 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   useEffect(() => {
     diag('player', `background ${style}, apple inspired ${appleInspired}, lyrics ${showLyrics}, glow ${glowOn}, hero ${heroOn}, canvas ${canvas ? canvas.source : 'none'}`);
   }, [style, appleInspired, showLyrics, glowOn, heroOn, canvas]);
+
+  if (style === 'youtube') {
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
+        <YouTubeBackdrop palette={palette} />
+      </View>
+    );
+  }
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
@@ -104,7 +115,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
         </View>
       ) : null}
 
-      {style !== 'apple' ? (
+      {style === 'blend' ? (
         <Animated.View style={[StyleSheet.absoluteFill, glowStyle]}>
           <GlowBackground colors={glowColors} variant="player" active={glowOn} />
         </Animated.View>

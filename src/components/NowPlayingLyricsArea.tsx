@@ -41,13 +41,18 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   scrollOffset,
 }) => {
   // Settings → Lyrics (text size, line spacing) and the song's own alignment (lyrics editor).
-  const fontSize = useSettingsStore(st => st.lyricsFontSize);
+  const fontSize = useSettingsStore(st => st.lyricsSize);
   const lineSpacing = useSettingsStore(st => st.lineSpacing);
-  const align = usePlayerStore(st => st.currentSong?.lyricsAlign ?? 'left');
+  // Settings → Lyrics → Alignment, unless the song was set to centre or right
+  // in the lyrics editor (songs are stored as 'left' by default).
+  const globalAlign = useSettingsStore(st => st.lyricsAlign);
+  const songAlign = usePlayerStore(st => st.currentSong?.lyricsAlign);
+  const align = songAlign && songAlign !== 'left' ? songAlign : globalAlign;
   const textStyle = React.useMemo(() => lyricsTextStyle(fontSize, lineSpacing, align), [fontSize, lineSpacing, align]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const appleInspired = useSettingsStore(s => s.appleMusicInspired);
+  // YouTube Music's player always shows the artwork as a card.
+  const appleInspired = useSettingsStore(s => s.appleMusicInspired && s.playerBackground !== 'youtube');
   if (!showLyrics) {
     // Apple Music inspired: the cover is drawn full-bleed by the backdrop.
     // Off: a floating artwork card, as in Echo's other player design.

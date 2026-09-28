@@ -29,7 +29,7 @@ import { Signal } from '../constants/allegraTheme';
 import appConfig from '../../app.json';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
-import { MiniPlayerBackground, PlayerBackground, useSettingsStore } from '../store/settingsStore';
+import { AppBackground, LYRICS_SIZE_MAX, LYRICS_SIZE_MIN, LyricsAlign, MiniPlayerBackground, PlayerBackground, useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
 import { Toast } from '../components/Toast';
 import ListenTogetherSettings from '../components/settings/ListenTogetherSettings';
@@ -203,6 +203,7 @@ const SettingsScreen: React.FC<Props> = () => {
   const bgHint: Record<PlayerBackground, string> = {
     blend: 'The Apple Music room, blending into a soft glow when lyrics are open.',
     apple: 'The cover melting into its own blur, like Apple Music.',
+    youtube: 'The cover\u2019s colour washing down into black, with the artwork as a card, like YouTube Music.',
   };
 
   return (
@@ -253,8 +254,17 @@ const SettingsScreen: React.FC<Props> = () => {
             label="Player background"
             hint={bgHint[settings.playerBackground]}
             value={settings.playerBackground}
-            options={[{ value: 'apple', label: 'Apple Music' }, { value: 'blend', label: 'Apple + glow' }]}
+            options={[{ value: 'apple', label: 'Apple Music' }, { value: 'blend', label: 'Apple + glow' }, { value: 'youtube', label: 'YouTube Music' }]}
             onChange={settings.setPlayerBackground}
+          />
+          <Choice<AppBackground>
+            label="App background"
+            hint={settings.appBackground === 'glass'
+              ? 'Dark frosted glass tinted by the song. Lighter on the battery.'
+              : 'The live shader, moving with the music.'}
+            value={settings.appBackground}
+            options={[{ value: 'shader', label: 'Live shader' }, { value: 'glass', label: 'Frosted glass' }]}
+            onChange={settings.setAppBackground}
           />
           <Choice<MiniPlayerBackground>
             label="Mini player background"
@@ -305,11 +315,13 @@ const SettingsScreen: React.FC<Props> = () => {
         </Section>
 
         <Section icon="text-outline" title="Lyrics" lead="How lyrics look and keep time." onLayout={at('lyrics')}>
-          <Choice<'small' | 'medium' | 'large'>
-            label="Text size"
-            value={settings.lyricsFontSize}
-            options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]}
-            onChange={settings.setLyricsFontSize}
+          <LyricsSizeRow size={settings.lyricsSize} align={settings.lyricsAlign} onChange={settings.setLyricsSize} />
+          <Choice<LyricsAlign>
+            label="Alignment"
+            hint="Where lines sit. A song set to centre or right in its lyrics editor keeps that."
+            value={settings.lyricsAlign}
+            options={[{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }, { value: 'right', label: 'Right' }]}
+            onChange={settings.setLyricsAlign}
           />
           <Choice<'compact' | 'normal' | 'relaxed'>
             label="Line spacing"
@@ -562,6 +574,32 @@ const SettingsScreen: React.FC<Props> = () => {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
+/** Lyrics text size: a sample line resizes under the thumb; the size saves on release. */
+const LyricsSizeRow: React.FC<{ size: number; align: LyricsAlign; onChange: (size: number) => void }> = ({ size, align, onChange }) => {
+  const [live, setLive] = React.useState(size);
+  React.useEffect(() => { setLive(size); }, [size]);
+  const shown = Math.round(live);
+  return (
+    <Row label={`Text size  ${shown}`} hint="Slide to size the lines you sing along to." stack>
+      <Text style={[styles.lyricsSample, { fontSize: shown, lineHeight: Math.round(shown * 1.22), textAlign: align }]} numberOfLines={2}>
+        Sing it back to me
+      </Text>
+      <Slider
+        style={styles.slider}
+        minimumValue={LYRICS_SIZE_MIN}
+        maximumValue={LYRICS_SIZE_MAX}
+        step={1}
+        value={size}
+        onValueChange={setLive}
+        onSlidingComplete={onChange}
+        minimumTrackTintColor={Signal.wave}
+        maximumTrackTintColor="rgba(244,241,234,0.18)"
+        thumbTintColor={Signal.wave}
+      />
+    </Row>
+  );
+};
+
 /** Lyrics timing: the readout follows the thumb; the setting saves on release. */
 const TimingRow: React.FC<{ value: number; onChange: (seconds: number) => void }> = ({ value, onChange }) => {
   const [live, setLive] = React.useState(value);
@@ -587,6 +625,7 @@ const TimingRow: React.FC<{ value: number; onChange: (seconds: number) => void }
 };
 
 const styles = StyleSheet.create({
+  lyricsSample: { color: Signal.ink, fontWeight: '700', marginTop: 10, marginBottom: 4 },
   hero: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 },
   heroTitle: { color: Signal.ink, fontSize: 34, fontWeight: '700' },
   heroLead: { color: Signal.inkMuted, fontSize: 15, lineHeight: 21, marginTop: 6 },

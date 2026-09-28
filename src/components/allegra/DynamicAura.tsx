@@ -19,6 +19,9 @@ import MusicFlowField, { AuraMood } from './MusicFlowField';
 import { AuraPalette } from './palette';
 import { Motion } from '../../constants/allegraTheme';
 import { isLowEndDevice } from '../../utils/performanceTier';
+import { useSettingsStore } from '../../store/settingsStore';
+import { usePlayerStore } from '../../store/playerStore';
+import GlassRoom from './GlassRoom';
 
 const LOW_END = isLowEndDevice();
 /** Paused, the field rests but still carries the cover's colour. */
@@ -40,7 +43,18 @@ const withAlpha = (hex: string, alpha: number): string => {
   return `${hex}${a}`;
 };
 
-export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = false, active = true, mood = 'energy', dim = 0 }) => {
+/**
+ * Settings → App background picks the room: the live shader, or the lite
+ * frosted glass (no frame loop at all).
+ */
+export const DynamicAura: React.FC<DynamicAuraProps> = props => {
+  const lite = useSettingsStore(s => s.appBackground === 'glass');
+  const hasSong = usePlayerStore(s => !!s.currentSongId);
+  if (lite) return <GlassRoom palette={hasSong ? props.palette : null} dim={props.dim} />;
+  return <ShaderRoom {...props} />;
+};
+
+const ShaderRoom: React.FC<DynamicAuraProps> = ({ palette, playing = false, active = true, mood = 'energy', dim = 0 }) => {
   // Sized to the space it actually fills, not the window: on edge-to-edge
   // Android the window height leaves out the navigation bar, which left an
   // unpainted strip at the bottom. Start from the full screen until measured.

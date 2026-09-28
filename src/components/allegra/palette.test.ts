@@ -1,4 +1,4 @@
-import { accentInk, DEFAULT_AURA, hexToHsl, hexToRgb, NEUTRAL_AURA, paletteFromColors, shadePalette, vivify } from './palette';
+import { accentInk, DEFAULT_AURA, hexToHsl, hexToRgb, NEUTRAL_AURA, paletteFromColors, shadePalette, vivify, youtubeWash } from './palette';
 
 describe('hexToRgb', () => {
   it('parses to 0..1 and never returns NaN', () => {
@@ -48,5 +48,19 @@ describe('accentInk / shadePalette', () => {
   it('only ever darkens', () => {
     const shaded = shadePalette(DEFAULT_AURA, 0.5);
     expect(hexToHsl(shaded.primary).light).toBeLessThan(hexToHsl(DEFAULT_AURA.primary).light);
+  });
+});
+
+describe('youtubeWash', () => {
+  it('keeps the hue and washes down into near-black', () => {
+    const [top, middle, bottom] = youtubeWash('#e23a3a');
+    expect(Math.abs(hexToHsl(top).hue - hexToHsl('#e23a3a').hue)).toBeLessThan(3);
+    expect(hexToHsl(top).light).toBeGreaterThan(hexToHsl(middle).light);
+    expect(hexToHsl(middle).light).toBeGreaterThan(hexToHsl(bottom).light);
+  });
+
+  it('clamps pale and dark covers into a readable band', () => {
+    expect(hexToHsl(youtubeWash('#f7f2ea')[0]).light).toBeLessThanOrEqual(0.345);
+    expect(hexToHsl(youtubeWash('#120a08')[0]).light).toBeGreaterThanOrEqual(0.195);
   });
 });

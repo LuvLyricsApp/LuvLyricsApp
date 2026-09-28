@@ -141,6 +141,8 @@ unmounts mid-load.
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
 - Android uses a **checked-in** `android/app/src/main/java/expo/modules/ExpoModulesPackageList.kt`, not autolinking. A new Expo package with native code does nothing on Android until its module is added there — missing `expo-video` once made the release APK throw at import and sit on a grey screen. `src/nativeModuleList.test.ts` fails CI when the list falls behind `package.json`. The `Android smoke test` workflow boots the release build on an emulator and publishes a screenshot + logcat to the `smoke-latest` release
 - Download state is one source for every surface: `hooks/useDownloadState` reads the song's `downloadQueueStore` item plus whether the library already holds it (`utils/downloadState.matchKey`: cleaned title + lead artist, only songs with audio). `stream/DownloadButton` (rows: arrow → turning arc while queued → progress ring, tap to pause/resume → tick, retry on failure) and `stream/SavedBadge` (cover corner) use it, and so does Luvs' Save. Never keep a per-screen "saved" set. Glyph changes animate only when seen live, not when a row scrolls in
+- Lyrics (`SynchronizedLyrics`): every line is the same bold weight — the sung line changes only opacity and scale, never layout (a bold swap re-wrapped lines and jolted the scroll). The list follows the sung line with its own UI-thread glide (`followY`, 620ms emphasized decelerate) fed to `scrollTo`, cuts on seeks over 4 lines, and glides back 3.5s after a manual scroll. Spacing is row padding. Settings → Lyrics: text size is a number (`lyricsSize`, 20–44, settings v3 migrates the old presets), alignment (`lyricsAlign`) is global; a song's centre/right from the lyrics editor overrides it
+- Player background `youtube` (`player/YouTubeBackdrop`, `palette.youtubeWash`): the cover's colour washing into black, artwork as a card, no canvas. App background (`appBackground`): `shader` or `glass` — `DynamicAura` renders `allegra/GlassRoom` (static smoked glass tinted by the song, dark glass with no song, new colours settle in over 900ms) instead of the shader
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 
 ## Branch naming
@@ -158,7 +160,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 47 suites / 409 tests passing
+node_modules\.bin\jest.cmd                  # expect 47 suites / 414 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.

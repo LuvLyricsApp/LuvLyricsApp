@@ -131,3 +131,17 @@ export const pillTint = (hex: string): string => {
   const { hue, sat } = hexToHsl(hex);
   return hslToHex(hue, Math.min(0.3, Math.max(0.12, sat * 0.45)), 0.3);
 };
+
+/**
+ * YouTube Music's player background: the cover's colour at the top washing
+ * down into near-black, so the controls always read. Returns [top, middle,
+ * bottom]; the hue is the cover's, lightness is clamped so a pale cover never
+ * glares and a dark one still shows its colour.
+ */
+export const youtubeWash = (hex: string): [string, string, string] => {
+  const { hue, sat, light } = hexToHsl(hex);
+  const s = Math.min(0.6, sat);
+  const top = hslToHex(hue, s, Math.min(0.34, Math.max(0.2, light * 0.6)));
+  const middle = hslToHex(hue, s * 0.8, Math.min(0.16, Math.max(0.09, light * 0.28)));
+  return [top, middle, '#0a0a0b'];
+};

@@ -9,26 +9,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SortOption, ViewMode } from '../types/song';
 
 type Theme = 'dark' | 'light' | 'auto';
-type FontSize = 'small' | 'medium' | 'large';
+export type LyricsAlign = 'left' | 'center' | 'right';
 type LineSpacing = 'compact' | 'normal' | 'relaxed';
 type ScrollSpeed = 'slow' | 'medium' | 'fast';
 
 export type MiniPlayerBackground = 'glow' | 'tint';
 /** 'blend' is Apple + glow: the Apple Music room, gliding into the glow when lyrics open. */
-export type PlayerBackground = 'blend' | 'apple';
+export type PlayerBackground = 'blend' | 'apple' | 'youtube';
+/** Behind every screen: the live shader, or the lite frosted glass tinted by the song. */
+export type AppBackground = 'shader' | 'glass';
 
 /**
  * Stored settings from before "Glow animated" was retired still say 'glow';
  * the closest look left is Apple + glow. Anything unknown gets the default.
  */
 export const normalizePlayerBackground = (value: unknown): PlayerBackground =>
-  (value === 'apple' ? 'apple' : 'blend');
+  (value === 'apple' || value === 'youtube' ? value : 'blend');
 
 interface SettingsState {
   // Appearance
   theme: Theme;
   defaultGradientId: string;
-  lyricsFontSize: FontSize;
+  /** Lyric text size in points (LYRICS_SIZE_MIN..MAX). */
+  lyricsSize: number;
+  /** Where lyric lines sit; a song's own centre/right alignment (lyrics editor) wins. */
+  lyricsAlign: LyricsAlign;
   lineSpacing: LineSpacing;
   
   // Playback
@@ -64,7 +69,8 @@ interface SettingsState {
   // Actions
   setTheme: (theme: Theme) => void;
   setDefaultGradient: (gradientId: string) => void;
-  setLyricsFontSize: (size: FontSize) => void;
+  setLyricsSize: (size: number) => void;
+  setLyricsAlign: (align: LyricsAlign) => void;
   setLineSpacing: (spacing: LineSpacing) => void;
   setScrollSpeed: (speed: ScrollSpeed) => void;
   setSkipDuration: (duration: 10 | 15 | 30) => void;
@@ -107,13 +113,15 @@ interface SettingsState {
 
   // Canvas: looping motion artwork behind the player (Echo Music providers)
   canvasEnabled: boolean;
+  appBackground: AppBackground;
+  setAppBackground: (v: AppBackground) => void;
   /** Echo's mini player background: 'glow' (Glow animated) or 'tint' (calm cover tone). */
   miniPlayerBackground: MiniPlayerBackground;
   /** Echo's "Apple Music inspired" player: full-bleed cover. Off = a floating artwork card. */
   appleMusicInspired: boolean;
   /** Echo's "Hide volume slider" (Apple Music player only). */
   hidePlayerVolume: boolean;
-  /** 'blend' = Apple Music for the cover, Glow animated once lyrics open. */
+  /** 'blend' = Apple Music for the cover, Glow animated once lyrics open; 'youtube' = YouTube Music's colour wash with an artwork card. */
   playerBackground: PlayerBackground;
   setMiniPlayerBackground: (v: MiniPlayerBackground) => void;
   setAppleMusicInspired: (v: boolean) => void;
@@ -137,7 +145,8 @@ interface SettingsState {
 const DEFAULT_SETTINGS = {
   theme: 'dark' as Theme,
   defaultGradientId: 'aurora',
-  lyricsFontSize: 'medium' as FontSize,
+  lyricsSize: 28,
+  lyricsAlign: 'left' as LyricsAlign,
   lineSpacing: 'normal' as LineSpacing,
   scrollSpeed: 'medium' as ScrollSpeed,
   skipDuration: 15 as const,
@@ -165,6 +174,7 @@ const DEFAULT_SETTINGS = {
   ytVideoPreview: false,
   youtubeApiKey: '',
   canvasEnabled: true,
+  appBackground: 'shader' as AppBackground,
   miniPlayerBackground: 'glow' as MiniPlayerBackground,
   appleMusicInspired: true,
   hidePlayerVolume: false,
@@ -183,7 +193,8 @@ export const useSettingsStore = create<SettingsState>()(
       // Appearance actions
       setTheme: (theme) => set({ theme }),
       setDefaultGradient: (defaultGradientId) => set({ defaultGradientId }),
-      setLyricsFontSize: (lyricsFontSize) => set({ lyricsFontSize }),
+      setLyricsSize: (size) => set({ lyricsSize: clampLyricsSize(size) }),
+      setLyricsAlign: (lyricsAlign) => set({ lyricsAlign }),
       setLineSpacing: (lineSpacing) => set({ lineSpacing }),
       
       // Playback actions
@@ -239,11 +250,13 @@ export const useSettingsStore = create<SettingsState>()(
 
       canvasEnabled: true,
       setCanvasEnabled: (canvasEnabled) => set({ canvasEnabled }),
+      appBackground: 'shader',
+      setAppBackground: (appBackground) => set({ appBackground }),
       miniPlayerBackground: 'glow',
       setMiniPlayerBackground: (miniPlayerBackground) => set({ miniPlayerBackground }),
       appleMusicInspired: true,
       // As in Echo: turning the Apple Music player on also picks its background.
-      setAppleMusicInspired: (appleMusicInspired) => set(appleMusicInspired ? { appleMusicInspired, playerBackground: 'blend' } : { appleMusicInspired }),
+      setAppleMusicInspired: (appleMusicInspired) => set(s => (appleMusicInspired && s.playerBackground === 'youtube' ? { appleMusicInspired, playerBackground: 'blend' } : { appleMusicInspired })),
       hidePlayerVolume: false,
       setHidePlayerVolume: (hidePlayerVolume) => set({ hidePlayerVolume }),
       playerBackground: 'blend',
@@ -258,11 +271,17 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'lyricflow-settings',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
-        const state = (persisted ?? {}) as Partial<SettingsState>;
+        const state = (persisted ?? {}) as Partial<SettingsState> & { lyricsFontSize?: string };
+        const { lyricsFontSize, ...rest } = state;
         return {
-          ...state,
+          ...rest,
+          // v3: the Small / Medium / Large text size became a size in points.
+          lyricsSize: version < 3
+            ? LYRICS_PRESET_SIZE[lyricsFontSize as keyof typeof LYRICS_PRESET_SIZE] ?? 28
+            : clampLyricsSize(state.lyricsSize ?? 28),
+          lyricsAlign: state.lyricsAlign ?? 'left',
           playerBackground: normalizePlayerBackground(state.playerBackground),
           // v2: hold-to-talk became the default. The old default was 'tap',
           // which kept listening after the finger lifted.
@@ -273,19 +292,24 @@ export const useSettingsStore = create<SettingsState>()(
   )
 );
 
-/** Settings → Lyrics → Text size: the lyric line's font size (medium is the player's default). */
-export const LYRICS_FONT_SIZE = { small: 24, medium: 28, large: 34 } as const;
+/** Settings → Lyrics → Text size, in points. */
+export const LYRICS_SIZE_MIN = 20;
+export const LYRICS_SIZE_MAX = 44;
+export const clampLyricsSize = (size: number): number =>
+  Math.round(Math.min(LYRICS_SIZE_MAX, Math.max(LYRICS_SIZE_MIN, Number.isFinite(size) ? size : 28)));
+/** The old presets, for settings saved before sizes were custom. */
+const LYRICS_PRESET_SIZE = { small: 24, medium: 28, large: 34 } as const;
 
 /** Settings → Lyrics → Line spacing: the space above and below each line. */
 export const LYRICS_LINE_GAP = { compact: 10, normal: 16, relaxed: 24 } as const;
 
-/** The lyric text style the settings (and the song's own alignment) ask for. */
+/** The lyric text style the settings ask for. */
 export const lyricsTextStyle = (
-  size: keyof typeof LYRICS_FONT_SIZE,
+  size: number,
   spacing: keyof typeof LYRICS_LINE_GAP,
-  align: 'left' | 'center' | 'right' = 'left',
-): { fontSize: number; lineHeight: number; marginVertical: number; textAlign: 'left' | 'center' | 'right' } => {
-  const fontSize = LYRICS_FONT_SIZE[size] ?? LYRICS_FONT_SIZE.medium;
+  align: LyricsAlign = 'left',
+): { fontSize: number; lineHeight: number; marginVertical: number; textAlign: LyricsAlign } => {
+  const fontSize = clampLyricsSize(size);
   return {
     fontSize,
     lineHeight: Math.round(fontSize * 1.22),
