@@ -28,6 +28,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { UnifiedSong } from '../../types/song';
+import { diag } from '../../utils/diag';
 
 export interface ExplorerLane {
   id: string;
@@ -213,6 +214,7 @@ export const TasteExplorer: React.FC<TasteExplorerProps> = ({
         const from = Math.round(startX.value);
         const heading = camX.value + v * 0.22;
         const target = Math.max(0, Math.min(n - 1, Math.max(from - 1, Math.min(from + 1, Math.round(heading)))));
+        runOnJS(diag)('luvs', `across: ${n} lanes, from ${from} at ${camX.value.toFixed(2)}, heading ${heading.toFixed(2)} -> ${target} (on ${curLane.value})`);
         if (target !== curLane.value) {
           const next = [...laneDepths.value];
           next[curLane.value] = Math.round(camZ.value);
