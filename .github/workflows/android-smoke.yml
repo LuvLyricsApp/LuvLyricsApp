@@ -81,6 +81,22 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk
 
+      # The emulator has exited ~1s after opening Luvs on the host renderer
+      # (swiftshader_indirect). A second, short boot opens only Luvs with the
+      # guest-side renderer: if it survives there, the freeze is the emulator's
+      # GL path, not the app. Its files are published with a guest- prefix.
+      - name: Luvs on the guest renderer
+        if: always()
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu guest -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk luvs
+
       - name: Upload smoke results
         if: always()
         uses: actions/upload-artifact@v4

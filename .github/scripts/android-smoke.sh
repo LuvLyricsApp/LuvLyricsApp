@@ -25,7 +25,11 @@
 #   diag.txt             the app's [diag:*] lines (canvas, Apple token, player)
 set -u
 APK="$1"
+# full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
+# runs it on the guest-side GPU, to tell an emulator renderer hang from an app bug).
+MODE="${2:-full}"
 OUT=smoke
+[ "$MODE" = luvs ] && OUT=smoke/guest
 PKG=com.lyricflow.app
 mkdir -p "$OUT"
 touch "$OUT/run-start"
@@ -48,7 +52,7 @@ host_diag() {
   {
     echo "== emulator processes"; pgrep -a -f qemu-system || echo "none"
     echo "== memory"; free -m
-    echo "== kernel log"; sudo dmesg -T 2>/dev/null | grep -i -E "qemu|emulator|segfault|oom|killed process|trap" | tail -n 40
+    echo "== kernel log"; sudo -n dmesg -T 2>&1 | grep -i -E "qemu|emulator|segfault|oom|killed process|trap|dmesg|sudo" | tail -n 40
     for d in $(find /tmp/android-* "$HOME/.android" -name "*.dmp" -newer "$OUT/run-start" 2>/dev/null); do
       echo "== minidump $d"; strings -n 8 "$d" | grep -E "\.so|codec|vulkan|gfxstream|swiftshader|abort|assert" | sort | uniq -c | sort -rn | head -n 40
     done
@@ -122,6 +126,31 @@ finish() {
   echo "===== JS, React Native and crash lines"
   grep -E "ReactNativeJS|AndroidRuntime|FATAL|Unhandled|Exception" "$OUT/logcat.txt" \
     | grep -v -E "chatty|GnssHAL|WifiService|Bluetooth" | tail -n 150
+  # The Luvs pass publishes beside the main run's files, prefixed.
+  if [ "$MODE" = luvs ]; then
+    for f in "$OUT"/*.png "$OUT"/*.txt; do [ -f "$f" ] && cp "$f" "smoke/guest-$(basename "$f")"; done
+  fi
+}
+
+# Luvs: the taste map on open, then across to the next lane, then deeper into it.
+luvs_steps() {
+  step "luvs"
+  if [ -z "${W:-}" ]; then
+    size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -n 1)
+    W=${size%x*}; H=${size#*x}
+  fi
+  link "lyricflow://open/luvs"
+  sleep 12
+  shot luvs
+  # The taste map: across to the next lane, then deeper into it.
+  if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
+    adb shell input swipe $((W * 80 / 100)) $((H * 40 / 100)) $((W * 15 / 100)) $((H * 40 / 100)) 180
+    sleep 4
+    shot luvs-across
+    adb shell input swipe $((W / 2)) $((H * 55 / 100)) $((W / 2)) $((H * 15 / 100)) 180
+    sleep 4
+    shot luvs-deeper
+  fi
 }
 
 adb install -r "$APK"
@@ -132,6 +161,19 @@ adb shell am start -W -n "$PKG/.MainActivity"
 sleep 45
 step "launched"
 shot after-45s
+
+if [ "$MODE" = luvs ]; then
+  link "lyricflow://diagnose"
+  sleep 2
+  # Same state as the main run reaches Luvs in: a song playing, player closed.
+  link "lyricflow://play?q=Blinding%20Lights%20The%20Weeknd"
+  sleep 25
+  adb shell input keyevent KEYCODE_BACK
+  sleep 3
+  luvs_steps
+  finish
+  exit 0
+fi
 
 link "lyricflow://diagnose"
 sleep 2
@@ -259,19 +301,7 @@ step "playlists"
 link "lyricflow://open/playlists"
 sleep 5
 shot playlists
-step "luvs"
-link "lyricflow://open/luvs"
-sleep 12
-shot luvs
-# The taste map: across to the next lane, then deeper into it.
-if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
-  adb shell input swipe $((W * 80 / 100)) $((H * 40 / 100)) $((W * 15 / 100)) $((H * 40 / 100)) 180
-  sleep 4
-  shot luvs-across
-  adb shell input swipe $((W / 2)) $((H * 55 / 100)) $((W / 2)) $((H * 15 / 100)) 180
-  sleep 4
-  shot luvs-deeper
-fi
+luvs_steps
 
 finish
 exit 0
