@@ -26,7 +26,7 @@
 set -u
 APK="$1"
 # full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
-# boots it with the guest kernel console and more RAM, to see why the emulator freezes there).
+# boots it with host video decoding off, to see whether that is what freezes the emulator there).
 MODE="${2:-full}"
 OUT=smoke
 [ "$MODE" = luvs ] && OUT=smoke/pass2

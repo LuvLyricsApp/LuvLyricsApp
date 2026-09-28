@@ -81,12 +81,14 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk
 
-      # The emulator freezes and exits ~1s after opening Luvs (every run; once
-      # at Playlists instead), on swiftshader and on lavapipe alike, with no
-      # app crash, host segfault, OOM or minidump. A second, short boot opens
-      # only Luvs with the guest kernel's console in this log (-show-kernel) and
-      # twice the RAM and cores, to catch a guest panic or memory stall. Its
-      # files are published with a pass2- prefix.
+      # The emulator freezes ~1s after opening Luvs (every run; once at
+      # Playlists) on swiftshader and lavapipe alike: no app crash, no guest
+      # kernel message, qemu idle at 0% CPU for ~30s (a deadlock), then gone,
+      # with no host segfault, OOM or minidump. Luvs starts a canvas video, and
+      # the emulator decodes H.264 on the host (hwcodec.avcdec=2, the "[h264]
+      # no frame!" lines). This second, short boot opens only Luvs with host
+      # decoding off, so video decodes in the guest like on a phone. Its files
+      # are published with a pass2- prefix.
       - name: Luvs, second pass
         if: always()
         continue-on-error: true
@@ -96,7 +98,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -show-kernel -memory 4096 -cores 4
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -show-kernel -feature -HardwareDecoder
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk luvs
 
       - name: Upload smoke results
@@ -119,3 +121,8 @@ jobs:
             --prerelease --target "$GITHUB_SHA" \
             --title "Emulator smoke test — latest" \
             --notes "Launch, player (cover and lyrics), Library and Settings screenshots, background playback check, diagnostics and full logcat, from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}."
+          # gh publishes the draft after the uploads; once that step was lost
+          # and the release stayed an untagged draft that no link could reach.
+          if [ "$(gh release view smoke-latest --json isDraft -q .isDraft 2>/dev/null)" != "false" ]; then
+            gh release edit smoke-latest --draft=false --tag smoke-latest || true
+          fi
