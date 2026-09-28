@@ -248,7 +248,7 @@ can't blank it.
 
 | Screen | Recipe |
 | --- | --- |
-| **Stream** | `DynamicAura`, title, mood chips, shortcut grid, quick picks, cover shelves |
+| **Stream** | `DynamicAura`, title, mood chips, shortcut grid, quick picks, cover shelves. Double-tap the Stream tab: scroll to the top, focus search, keyboard up (the first tap still switches at once) |
 | **Search** | same room; one field for the phone *and* the catalog; scopes All · On this phone · Online; recent searches; mood tiles |
 | **Library** | same room; glass "+", Downloads row, two-column playlist mosaics rising in 40 ms apart |
 | **Playlist** | CoverFlow deck, playlist name, meta + sort chip, **Play / Shuffle** (transport lives in the pill), glass header that fades in on scroll |

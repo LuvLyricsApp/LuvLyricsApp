@@ -59,7 +59,7 @@ import { useLuvsPreferencesStore } from '../store/luvsPreferencesStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { Song, UnifiedSong } from '../types/song';
 import { Toast } from '../components/Toast';
-import { pillBarTop, PILL_STACK_GAP } from '../navigation/tabs';
+import { isDoubleTap, pillBarTop, PILL_STACK_GAP } from '../navigation/tabs';
 import { CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
 
 const HEADER_HEIGHT = 52;
@@ -99,6 +99,24 @@ const StreamScreen: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [mood, setMood] = useState<string | null>(null);
   const searchSeq = useRef(0);
+
+  // Double-tap the Stream tab: straight to the search field with the keyboard
+  // up. The first tap still switches tabs at once — nothing waits on a timer.
+  const scrollRef = useRef<ScrollView>(null);
+  const searchRef = useRef<TextInput>(null);
+  const lastTabPress = useRef(0);
+  useEffect(() => navigation.addListener('tabPress', () => {
+    const now = Date.now();
+    if (isDoubleTap(lastTabPress.current, now)) {
+      lastTabPress.current = 0;
+      Haptics.selectionAsync().catch(() => {});
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      // After the tab switch has settled, or focus is lost to the transition.
+      setTimeout(() => searchRef.current?.focus(), 60);
+    } else {
+      lastTabPress.current = now;
+    }
+  }), [navigation]);
 
   // YouTube Music's own home (Echo's feed): mood chips and shelves.
   const [ytHome, setYtHome] = useState<HomePage | null>(null);
@@ -453,6 +471,7 @@ const StreamScreen: React.FC = () => {
           music plays, and the picked mood's motion. Frames stop off-screen. */}
       <DynamicAura palette={palette} playing={isPlaying} active={isFocused} mood={shaderMood} dim={0.18} />
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingTop: insets.top + Space.xs, paddingBottom: bottomClearance }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Signal.wave} progressViewOffset={insets.top + 40} />}
@@ -464,6 +483,7 @@ const StreamScreen: React.FC = () => {
         <View style={styles.search}>
           <Ionicons name="search" size={18} color={Signal.inkMuted} />
           <TextInput
+            ref={searchRef}
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={() => runSearch()}

@@ -61,3 +61,8 @@ export const playerSheetRest = (
       scale: (screenWidth - 2 * pillPlayerInset(screenWidth)) / screenWidth,
     }
     : { y: screenHeight, scale: 1 };
+
+/** Two tab presses this close together (ms) are a double tap (Stream → search). */
+export const DOUBLE_TAP_MS = 350;
+export const isDoubleTap = (previous: number, now: number): boolean =>
+  previous > 0 && now - previous <= DOUBLE_TAP_MS;
