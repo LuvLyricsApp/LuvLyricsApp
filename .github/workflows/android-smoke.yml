@@ -81,15 +81,14 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk
 
-      # The emulator freezes ~1s after opening Luvs (every run; in two runs at
-      # Playlists first): no app crash, no guest kernel message, qemu idle at 0% CPU
+      # On GLES the emulator freezes ~1s after opening Luvs (sometimes at
+      # Playlists): no app crash, no guest kernel message, qemu idle at 0% CPU
       # for ~30s (a deadlock), then gone, with no host segfault, OOM or
-      # minidump. Not the renderer (swiftshader and lavapipe both) and not host
-      # video decoding (off with -feature -HardwareDecoder, still froze),
-      # nor two audio outputs at once (main song paused first, still froze).
-      # A whole-VM freeze with qemu idle reads as the GLES pipe deadlocking on
-      # some draw, so this second boot draws the UI through Vulkan
-      # (debug.hwui.renderer skiavk) and opens only Luvs. Files get a pass2- prefix.
+      # minidump. Not the renderer backend (swiftshader, lavapipe), not host
+      # video decoding, not two audio outputs; with HWUI on Vulkan it survives.
+      # The main walk therefore draws through Vulkan (android-smoke.sh), and this
+      # short second boot opens only Luvs on GLES as a canary for the emulator
+      # bug. Its files are published with a pass2- prefix.
       - name: Luvs, second pass
         if: always()
         continue-on-error: true

@@ -26,7 +26,7 @@
 set -u
 APK="$1"
 # full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
-# draws the UI through Vulkan, to see whether the emulator's GLES pipe is what freezes there).
+# stays on GLES, where the emulator's GL pipe deadlocks on Luvs — a canary for that emulator bug).
 MODE="${2:-full}"
 OUT=smoke
 [ "$MODE" = luvs ] && OUT=smoke/pass2
@@ -156,12 +156,14 @@ luvs_steps() {
 }
 
 adb install -r "$APK"
-# The Luvs pass draws the UI through Vulkan instead of GLES: if the freeze is
-# the emulator's GLES pipe deadlocking on some draw, this pass survives it.
-if [ "$MODE" = luvs ]; then
+# The emulator's GLES pipe deadlocks the whole VM on a draw Luvs makes (qemu
+# idle, no guest or host error; it survives with HWUI on Vulkan). The main walk
+# draws through Vulkan so it reaches every screen; the Luvs pass stays on GLES
+# as a canary for that emulator bug.
+if [ "$MODE" = full ]; then
   adb shell setprop debug.hwui.renderer skiavk
-  echo "hwui renderer: $(adb shell getprop debug.hwui.renderer)" > "$OUT/renderer.txt"
 fi
+echo "hwui renderer: $(adb shell getprop debug.hwui.renderer)" > "$OUT/renderer.txt"
 adb logcat -c
 # Streamed live (unbounded on purpose) so a crash of the emulator itself still leaves a log.
 "$ADB_BIN" logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
