@@ -317,19 +317,7 @@ const SettingsScreen: React.FC<Props> = () => {
             options={[{ value: 'compact', label: 'Tight' }, { value: 'normal', label: 'Normal' }, { value: 'relaxed', label: 'Airy' }]}
             onChange={settings.setLineSpacing}
           />
-          <Row label={`Timing  ${settings.lyricsDelay > 0 ? '+' : ''}${settings.lyricsDelay.toFixed(1)}s`} hint="Lyrics running late? Slide right. Early? Slide left." stack>
-            <Slider
-              style={styles.slider}
-              minimumValue={-5.0}
-              maximumValue={5.0}
-              step={0.1}
-              value={settings.lyricsDelay}
-              onSlidingComplete={settings.setLyricsDelay}
-              minimumTrackTintColor={Signal.wave}
-              maximumTrackTintColor="rgba(244,241,234,0.18)"
-              thumbTintColor={Signal.wave}
-            />
-          </Row>
+          <TimingRow value={settings.lyricsDelay} onChange={settings.setLyricsDelay} />
         </Section>
 
         <Section icon="navigate-outline" title="Navigation and voice" lead="The bar at the bottom and the mic in it." onLayout={at('nav')}>
@@ -573,6 +561,30 @@ const SettingsScreen: React.FC<Props> = () => {
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
+
+/** Lyrics timing: the readout follows the thumb; the setting saves on release. */
+const TimingRow: React.FC<{ value: number; onChange: (seconds: number) => void }> = ({ value, onChange }) => {
+  const [live, setLive] = React.useState(value);
+  React.useEffect(() => { setLive(value); }, [value]);
+  const shown = Math.round(live * 10) / 10;
+  const label = shown === 0 ? 'In sync' : `${shown > 0 ? '+' : ''}${shown.toFixed(1)}s`;
+  return (
+    <Row label={`Timing  ${label}`} hint="Lyrics running late? Slide right. Early? Slide left." stack>
+      <Slider
+        style={styles.slider}
+        minimumValue={-5.0}
+        maximumValue={5.0}
+        step={0.1}
+        value={value}
+        onValueChange={setLive}
+        onSlidingComplete={onChange}
+        minimumTrackTintColor={Signal.wave}
+        maximumTrackTintColor="rgba(244,241,234,0.18)"
+        thumbTintColor={Signal.wave}
+      />
+    </Row>
+  );
+};
 
 const styles = StyleSheet.create({
   hero: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 },

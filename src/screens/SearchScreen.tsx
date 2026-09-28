@@ -220,7 +220,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
     key: s.id, title: s.title, artist: s.artist, artwork: s.coverImageUri, isCurrent: currentSongId === s.id,
   });
   const onlineTrack = (s: UnifiedSong): TrackItem => ({
-    key: streamIdFor(s), title: s.title, artist: s.artist, artwork: s.highResArt, isCurrent: currentSongId === streamIdFor(s),
+    key: streamIdFor(s), title: s.title, artist: s.artist, artwork: s.highResArt, isCurrent: currentSongId === streamIdFor(s), download: s,
   });
 
   // ── Body ───────────────────────────────────────────────────────────────

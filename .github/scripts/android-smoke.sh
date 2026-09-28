@@ -7,6 +7,7 @@
 #   player-lyrics.png    Now Playing on lyrics (glow in the blend style)
 #   after-close.png      back from the player: the mini pill must be showing
 #   player-reopened.png  the player opened again from the pill
+#   player-nudged.png    a small pull let go: the player springs back open
 #   player-drag.png      halfway through a slow drag down (page under it, blurred)
 #   player-dragged.png   after the drag: the sheet back on the pill
 #   player-menu.png      the ••• menu sheet
@@ -144,6 +145,11 @@ step "dragging the player down"
 size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -n 1)
 W=${size%x*}; H=${size#*x}
 if [ -n "$W" ] && [ -n "$H" ]; then
+  # A small pull that lets go: the sheet must spring back open, app alive.
+  adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 36 / 100)) 400
+  sleep 2
+  shot player-nudged
+  adb shell pidof "$PKG" > /dev/null || echo "crashed after a small pull" >> "$OUT/taps.txt"
   adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 85 / 100)) 2600 &
   swipe_pid=$!
   sleep 1.4

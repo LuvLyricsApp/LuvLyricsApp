@@ -298,6 +298,7 @@ const StreamScreen: React.FC = () => {
     artist: s.artist,
     artwork: s.highResArt,
     isCurrent: currentSongId === streamIdFor(s),
+    download: s,
   });
   const localTrack = (s: Song): TrackItem => ({
     key: s.id,

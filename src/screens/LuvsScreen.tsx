@@ -31,6 +31,8 @@ import { useStreamHistoryStore } from '../store/streamHistoryStore';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useDownloadQueueStore } from '../store/downloadQueueStore';
+import { useDownloadState } from '../hooks/useDownloadState';
 import { luvsBufferManager } from '../services/LuvsBufferManager';
 import { luvsEngine } from '../services/luvsEngine';
 import { hookOffsetSeconds } from '../services/luvsHook';
@@ -52,6 +54,9 @@ import { Glass, Signal } from '../constants/allegraTheme';
 import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 import type { RootStackParamList } from '../types/navigation';
 import type { UnifiedSong } from '../types/song';
+
+// Stands in for "no song yet" so the download hook always has something to read.
+const NO_SONG = { id: '', title: '' };
 
 /** Under this many seconds on a card counts as a skip for the recommender. */
 const SKIP_THRESHOLD_SECONDS = 3;
@@ -91,7 +96,6 @@ const LuvsScreen: React.FC = () => {
 
   const [playing, setPlaying] = useState(true);
   const [showVault, setShowVault] = useState(false);
-  const [saved, setSaved] = useState<Set<string>>(() => new Set());
   const [burst, setBurst] = useState(0);
   const [hint, setHint] = useState(!hintSeen);
   const [lastDir, setLastDir] = useState(1);
@@ -280,12 +284,17 @@ const LuvsScreen: React.FC = () => {
     }
   }, [song, isInVault, addToVault, removeFromVault]);
 
+  // The same download state every song row shows: saving, the percentage, saved.
+  const download = useDownloadState(song ?? NO_SONG);
   const onSave = useCallback(() => {
-    if (!song || isPlaceholder(song) || saved.has(song.id)) return;
+    if (!song || isPlaceholder(song) || download.phase !== 'idle') return;
     StreamService.save(song);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setSaved(prev => new Set(prev).add(song.id));
-  }, [song, saved]);
+  }, [song, download.phase]);
+  const saveLabel = download.phase === 'saved' ? 'Saved'
+    : download.phase === 'downloading' ? `${Math.round(download.progress * 100)}%`
+    : download.phase === 'queued' || download.phase === 'paused' ? 'Waiting'
+    : download.phase === 'failed' ? 'Retry' : 'Save';
 
   const onFull = useCallback(async () => {
     if (!song || isPlaceholder(song)) return;
@@ -389,7 +398,12 @@ const LuvsScreen: React.FC = () => {
             )}
             <View style={styles.actions}>
               <LuvAction icon={liked ? 'heart' : 'heart-outline'} label={liked ? 'Luved' : 'Luv'} onPress={onLuv} on={liked} tint={Signal.accent} burst={burst} />
-              <LuvAction icon={song && saved.has(song.id) ? 'checkmark' : 'arrow-down'} label={song && saved.has(song.id) ? 'Saving' : 'Save'} onPress={onSave} on={!!song && saved.has(song.id)} />
+              <LuvAction
+                icon={download.phase === 'saved' ? 'checkmark' : download.phase === 'failed' ? 'refresh' : 'arrow-down'}
+                label={saveLabel}
+                onPress={download.phase === 'failed' && song ? () => useDownloadQueueStore.getState().retryItem(song.id) : onSave}
+                on={download.phase !== 'idle' && download.phase !== 'failed'}
+              />
               <LuvAction icon="play" label="Full song" onPress={onFull} on tint={Signal.wave} />
               <LuvAction icon="share-outline" label="Share" onPress={onShare} />
             </View>

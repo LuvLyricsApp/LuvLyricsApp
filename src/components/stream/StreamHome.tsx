@@ -18,6 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Signal, Space } from '../../constants/allegraTheme';
 import Artwork from '../allegra/Artwork';
 import { Tactile } from '../allegra/motion';
+import DownloadButton from './DownloadButton';
+import SavedBadge from './SavedBadge';
+import type { DownloadTarget } from '../../hooks/useDownloadState';
 
 // Matches SectionHeading's inset so headings and content share an edge.
 export const GUTTER = Space.lg - 4;
@@ -30,6 +33,8 @@ export interface TrackItem {
   artist?: string;
   artwork?: string;
   isCurrent: boolean;
+  /** A catalog song: its download state shows beside it and on its cover. */
+  download?: DownloadTarget;
 }
 
 const PlayingMark: React.FC<{ size: number }> = ({ size }) => (
@@ -85,6 +90,7 @@ export const ShortcutGrid: React.FC<{
           <View style={styles.shortcutArt}>
             <Artwork uri={item.artwork} title={item.title} artist={item.artist} size={56} style={StyleSheet.absoluteFill} />
             {item.isCurrent ? <PlayingMark size={18} /> : null}
+            {item.download ? <SavedBadge song={item.download} small /> : null}
           </View>
           <Text style={[styles.shortcutTitle, item.isCurrent && styles.current]} numberOfLines={2}>{item.title}</Text>
         </Tactile>
@@ -120,7 +126,11 @@ export const SongRow: React.FC<{
         {item.artist ? <Text style={styles.rowArtist} numberOfLines={1}>{item.artist}</Text> : null}
       </View>
     </Tactile>
-    {onSave ? (
+    {onSave && item.download ? (
+      <View style={styles.rowAction}>
+        <DownloadButton song={item.download} onSave={onSave} />
+      </View>
+    ) : onSave ? (
       <Tactile onPress={onSave} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Download ${item.title}`} style={styles.rowAction}>
         <Ionicons name="arrow-down-circle-outline" size={22} color={Signal.inkMuted} />
       </Tactile>
@@ -198,6 +208,7 @@ export const CoverShelf: React.FC<{
         <View style={styles.coverArt}>
           <Artwork uri={item.artwork} title={item.title} artist={item.artist} size={COVER} style={StyleSheet.absoluteFill} />
           {item.isCurrent ? <PlayingMark size={28} /> : null}
+          {item.download ? <SavedBadge song={item.download} /> : null}
         </View>
         <Text style={[styles.coverTitle, item.isCurrent && styles.current]} numberOfLines={1}>{item.title}</Text>
         {item.artist ? <Text style={styles.coverArtist} numberOfLines={1}>{item.artist}</Text> : null}

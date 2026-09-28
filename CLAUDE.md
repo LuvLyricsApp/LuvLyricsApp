@@ -140,6 +140,7 @@ unmounts mid-load.
 - Covers never print their title twice: `GeneratedArtwork`'s on-cover label is opt-in (`label`) — only where no title sits beside it
 - `DynamicAura` must get `active={isFocused}` (or equivalent) so the shader's frame loop stops when its screen isn't visible
 - Android uses a **checked-in** `android/app/src/main/java/expo/modules/ExpoModulesPackageList.kt`, not autolinking. A new Expo package with native code does nothing on Android until its module is added there — missing `expo-video` once made the release APK throw at import and sit on a grey screen. `src/nativeModuleList.test.ts` fails CI when the list falls behind `package.json`. The `Android smoke test` workflow boots the release build on an emulator and publishes a screenshot + logcat to the `smoke-latest` release
+- Download state is one source for every surface: `hooks/useDownloadState` reads the song's `downloadQueueStore` item plus whether the library already holds it (`utils/downloadState.matchKey`: cleaned title + lead artist, only songs with audio). `stream/DownloadButton` (rows: arrow → turning arc while queued → progress ring, tap to pause/resume → tick, retry on failure) and `stream/SavedBadge` (cover corner) use it, and so does Luvs' Save. Never keep a per-screen "saved" set. Glyph changes animate only when seen live, not when a row scrolls in
 - `MAX_CONCURRENT` downloads is 2 — don't raise it without testing on low-end Android
 
 ## Branch naming
@@ -157,7 +158,7 @@ on this Windows box), call the binaries directly — same result, no npm shim:
 ```
 node_modules\.bin\tsc.cmd --noEmit          # expect exit 0, zero output
 node_modules\.bin\eslint.cmd src index.ts   # expect exit 0
-node_modules\.bin\jest.cmd                  # expect 46 suites / 402 tests passing
+node_modules\.bin\jest.cmd                  # expect 47 suites / 409 tests passing
 ```
 Jest prints "A worker process has failed to exit gracefully" — that warning is
 pre-existing and not a failure; check the `Tests:` summary line instead.
