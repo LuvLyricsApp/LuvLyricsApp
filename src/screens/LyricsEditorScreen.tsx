@@ -7,8 +7,7 @@
  *   Song      title, artist and album
  *   Lyrics    find them (the provider cascade), choose a source, paste,
  *             switch to the transliteration, and the text itself
- *   Timing    nudge every timestamp; for unsynced lyrics, the length and the
- *             auto-scroll speed
+ *   Timing    nudge every timestamp; for unsynced lyrics, the song length
  *   Display   alignment
  * Every control does something; Save writes to the library and updates the
  * player if this song is playing.
@@ -55,9 +54,6 @@ type Props = RootStackScreenProps<'EditLyrics'>;
 type Align = 'left' | 'center' | 'right';
 
 const OFFSETS = [-1, -0.5, -0.1, 0.1, 0.5, 1] as const;
-const SPEED_MIN = 10;
-const SPEED_MAX = 200;
-const SPEED_STEP = 10;
 
 const Field: React.FC<{
   label: string;
@@ -117,7 +113,6 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
   const [transliterated, setTransliterated] = useState('');
   const [showTransliteration, setShowTransliteration] = useState(false);
   const [durationText, setDurationText] = useState('');
-  const [scrollSpeed, setScrollSpeed] = useState(50);
   const [align, setAlign] = useState<Align>('left');
   const [shifted, setShifted] = useState(0);
   const [finding, setFinding] = useState(false);
@@ -146,7 +141,6 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
       setLyricsText(lyricsToRawText(song.lyrics));
       setTransliterated(song.transliteratedLyrics ? lyricsToRawText(song.transliteratedLyrics) : '');
       setDurationText(song.duration > 0 ? formatTime(song.duration) : '');
-      setScrollSpeed(song.scrollSpeed ?? 50);
       setAlign(song.lyricsAlign ?? 'left');
     }).catch(() => {});
     return () => { live = false; };
@@ -235,7 +229,6 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
         transliteratedLyrics: transliterated.trim() ? parseTimestampedLyrics(transliterated) : undefined,
         duration: typed > 0 ? typed : Math.max(original.duration, calculateDuration(lyrics)),
         dateModified: new Date().toISOString(),
-        scrollSpeed,
         lyricsAlign: align,
       };
       await updateSong(song);
@@ -248,7 +241,6 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
           lyrics: song.lyrics,
           transliteratedLyrics: song.transliteratedLyrics,
           duration: song.duration,
-          scrollSpeed: song.scrollSpeed,
           lyricsAlign: song.lyricsAlign,
         });
       }
@@ -331,7 +323,7 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
           </Section>
 
-          <Section icon="time-outline" title="Timing" lead={synced ? 'Early or late? Move every line at once.' : 'For lyrics without timestamps.'}>
+          <Section icon="time-outline" title="Timing" lead={synced ? 'Early or late? Move every line at once.' : 'Lyrics without timestamps show in full; add [0:12.40] stamps to sync them.'}>
             {synced ? (
               <Row label="Shift all lines" hint={shifted === 0 ? 'Earlier on the left, later on the right' : `Shifted ${formatOffset(shifted)}`} stack>
                 <View style={styles.offsets}>
@@ -355,19 +347,7 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
                 ) : null}
               </Row>
             ) : (
-              <>
-                <Field label="Song length" value={durationText} onChangeText={setDurationText} placeholder="3:25" keyboardType="numbers-and-punctuation" />
-                <Row label="Scroll speed" hint={`${scrollSpeed} points a second`}>
-                  <View style={styles.stepper}>
-                    <Tactile onPress={() => setScrollSpeed(v => Math.max(SPEED_MIN, v - SPEED_STEP))} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Slower" style={styles.stepBtn}>
-                      <Ionicons name="remove" size={18} color={Signal.ink} />
-                    </Tactile>
-                    <Tactile onPress={() => setScrollSpeed(v => Math.min(SPEED_MAX, v + SPEED_STEP))} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Faster" style={styles.stepBtn}>
-                      <Ionicons name="add" size={18} color={Signal.ink} />
-                    </Tactile>
-                  </View>
-                </Row>
-              </>
+              <Field label="Song length" value={durationText} onChangeText={setDurationText} placeholder="3:25" keyboardType="numbers-and-punctuation" />
             )}
           </Section>
 
@@ -457,17 +437,6 @@ const styles = StyleSheet.create({
   offsetText: { color: Signal.ink, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   undo: { alignSelf: 'flex-start', paddingVertical: 4 },
   undoText: { color: Signal.wave, fontSize: 14, fontWeight: '600' },
-  stepper: { flexDirection: 'row', gap: 8 },
-  stepBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Glass.fillLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
-  },
 });
 
 export default LyricsEditorScreen;

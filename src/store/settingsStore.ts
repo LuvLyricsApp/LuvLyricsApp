@@ -273,16 +273,23 @@ export const useSettingsStore = create<SettingsState>()(
   )
 );
 
-// Font size mappings for use in components
-export const FONT_SIZE_MAP = {
-  small: { current: 28, other: 18 },
-  medium: { current: 34, other: 22 },
-  large: { current: 42, other: 28 },
-};
+/** Settings → Lyrics → Text size: the lyric line's font size (medium is the player's default). */
+export const LYRICS_FONT_SIZE = { small: 24, medium: 28, large: 34 } as const;
 
-// Line height mappings
-export const LINE_SPACING_MAP = {
-  compact: 1.4,
-  normal: 1.75,
-  relaxed: 2.0,
+/** Settings → Lyrics → Line spacing: the space above and below each line. */
+export const LYRICS_LINE_GAP = { compact: 10, normal: 16, relaxed: 24 } as const;
+
+/** The lyric text style the settings (and the song's own alignment) ask for. */
+export const lyricsTextStyle = (
+  size: keyof typeof LYRICS_FONT_SIZE,
+  spacing: keyof typeof LYRICS_LINE_GAP,
+  align: 'left' | 'center' | 'right' = 'left',
+): { fontSize: number; lineHeight: number; marginVertical: number; textAlign: 'left' | 'center' | 'right' } => {
+  const fontSize = LYRICS_FONT_SIZE[size] ?? LYRICS_FONT_SIZE.medium;
+  return {
+    fontSize,
+    lineHeight: Math.round(fontSize * 1.22),
+    marginVertical: LYRICS_LINE_GAP[spacing] ?? LYRICS_LINE_GAP.normal,
+    textAlign: align,
+  };
 };

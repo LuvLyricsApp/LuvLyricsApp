@@ -16,6 +16,7 @@
  *             play, which reloads the song at the same spot.
  */
 import { resumeNextLoadAt, usePlayerStore } from '../store/playerStore';
+import { usePlaybackModesStore } from '../store/playbackModesStore';
 import { positionSV } from './positionBus';
 import { Song, UnifiedSong } from '../types/song';
 import { isStreamSongId, parseStreamId, streamUrlOf } from '../services/stream/streamSong';
@@ -117,6 +118,10 @@ const reloadAt = async (songId: string, at: number): Promise<boolean> => {
     return false;
   }
   usePlayerStore.getState().requestPlayback(true);
+  // A recreated player starts plain: put back repeat and tempo / pitch.
+  const modes = usePlaybackModesStore.getState();
+  if (modes.repeatOne) modes.setRepeatOne(true);
+  if (modes.tempo !== 1 || modes.pitch !== 1) modes.setTempoPitch(modes.tempo, modes.pitch);
   return true;
 };
 

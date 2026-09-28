@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Artwork from './allegra/Artwork';
-import { useSettingsStore } from '../store/settingsStore';
+import { lyricsTextStyle, useSettingsStore } from '../store/settingsStore';
+import { usePlayerStore } from '../store/playerStore';
 import { SharedValue } from 'react-native-reanimated';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +40,11 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   songArtist,
   scrollOffset,
 }) => {
+  // Settings → Lyrics (text size, line spacing) and the song's own alignment (lyrics editor).
+  const fontSize = useSettingsStore(st => st.lyricsFontSize);
+  const lineSpacing = useSettingsStore(st => st.lineSpacing);
+  const align = usePlayerStore(st => st.currentSong?.lyricsAlign ?? 'left');
+  const textStyle = React.useMemo(() => lyricsTextStyle(fontSize, lineSpacing, align), [fontSize, lineSpacing, align]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const appleInspired = useSettingsStore(s => s.appleMusicInspired);
@@ -61,6 +67,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
     <View style={[styles.lyricsFrame, { paddingTop: insets.top + HEADER_CLEARANCE }]}>
       <SynchronizedLyrics
         ref={flatListRef}
+        textStyle={textStyle}
         lyrics={processedLyrics || []}
         currentTime={currentTime}
         onLyricPress={onLyricPress}
