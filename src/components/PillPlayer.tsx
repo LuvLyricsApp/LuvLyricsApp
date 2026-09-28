@@ -56,6 +56,19 @@ const COOKIE = 40;
 const SPIN_MS = 14000;
 const SPIN = !isLowEndDevice();
 
+/** How far the pill can be pulled, in points, however far the finger goes. */
+const PILL_GIVE_UP = 14;
+const PILL_GIVE_DOWN = 8;
+const PILL_GIVE_SIDE = 18;
+/** Underdamped on purpose: the pill overshoots its rest once and settles. */
+const PILL_BOUNCE = { stiffness: 520, damping: 16, mass: 0.7 } as const;
+/** Rubber band that approaches `limit` asymptotically. */
+const pillGive = (drag: number, limit: number): number => {
+  'worklet';
+  const a = Math.abs(drag);
+  return Math.sign(drag) * ((a * limit) / (limit + a));
+};
+
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /** A soft nine-lobed scallop (Material's "cookie"), as an SVG path. */
@@ -146,6 +159,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   useEffect(() => {
     enter.value = withSpring(1, Motion.spring.sheet);
   }, [enter]);
+  // Where the pill shows under the finger (already rubber-banded).
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
   // Hand-over with the player sheet: as the sheet grows out of the pill the
@@ -155,8 +169,10 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   const shellMotion = useAnimatedStyle(() => {
     const p = playerSheetProgress.value;
     const handOver = Math.max(0, 1 - p / 0.1);
-    const y = (1 - enter.value) * 24 + Math.min(0, dragY.value) * 0.35 - restTop * p;
-    const x = dragX.value * 0.3;
+    // The pill gives a few points under the finger, never more: the further
+    // the pull, the harder it resists (a swipe up opens the player instead).
+    const y = (1 - enter.value) * 24 + dragY.value - restTop * p;
+    const x = dragX.value;
     return { opacity: enter.value * handOver, transform: [{ translateY: y }, { translateX: x }] as const };
   });
 
@@ -169,16 +185,17 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
     .activeOffsetX([-14, 14])
     .activeOffsetY([-14, 14])
     .onUpdate(e => {
-      dragX.value = e.translationX;
-      dragY.value = e.translationY;
+      dragX.value = pillGive(e.translationX, PILL_GIVE_SIDE);
+      dragY.value = pillGive(e.translationY, e.translationY < 0 ? PILL_GIVE_UP : PILL_GIVE_DOWN);
     })
     .onEnd(e => {
       const horizontal = Math.abs(e.translationX) > Math.abs(e.translationY);
       if (horizontal && (e.translationX < -60 || e.velocityX < -600)) runOnJS(next)();
       else if (horizontal && (e.translationX > 60 || e.velocityX > 600)) runOnJS(previous)();
       else if (!horizontal && (e.translationY < -36 || e.velocityY < -500)) runOnJS(onOpen)(Math.max(0, -e.velocityY));
-      dragX.value = withSpring(0, Motion.spring.tactile);
-      dragY.value = withSpring(0, Motion.spring.tactile);
+      // Let go: it springs home from where it shows and settles with a small bounce.
+      dragX.value = withSpring(0, PILL_BOUNCE);
+      dragY.value = withSpring(0, PILL_BOUNCE);
     });
 
   return (
