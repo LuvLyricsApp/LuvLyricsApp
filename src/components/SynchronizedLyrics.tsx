@@ -194,15 +194,15 @@ const LyricLine = React.memo(({
   );
 
   // ── How it looks: dimmed at rest, bright while sung ─────────────────────
-  const rowStyle = useAnimatedStyle((): ViewStyle => {
+  // Position and brightness are separate styles: the shift changes every
+  // frame of a cascade, and sharing a style would restart the dim tween with it.
+  const moveStyle = useAnimatedStyle((): ViewStyle => ({ transform: [{ translateY: shift.value }] }));
+  const dimStyle = useAnimatedStyle((): ViewStyle => {
     const active = activeIndexSV.value;
     const target = active === index ? 1 : restOpacity(index, active, readingSV.value);
     // Far from the sung line: plain values, no animation to run.
     const far = active >= 0 && Math.abs(index - active) > 6;
-    return {
-      opacity: far ? target : withTiming(target, { duration: DIM_MS }),
-      transform: [{ translateY: shift.value }],
-    };
+    return { opacity: far ? target : withTiming(target, { duration: DIM_MS }) };
   });
   const emphasis = useDerivedValue(() =>
     withSpring(activeIndexSV.value === index ? 1 : 0, SCALE_SPRING),
@@ -230,16 +230,18 @@ const LyricLine = React.memo(({
   }, [text, songTitle]);
 
   return (
-    <Animated.View onLayout={handleLayout} style={[{ paddingVertical: gap }, rowStyle]}>
-      <Pressable onPress={handlePress} style={styles.linePressable}>
-        {isInstrumental ? (
-          <InstrumentalLine activeIndexSV={activeIndexSV} index={index} scaleStyle={scaleStyle} />
-        ) : (
-          <Animated.View style={[scaleStyle, { transformOrigin: origin }]}>
-            <Text style={[styles.lyricText, textStyle]}>{renderedText}</Text>
-          </Animated.View>
-        )}
-      </Pressable>
+    <Animated.View onLayout={handleLayout} style={[{ paddingVertical: gap }, moveStyle]}>
+      <Animated.View style={dimStyle}>
+        <Pressable onPress={handlePress} style={styles.linePressable}>
+          {isInstrumental ? (
+            <InstrumentalLine activeIndexSV={activeIndexSV} index={index} scaleStyle={scaleStyle} />
+          ) : (
+            <Animated.View style={[scaleStyle, { transformOrigin: origin }]}>
+              <Text style={[styles.lyricText, textStyle]}>{renderedText}</Text>
+            </Animated.View>
+          )}
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 });
