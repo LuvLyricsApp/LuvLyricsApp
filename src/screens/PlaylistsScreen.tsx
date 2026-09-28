@@ -165,7 +165,7 @@ export const PlaylistsScreen: React.FC = () => {
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{PlaylistsStrings.noPlaylistsYet}</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Create your first playlist to get started</Text>
             <Pressable style={styles.createButton} onPress={handleCreatePlaylist}>
-              <Ionicons name="add" size={24} color="#fff" />
+              <Ionicons name="add" size={24} color={Signal.waveInk} />
               <Text style={styles.createButtonText}>{PlaylistsStrings.createPlaylist}</Text>
             </Pressable>
           </View>
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1DB954',
+    backgroundColor: Signal.wave,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: Signal.waveInk,
   },
 });
 

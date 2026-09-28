@@ -61,6 +61,7 @@ import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
 import { bottomChromeHeight } from '../constants/layout';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 type PlaylistDetailRouteProp = RouteProp<
   { PlaylistDetail: { playlistId: string } },
@@ -990,7 +991,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeButton: {
-      backgroundColor: '#1DB954',
+      backgroundColor: Glass.fillPressed,
   },
   listHeader: {
     alignItems: 'center',
@@ -1032,7 +1033,7 @@ const styles = StyleSheet.create({
       position: 'absolute',
       bottom: 8,
       right: 8,
-      backgroundColor: '#1DB954',
+      backgroundColor: Signal.wave,
       width: 32,
       height: 32,
       borderRadius: 16,

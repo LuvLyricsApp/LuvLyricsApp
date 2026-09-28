@@ -44,6 +44,7 @@ import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
 import Artwork from './allegra/Artwork';
+import { Signal } from '../constants/allegraTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -1303,7 +1304,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             <Ionicons
                                 name={isLiked ? 'checkmark-circle' : 'add-circle-outline'}
                                 size={24}
-                                color={isLiked ? '#1DB954' : '#fff'}
+                                color={isLiked ? Signal.wave : '#fff'}
                             />
                         </Pressable>
                         <PlaybackControls
