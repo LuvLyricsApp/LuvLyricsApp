@@ -33,7 +33,7 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
   const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = route.key === activeKey && !more.open;
+    const isFocused = route.key === activeKey && !moreActive;
 
     const onPress = () => {
       const event = navigation.emit({
