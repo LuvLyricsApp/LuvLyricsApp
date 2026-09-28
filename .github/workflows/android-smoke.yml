@@ -82,13 +82,13 @@ jobs:
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk
 
       # The emulator freezes ~1s after opening Luvs (every run; once at
-      # Playlists) on swiftshader and lavapipe alike: no app crash, no guest
-      # kernel message, qemu idle at 0% CPU for ~30s (a deadlock), then gone,
-      # with no host segfault, OOM or minidump. Luvs starts a canvas video, and
-      # the emulator decodes H.264 on the host (hwcodec.avcdec=2, the "[h264]
-      # no frame!" lines). This second, short boot opens only Luvs with host
-      # decoding off, so video decodes in the guest like on a phone. Its files
-      # are published with a pass2- prefix.
+      # Playlists): no app crash, no guest kernel message, qemu idle at 0% CPU
+      # for ~30s (a deadlock), then gone, with no host segfault, OOM or
+      # minidump. Not the renderer (swiftshader and lavapipe both) and not host
+      # video decoding (off with -feature -HardwareDecoder, still froze). Luvs
+      # opens its own players while the main song is still playing, ducked.
+      # This second boot pauses the main song first, to see whether two audio
+      # outputs at once is what locks the emulator. Files get a pass2- prefix.
       - name: Luvs, second pass
         if: always()
         continue-on-error: true
@@ -98,7 +98,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -show-kernel -feature -HardwareDecoder
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -show-kernel
           script: bash .github/scripts/android-smoke.sh LuvLyrics-x86_64.apk luvs
 
       - name: Upload smoke results

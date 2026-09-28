@@ -26,7 +26,7 @@
 set -u
 APK="$1"
 # full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
-# boots it with host video decoding off, to see whether that is what freezes the emulator there).
+# pauses the main song first, to see whether overlapping audio is what freezes the emulator there).
 MODE="${2:-full}"
 OUT=smoke
 [ "$MODE" = luvs ] && OUT=smoke/pass2
@@ -174,6 +174,9 @@ if [ "$MODE" = luvs ]; then
   # Same state as the main run reaches Luvs in: a song playing, player closed.
   link "lyricflow://play?q=Blinding%20Lights%20The%20Weeknd"
   sleep 25
+  # Paused before Luvs opens, unlike the main walk: only Luvs' own audio plays.
+  adb shell input keyevent KEYCODE_MEDIA_PAUSE
+  sleep 2
   adb shell input keyevent KEYCODE_BACK
   sleep 3
   luvs_steps
