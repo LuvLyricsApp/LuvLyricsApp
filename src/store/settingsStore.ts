@@ -14,7 +14,15 @@ type LineSpacing = 'compact' | 'normal' | 'relaxed';
 type ScrollSpeed = 'slow' | 'medium' | 'fast';
 
 export type MiniPlayerBackground = 'glow' | 'tint';
-export type PlayerBackground = 'blend' | 'apple' | 'glow';
+/** 'blend' is Apple + glow: the Apple Music room, gliding into the glow when lyrics open. */
+export type PlayerBackground = 'blend' | 'apple';
+
+/**
+ * Stored settings from before "Glow animated" was retired still say 'glow';
+ * the closest look left is Apple + glow. Anything unknown gets the default.
+ */
+export const normalizePlayerBackground = (value: unknown): PlayerBackground =>
+  (value === 'apple' ? 'apple' : 'blend');
 
 interface SettingsState {
   // Appearance
@@ -250,6 +258,11 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'lyricflow-settings',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      migrate: (persisted) => {
+        const state = (persisted ?? {}) as Partial<SettingsState>;
+        return { ...state, playerBackground: normalizePlayerBackground(state.playerBackground) } as SettingsState;
+      },
     }
   )
 );

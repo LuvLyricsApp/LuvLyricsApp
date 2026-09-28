@@ -198,9 +198,8 @@ const SettingsScreen: React.FC<Props> = () => {
   const jump = (key: string) => scrollRef.current?.scrollTo({ y: Math.max(0, (sectionY.current[key] ?? 0) - 64), animated: true });
 
   const bgHint: Record<PlayerBackground, string> = {
-    blend: 'The cover while a song plays, drifting glow when lyrics are open.',
+    blend: 'The Apple Music room, blending into a soft glow when lyrics are open.',
     apple: 'The cover melting into its own blur, like Apple Music.',
-    glow: 'Soft glows in the cover\u2019s colours, always.',
   };
 
   return (
@@ -250,7 +249,7 @@ const SettingsScreen: React.FC<Props> = () => {
             label="Player background"
             hint={bgHint[settings.playerBackground]}
             value={settings.playerBackground}
-            options={[{ value: 'blend', label: 'Blend' }, { value: 'apple', label: 'Apple Music' }, { value: 'glow', label: 'Glow animated' }]}
+            options={[{ value: 'apple', label: 'Apple Music' }, { value: 'blend', label: 'Apple + glow' }]}
             onChange={settings.setPlayerBackground}
           />
           <Choice<MiniPlayerBackground>
