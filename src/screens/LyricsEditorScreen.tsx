@@ -334,6 +334,7 @@ const LyricsEditorScreen: React.FC<Props> = ({ navigation, route }) => {
                       pressScale={0.92}
                       accessibilityRole="button"
                       accessibilityLabel={`Shift ${s < 0 ? 'earlier' : 'later'} by ${Math.abs(s)} seconds`}
+                      wrapperStyle={styles.offsetCell}
                       style={styles.offset}
                     >
                       <Text style={styles.offsetText}>{formatOffset(s)}</Text>
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
   saveOff: { opacity: 0.5 },
   saveText: { color: Signal.waveInk, fontSize: 15, fontWeight: '700' },
   content: { paddingHorizontal: 16 },
-  songCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
+  songCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6, paddingHorizontal: 16 },
   songArt: { width: 64, height: 64, borderRadius: 12 },
   songTitle: { color: Signal.ink, fontSize: 22, fontWeight: '700' },
   songMeta: { color: Signal.inkMuted, fontSize: 13, marginTop: 3 },
@@ -423,9 +424,9 @@ const styles = StyleSheet.create({
   },
   lyrics: { minHeight: 280, color: Signal.ink, fontSize: 15, lineHeight: 24, padding: 14 },
   offsets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // Three to a row, always: the grid never runs off the edge.
+  offsetCell: { flexBasis: '30%', flexGrow: 1 },
   offset: {
-    flexBasis: '30%',
-    flexGrow: 1,
     height: 42,
     borderRadius: 14,
     alignItems: 'center',
