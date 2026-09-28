@@ -1,4 +1,5 @@
 import { UnifiedSong } from '../types/song';
+import { titleCaseShouting } from '../utils/sentenceCase';
 import {
   ProviderDownloadResponse,
   ProviderImageResponse,
@@ -69,8 +70,8 @@ const mapProviderSong = (song: SaavnGaanaSongResponse, source: ProviderSource): 
 
   return {
     id: song.id ?? '',
-    title: decodeHtml(song.name || song.title || ''),
-    artist: decodeHtml(getArtistName(song)),
+    title: titleCaseShouting(decodeHtml(song.name || song.title || '')),
+    artist: titleCaseShouting(decodeHtml(getArtistName(song))),
     highResArt: highResImage?.url || '',
     downloadUrl: topQuality?.url || '',
     hasLyrics: song.hasLyrics === true,
