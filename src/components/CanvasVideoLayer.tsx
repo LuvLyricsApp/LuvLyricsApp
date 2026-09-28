@@ -7,6 +7,13 @@
  * vanishing) when the song changes. When the song is paused the loop
  * pauses too; with Reduce Motion on it holds the first frame instead of moving.
  *
+ * The reveal waits for the video to be really moving, not just for its first
+ * frame: first frame, the clip's size known (so the view never resizes under
+ * the fade — on Android a TextureView resize shows a black frame), and a
+ * quarter second of playback past the start (a stream's first frames can be
+ * dark or stall). Then one 900ms ease-in-out dissolve from the cover, so the
+ * move from still to motion reads as the cover coming alive, not a swap.
+ *
  * The layer has no backing of its own. Whatever sits under it (the cover in
  * the player, the card art in Luvs) is what shows before the first frame and
  * through any frame the decoder hasn't filled yet — a dark backing here used
@@ -64,6 +71,14 @@ interface CanvasVideoLayerProps {
 
 /** How long a canvas takes to leave (song change, feature off). */
 const FADE_OUT_MS = 520;
+/** Playback past the first frame before the dissolve starts (seconds). */
+const REVEAL_AFTER_S = 0.25;
+/** Never wait longer than this after the first frame (a paused or slow clip). */
+const REVEAL_MAX_MS = 1500;
+/** How often the reveal checks the clip's progress. */
+const REVEAL_POLL_MS = 80;
+/** Same shape within this (a quality switch): keep the laid-out size. */
+const ASPECT_TOLERANCE = 0.01;
 
 const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   lib,
@@ -109,10 +124,12 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   const [box, setBox] = useState<{ width: number; height: number } | null>(null);
   const [video, setVideo] = useState<{ width: number; height: number } | null>(null);
 
-  // New canvas: hide until its first frame lands, forget the old track size.
+  // New canvas: hide until it is ready to show, forget the old track size.
+  const [firstFrame, setFirstFrame] = useState(false);
   useEffect(() => {
     opacity.value = 0;
     setVideo(null);
+    setFirstFrame(false);
     onVisibleChange?.(false);
   }, [canvas?.url, opacity, onVisibleChange]);
 
@@ -122,7 +139,11 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
     const adopt = (track: VideoTrack | null | undefined) => {
       const w = track?.size?.width ?? 0;
       const h = track?.size?.height ?? 0;
-      if (w > 0 && h > 0) setVideo(v => (v && v.width === w && v.height === h ? v : { width: w, height: h }));
+      // A quality switch keeps the shape: resizing the view for it would
+      // flash a black frame on Android, so only a new aspect lays it out again.
+      if (w > 0 && h > 0) {
+        setVideo(v => (v && Math.abs(v.width / v.height - w / h) < ASPECT_TOLERANCE ? v : { width: w, height: h }));
+      }
     };
     const onLoad = player.addListener('sourceLoad', e => {
       const largest = [...e.availableVideoTracks].sort((a, b) => b.size.width * b.size.height - a.size.width * a.size.height)[0];
@@ -153,6 +174,41 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
     if (playing && !reduceMotion) player.play();
     else player.pause();
   }, [canvas, playing, reduceMotion, player]);
+
+  // ── The reveal ─────────────────────────────────────────────────────────
+  // After the first frame, poll the clip until it has its size and has
+  // actually played a little, then dissolve in once. A paused song (or Reduce
+  // Motion) holds a still frame, so it only waits for the size.
+  const sizeKnown = video !== null;
+  useEffect(() => {
+    if (!canvas || !firstFrame) return;
+    let done = false;
+    const startedAt = Date.now();
+    const startTime = player.currentTime;
+    const moving = playing && !reduceMotion;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      clearInterval(timer);
+      diag('canvas', `revealed after ${Date.now() - startedAt}ms: ${canvas.url}`);
+      opacity.value = withTiming(1, {
+        duration: reduceMotion ? Motion.duration.fast : Motion.duration.crossfade,
+        easing: Motion.ease.standard,
+      });
+      onVisibleChange?.(true);
+    };
+    const check = () => {
+      const waited = Date.now() - startedAt;
+      if (waited >= REVEAL_MAX_MS) { reveal(); return; }
+      if (!sizeKnown) return;
+      if (!moving || player.currentTime - startTime >= REVEAL_AFTER_S) reveal();
+    };
+    const timer = setInterval(check, REVEAL_POLL_MS);
+    check();
+    return () => { done = true; clearInterval(timer); };
+  // Re-evaluated when the size lands; the opacity and callbacks are stable.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvas?.url, firstFrame, sizeKnown, playing, reduceMotion, player]);
 
   const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -190,11 +246,8 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
         allowsPictureInPicture={false}
         onFirstFrameRender={() => {
           diag('canvas', `first frame: ${canvas.url}`);
-          opacity.value = withTiming(1, {
-            duration: reduceMotion ? Motion.duration.fast : Motion.duration.crossfade,
-            easing: Motion.ease.decelerate,
-          });
-          onVisibleChange?.(true);
+          // Not shown yet — the reveal effect waits until the clip is moving.
+          setFirstFrame(true);
         }}
       />
       <LinearGradient

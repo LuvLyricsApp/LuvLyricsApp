@@ -125,11 +125,21 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
   const fade = useSharedValue(1);
   useEffect(() => {
     if (!image || lastUri.current === uri) return;
+    const first = lastUri.current === undefined;
     lastUri.current = uri;
     setLayers(l => ({ prev: l.next, next: image }));
+    // The veil mounts with the canvas, long after the backdrop underneath has
+    // shown this cover. Replaying the arrival (palette first, then a 1.2s fade
+    // and settle) inside the canvas's cross-dissolve darkened and shifted the
+    // dissolve band for a moment — the "black flash" going cover -> video. Its
+    // first cover is simply there; song changes still arrive with the fade.
+    if (veil && first) {
+      fade.value = 1;
+      return;
+    }
     fade.value = 0;
     fade.value = withTiming(1, { duration: 1200, easing: Motion.ease.standard });
-  }, [image, uri, fade]);
+  }, [image, uri, fade, veil]);
 
   const hero = useSharedValue(showHero ? 1 : 0);
   useEffect(() => {
