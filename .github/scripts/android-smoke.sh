@@ -7,6 +7,8 @@
 #   player-lyrics.png    Now Playing on lyrics (glow in the blend style)
 #   after-close.png      back from the player: the mini pill must be showing
 #   player-reopened.png  the player opened again from the pill
+#   player-drag.png      halfway through a slow drag down (page under it, blurred)
+#   player-dragged.png   after the drag: the sheet back on the pill
 #   player-menu.png      the ••• menu sheet
 #   listen-together.png  the Listen together sheet
 #   after-close-2.png    back from the player a second time
@@ -127,6 +129,21 @@ step "reopening from the pill"
 # Open the player again from the pill, then its ••• menu and Listen together.
 tap_desc "Now playing:" && sleep 3
 shot player-reopened
+
+# A slow drag down: halfway, the page underneath must show (blurred), not a
+# black slab; after release the sheet lands on the pill.
+step "dragging the player down"
+size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -n 1)
+W=${size%x*}; H=${size#*x}
+if [ -n "$W" ] && [ -n "$H" ]; then
+  adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 85 / 100)) 2600 &
+  sleep 1.4
+  shot player-drag
+  wait
+  sleep 2
+  shot player-dragged
+fi
+tap_desc "Now playing:" && sleep 3
 # The canvas video keeps uiautomator from seeing an idle UI inside the player,
 # so the sheets are opened with the app's own links.
 step "menu sheet"

@@ -37,13 +37,15 @@ import { useArtworkPalette } from './allegra/useArtworkPalette';
 import { pillTint } from './allegra/palette';
 import { Motion } from '../constants/allegraTheme';
 import { positionSV, durationSV } from '../playback/positionBus';
-import { pillBarInset } from '../navigation/tabs';
 import { isLowEndDevice } from '../utils/performanceTier';
 import GlowBackground from './player/GlowBackground';
 import { useGlowColors } from './player/useGlowColors';
 import { useSettingsStore } from '../store/settingsStore';
+import { PILL_PLAYER_HEIGHT, pillPlayerInset } from '../navigation/tabs';
+import { playerSheetProgress } from '../navigation/sheetProgress';
 
-export const PILL_PLAYER_HEIGHT = 54;
+export { PILL_PLAYER_HEIGHT };
+
 const DISC = 40;
 const RING = DISC + 8;
 const RING_STROKE = 2.5;
@@ -77,6 +79,8 @@ interface PillPlayerProps {
   playing: boolean;
   /** Distance from the screen bottom (clears the tab bar). */
   bottom: number;
+  /** The player sheet is up (or on its way): the pill hands over to it and takes no touches. */
+  sheetUp?: boolean;
   /** `velocity`: upward swipe speed in px/s, carried into the player sheet. */
   onOpen: (velocity?: number) => void;
   onTogglePlay: () => void;
@@ -87,9 +91,9 @@ interface PillPlayerProps {
 const tick = () => { Haptics.selectionAsync().catch(() => {}); };
 
 const PillPlayer: React.FC<PillPlayerProps> = ({
-  title, artist, coverImageUri, playing, bottom, onOpen, onTogglePlay, onNext, onPrevious,
+  title, artist, coverImageUri, playing, bottom, sheetUp = false, onOpen, onTogglePlay, onNext, onPrevious,
 }) => {
-  const side = pillBarInset(Dimensions.get('window').width) + 14;
+  const side = pillPlayerInset(Dimensions.get('window').width);
 
   // ── Colour: cross-fade from the last song's tone to this one's ────────────
   const palette = useArtworkPalette(coverImageUri);
@@ -141,10 +145,16 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   }, [enter]);
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
+  // Hand-over with the player sheet: as the sheet grows out of the pill the
+  // pill rides its top edge and fades within the first tenth of the travel;
+  // closing brings it back the same way, landing exactly where it rests.
+  const restTop = Math.max(Dimensions.get('window').height, Dimensions.get('screen').height) - bottom - PILL_PLAYER_HEIGHT;
   const shellMotion = useAnimatedStyle(() => {
-    const y = (1 - enter.value) * 24 + Math.min(0, dragY.value) * 0.35;
+    const p = playerSheetProgress.value;
+    const handOver = Math.max(0, 1 - p / 0.1);
+    const y = (1 - enter.value) * 24 + Math.min(0, dragY.value) * 0.35 - restTop * p;
     const x = dragX.value * 0.3;
-    return { opacity: enter.value, transform: [{ translateY: y }, { translateX: x }] as const };
+    return { opacity: enter.value * handOver, transform: [{ translateY: y }, { translateX: x }] as const };
   });
 
   const [backNudge, setBackNudge] = useState(0);
@@ -170,7 +180,10 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.shell, { left: side, right: side, bottom }, shellColor, shellMotion]}>
+      <Animated.View
+        pointerEvents={sheetUp ? 'none' : 'auto'}
+        style={[styles.shell, { left: side, right: side, bottom }, shellColor, shellMotion]}
+      >
         {glow ? (
           <View style={[StyleSheet.absoluteFill, styles.glowClip]} pointerEvents="none">
             <GlowBackground colors={glowColors} variant="mini" />

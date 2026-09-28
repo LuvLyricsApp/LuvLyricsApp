@@ -243,8 +243,13 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const toggleLike = useSongsStore(state => state.toggleLike);
   const isLiked = useIsSongLiked(currentSong?.id);
 
+  // The pill stays mounted under the player sheet so it can hand over to it
+  // (PillPlayer reads the sheet's progress); anything else hides it outright.
+  const hiddenOnlyBySheet = usePlayerStore(state =>
+    state.miniPlayerHiddenSources.size === 1 && state.miniPlayerHiddenSources.has('NowPlaying'));
+  const pillNav = navBarStyle === 'modern-pill';
   // Use store instead of navigation state to avoid root-level crashes
-  const isNowPlaying = hideMiniPlayer;
+  const isNowPlaying = hideMiniPlayer && !(pillNav && hiddenOnlyBySheet);
 
   // Animation for Play/Pause Button
   const playButtonScale = useSharedValue(1);
@@ -974,6 +979,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         coverImageUri={currentSong.coverImageUri}
         playing={storePlaying}
         bottom={tabChromeH}
+        sheetUp={hiddenOnlyBySheet}
         onOpen={openNowPlaying}
         onTogglePlay={togglePlay}
         onNext={skipForward}

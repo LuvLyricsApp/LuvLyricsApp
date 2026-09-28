@@ -68,10 +68,14 @@ export const RootNavigator: React.FC = () => {
             component={NowPlayingScreen}
             // The sheet animates itself (navigation/playerSheet.ts): it rises
             // from the pill and follows a drag down from anywhere.
+            // Transparent: the stack's dark contentStyle painted the whole
+            // route, so dragging the sheet down showed a black slab instead of
+            // the page underneath.
             options={{
               presentation: 'transparentModal',
               animation: 'none',
               gestureEnabled: false,
+              contentStyle: { backgroundColor: 'transparent' },
             }}
           />
           <Stack.Screen

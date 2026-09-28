@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Dimensions, View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Dimensions, Platform, View, StyleSheet, useWindowDimensions } from 'react-native';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { useFocusEffect, usePreventRemove } from '@react-navigation/native';
 import Animated, {
@@ -7,7 +7,9 @@ import Animated, {
   Extrapolation,
   interpolate,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withSpring,
@@ -24,6 +26,11 @@ import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { navigationRef, safeGoBack } from '../utils/navigationService';
 import { DISMISS_DISTANCE, DISMISS_VELOCITY, takeOpenVelocity } from '../navigation/playerSheet';
+import { playerSheetRest } from '../navigation/tabs';
+import { playerSheetProgress } from '../navigation/sheetProgress';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { isLowEndDevice } from '../utils/performanceTier';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSettingsStore } from '../store/settingsStore';
@@ -43,11 +50,32 @@ import { useListenTogetherStore } from '../store/listenTogetherStore';
 
 const { Gesture, GestureDetector } = GestureHandler;
 
-// Opening decelerates into place with no bounce; closing accelerates out,
-// carrying the flick's speed.
+// Springs throughout (Apple's fluid-interface rules): critically damped, no
+// bounce, and every one starts from where the sheet is with the finger's
+// speed, so a flick carries straight into the motion and a grab mid-flight
+// just takes over.
 const OPEN_SPRING = { stiffness: 240, damping: 32, mass: 1, overshootClamping: true } as const;
 const SETTLE_SPRING = { stiffness: 320, damping: 34, mass: 1, overshootClamping: true } as const;
-const CLOSE_EASE = Easing.bezier(0.4, 0, 0.9, 0.6);
+const CLOSE_SPRING = {
+  stiffness: 260,
+  damping: 32,
+  mass: 1,
+  overshootClamping: true,
+  restDisplacementThreshold: 0.5,
+  restSpeedThreshold: 8,
+} as const;
+/** Momentum projection: where a flick would come to rest (deceleration 0.99/ms). */
+const projectMomentum = (velocity: number): number => (velocity / 1000) * (0.99 / (1 - 0.99));
+/** Progressive resistance past the top, instead of a hard stop. */
+const rubberBand = (overshoot: number, dimension: number): number => {
+  'worklet';
+  const a = Math.abs(overshoot);
+  return Math.sign(overshoot) * ((a * dimension * 0.55) / (dimension + 0.55 * a));
+};
+// The page underneath blurs while the sheet is up and clears as it lowers.
+// A live Android blur re-renders every frame, so it is only mounted while the
+// sheet moves, and low-end phones dim instead.
+const LIVE_BLUR = !isLowEndDevice();
 
 type Props = RootStackScreenProps<'NowPlaying'>;
 
@@ -56,24 +84,38 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const setMiniPlayerHiddenSource = usePlayerStore(state => state.setMiniPlayerHiddenSource);
   // The screen, not the window: on Android the window leaves out the nav bar,
   // and a sheet parked at the window height would leave a sliver showing.
-  const { height: windowH } = useWindowDimensions();
+  const { width: windowW, height: windowH } = useWindowDimensions();
   const screenH = Math.max(windowH, Dimensions.get('screen').height);
   const reduceMotion = useReducedMotion();
+  const insets = useSafeAreaInsets();
+  const pillNav = useSettingsStore(s => s.navBarStyle) === 'modern-pill';
 
-  // ── Sheet: rise in, follow the finger, fall away ────────────────────────
-  // translateY 0 = open, screenH = below the screen. Starts off-screen so the
-  // first frame never flashes the player at rest.
-  const sheetY = useSharedValue(screenH);
+  // ── Sheet: grow out of the pill, follow the finger, shrink back ──────────
+  // translateY 0 = open; restY = resting on the pill (its top edge), where the
+  // sheet is scaled to the pill's width. It starts there, so the first frame
+  // never flashes the player at rest.
+  const { y: restY, scale: restScale } = playerSheetRest(windowW, screenH, insets.bottom, pillNav);
+  const sheetY = useSharedValue(restY);
+  const progress = useDerivedValue(() => Math.min(1, Math.max(0, 1 - sheetY.value / restY)));
+  useAnimatedReaction(() => progress.value, p => { playerSheetProgress.value = p; });
+  useEffect(() => () => { playerSheetProgress.value = 0; }, []);
+
   // Every way out (grabber, hardware back, a programmatic pop) animates first;
-  // the route is only removed once the sheet is off-screen.
+  // the route is only removed once the sheet is back on the pill.
   const [holdRoute, setHoldRoute] = useState(true);
   const closing = useSharedValue(false);
+  // The blur under the sheet only exists while the sheet moves.
+  const [blurOn, setBlurOn] = useState(true);
 
   useEffect(() => {
     const velocity = takeOpenVelocity();
+    const settled = (done?: boolean) => {
+      'worklet';
+      if (done) runOnJS(setBlurOn)(false);
+    };
     sheetY.value = reduceMotion
-      ? withTiming(0, { duration: 200 })
-      : withSpring(0, { ...OPEN_SPRING, velocity: -velocity });
+      ? withTiming(0, { duration: 200 }, settled)
+      : withSpring(0, { ...OPEN_SPRING, velocity: -velocity }, settled);
   // Mount only: the sheet opens once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -100,15 +142,16 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     'worklet';
     if (closing.value) return;
     closing.value = true;
+    runOnJS(setBlurOn)(true);
     runOnJS(revealPill)();
-    const remaining = Math.max(0, screenH - sheetY.value);
-    const duration = velocity > 0
-      ? Math.max(140, Math.min(300, (remaining / velocity) * 1000))
-      : 280;
-    sheetY.value = withTiming(screenH, { duration, easing: CLOSE_EASE }, done => {
-      if (done) runOnJS(finishClose)();
-    });
-  }, [screenH, finishClose, revealPill, closing, sheetY]);
+    const done = (finished?: boolean) => {
+      'worklet';
+      if (finished) runOnJS(finishClose)();
+    };
+    sheetY.value = reduceMotion
+      ? withTiming(restY, { duration: 200, easing: Easing.out(Easing.quad) }, done)
+      : withSpring(restY, { ...CLOSE_SPRING, velocity: Math.max(0, velocity) }, done);
+  }, [restY, reduceMotion, finishClose, revealPill, closing, sheetY]);
 
   // Ambient mode (player menu): back leaves ambient first, then the player.
   const [ambient, setAmbient] = useState(false);
@@ -123,6 +166,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // the list is scrolled to its top — otherwise the drag scrolls the lyrics.
   const lyricsOffset = useSharedValue(0);
   const startY = useSharedValue(0);
+  const grabY = useSharedValue(0);
   const dismissGesture = Gesture.Pan()
     .enabled(!ambient)
     .manualActivation(true)
@@ -140,33 +184,55 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       if (dy < -10) { state.fail(); return; }
       if (dy < 12) return;
       if (lyricsOffset.value > 2) { state.fail(); return; }
+      runOnJS(setBlurOn)(true);
       state.activate();
     })
     .failOffsetX([-24, 24])
+    .onStart(() => {
+      'worklet';
+      // Grabbed mid-flight: carry on from where the sheet is, not from 0.
+      grabY.value = sheetY.value;
+    })
     .onUpdate(e => {
       'worklet';
-      // Past the top it resists instead of detaching.
-      const y = e.translationY;
-      sheetY.value = y > 0 ? y : y * 0.15;
+      const y = grabY.value + e.translationY;
+      // Past the top it resists instead of detaching; it never goes below the pill.
+      sheetY.value = y >= 0 ? Math.min(y, restY) : rubberBand(y, 120);
     })
     .onEnd(e => {
       'worklet';
-      const past = e.translationY > screenH * DISMISS_DISTANCE;
+      // Decide on where the flick is heading, not where the finger let go.
+      const landing = sheetY.value + projectMomentum(e.velocityY);
+      const past = landing > screenH * DISMISS_DISTANCE;
       const flung = e.velocityY > DISMISS_VELOCITY;
       if ((past && e.velocityY > -200) || flung) {
-        animateClose(Math.max(e.velocityY, 0));
+        animateClose(e.velocityY);
       } else {
-        sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
+        sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY }, done => {
+          if (done) runOnJS(setBlurOn)(false);
+        });
       }
     });
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetY.value }],
-  }));
-  // The page underneath shows through as the sheet lowers, dimmed until the
-  // sheet is mostly gone.
+  // The sheet is the pill, grown: pinned at its top edge, as wide as the pill
+  // at rest, full width open. It is solid within the first eighth of the
+  // travel, so the pill's fade and the sheet's overlap without a gap.
+  const sheetStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    return {
+      opacity: reduceMotion ? p : interpolate(p, [0, 0.12], [0, 1], Extrapolation.CLAMP),
+      transform: [
+        { translateY: sheetY.value },
+        { scale: restScale + (1 - restScale) * p },
+      ] as const,
+    };
+  });
+  // The page underneath: blurred and a little dimmed while the sheet is up,
+  // clearing as it lowers. Opacity carries the change, so the blur itself is
+  // drawn once at one strength.
+  const blurStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sheetY.value, [0, screenH], [0.6, 0], Extrapolation.CLAMP),
+    opacity: progress.value * (LIVE_BLUR ? 0.3 : 0.6),
   }));
 
   // Settings → Playback → Keep screen on: only while this screen is open.
@@ -359,6 +425,16 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={styles.root}>
+      {LIVE_BLUR && blurOn ? (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, blurStyle]}>
+          <BlurView
+            intensity={60}
+            tint="dark"
+            experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      ) : null}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
       <GestureDetector gesture={dismissGesture}>
       <Animated.View style={[styles.container, sheetStyle]}>
@@ -474,6 +550,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b0b0f',
     overflow: 'hidden',
+    // Rounded like the pill it grows out of; pinned at the top so scaling
+    // keeps its top edge on the finger.
+    borderRadius: 28,
+    transformOrigin: 'top',
   },
   contentArea: {
     flex: 1,

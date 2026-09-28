@@ -171,14 +171,24 @@ The Dynamic Island (`island`) and classic bar (`bar`) remain as settings.
 The route is a transparent modal with no native animation; the screen animates
 itself so it can be dragged.
 
-- **Open:** rises with a clamped spring (`stiffness 240, damping 32`), no bounce.
-- **Drag down from anywhere** to dismiss; the page underneath shows through,
-  dimmed. Over the lyrics the drag belongs to the list until it is scrolled to
-  its top (Apple Music's split).
-- **Release:** past 22 % of the screen or faster than 900 px/s → falls away
-  with an accelerate curve whose length follows the flick; otherwise springs back.
+- **It is the pill, grown.** Closed, the sheet rests on the pill's top edge,
+  scaled to the pill's width (`playerSheetRest`); open, it is full screen. One
+  progress value (`navigation/sheetProgress.ts`) drives both: the pill rides
+  the sheet's top edge and fades over the first tenth of the travel while the
+  sheet turns solid over the first eighth, so the two overlap with no gap.
+- **Open:** a clamped spring (`stiffness 240, damping 32`) from the pill, carrying
+  the swipe's speed.
+- **Drag down from anywhere** to close. Over the lyrics the drag belongs to the
+  list until it is scrolled to its top (Apple Music's split). A grab mid-flight
+  takes over from where the sheet is; past the top it rubber-bands.
+- **Release:** the decision uses where the flick is heading (momentum
+  projection), not where the finger let go: past 22 % of the screen or faster
+  than 900 px/s → a clamped spring back onto the pill with the finger's speed;
+  otherwise it springs open.
+- **The page underneath** is drawn (the route is transparent) and blurred while
+  the sheet is up, clearing as it lowers — the blur's opacity follows the
+  progress. It is mounted only while the sheet moves; low-end phones dim instead.
 - Back button and the chevron use the same exit (`usePreventRemove`).
-- The pill fades back in as the sheet starts falling.
 - Controls never auto-hide.
 
 ### Player look (Settings → Player)

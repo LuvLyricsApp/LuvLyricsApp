@@ -35,3 +35,29 @@ export const pillBarTop = (insetBottom: number): number => pillBarBottom(insetBo
 /** Side inset of the pill (92% wide, at most 440pt, centred). */
 export const pillBarInset = (screenWidth: number): number =>
   Math.max(8, (screenWidth - Math.min(screenWidth * 0.92, 440)) / 2);
+
+/** The now-playing pill (PillPlayer): its height and where it floats. */
+export const PILL_PLAYER_HEIGHT = 54;
+/** Distance from the screen bottom to the now-playing pill's bottom edge. */
+export const pillPlayerBottom = (insetBottom: number): number => pillBarTop(insetBottom) + PILL_STACK_GAP;
+/** Side inset of the now-playing pill: a little narrower than the tab bar. */
+export const pillPlayerInset = (screenWidth: number): number => pillBarInset(screenWidth) + 14;
+
+/**
+ * Where the closed player sheet rests, so it grows out of (and shrinks back
+ * into) the pill: `y` is the pill's top edge from the top of the screen and
+ * `scale` makes the sheet exactly as wide as the pill. Without a pill (the
+ * classic bar) it rests below the screen at full width.
+ */
+export const playerSheetRest = (
+  screenWidth: number,
+  screenHeight: number,
+  insetBottom: number,
+  pill: boolean,
+): { y: number; scale: number } =>
+  pill
+    ? {
+      y: screenHeight - pillPlayerBottom(insetBottom) - PILL_PLAYER_HEIGHT,
+      scale: (screenWidth - 2 * pillPlayerInset(screenWidth)) / screenWidth,
+    }
+    : { y: screenHeight, scale: 1 };
