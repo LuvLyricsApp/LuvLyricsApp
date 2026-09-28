@@ -26,10 +26,10 @@
 set -u
 APK="$1"
 # full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
-# runs it on the guest-side GPU, to tell an emulator renderer hang from an app bug).
+# boots it with the guest kernel console and more RAM, to see why the emulator freezes there).
 MODE="${2:-full}"
 OUT=smoke
-[ "$MODE" = luvs ] && OUT=smoke/guest
+[ "$MODE" = luvs ] && OUT=smoke/pass2
 PKG=com.lyricflow.app
 mkdir -p "$OUT"
 touch "$OUT/run-start"
@@ -53,7 +53,8 @@ host_diag() {
     echo "== emulator processes"; pgrep -a -f qemu-system || echo "none"
     echo "== memory"; free -m
     echo "== kernel log"; sudo -n dmesg -T 2>&1 | grep -i -E "qemu|emulator|segfault|oom|killed process|trap|dmesg|sudo" | tail -n 40
-    for d in $(find /tmp/android-* "$HOME/.android" -name "*.dmp" -newer "$OUT/run-start" 2>/dev/null); do
+    echo "== crash stores"; ls -d /tmp/android-*/emu-crash* "$HOME"/.android/*crash* 2>/dev/null || echo "none"
+    for d in $(find /tmp "$HOME/.android" "$HOME/.config" -xdev \( -name "*.dmp" -o -name "*.dmp.gz" \) -newer "$OUT/run-start" 2>/dev/null); do
       echo "== minidump $d"; strings -n 8 "$d" | grep -E "\.so|codec|vulkan|gfxstream|swiftshader|abort|assert" | sort | uniq -c | sort -rn | head -n 40
     done
   } > "$OUT/host.txt" 2>&1
@@ -112,6 +113,7 @@ burst() {
 }
 
 finish() {
+  kill "${TOP_PID:-0}" 2>/dev/null
   alive || host_diag
   adb logcat -d -v time > "$OUT/logcat.txt" 2>/dev/null
   # Emulator gone: fall back to what the live stream caught before it died.
@@ -128,7 +130,7 @@ finish() {
     | grep -v -E "chatty|GnssHAL|WifiService|Bluetooth" | tail -n 150
   # The Luvs pass publishes beside the main run's files, prefixed.
   if [ "$MODE" = luvs ]; then
-    for f in "$OUT"/*.png "$OUT"/*.txt; do [ -f "$f" ] && cp "$f" "smoke/guest-$(basename "$f")"; done
+    for f in "$OUT"/*.png "$OUT"/*.txt; do [ -f "$f" ] && cp "$f" "smoke/pass2-$(basename "$f")"; done
   fi
 }
 
@@ -157,6 +159,10 @@ adb install -r "$APK"
 adb logcat -c
 # Streamed live (unbounded on purpose) so a crash of the emulator itself still leaves a log.
 "$ADB_BIN" logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
+# The emulator as the host sees it, every 5s: pegged CPU before it exits is a
+# spin, idle is a deadlock.
+( while :; do echo "$(date -u +%H:%M:%S) $(top -b -n 1 -w 200 | grep -m 1 qemu-system || echo 'no qemu')"; sleep 5; done ) > "$OUT/host-top.txt" 2>&1 &
+TOP_PID=$!
 adb shell am start -W -n "$PKG/.MainActivity"
 sleep 45
 step "launched"
