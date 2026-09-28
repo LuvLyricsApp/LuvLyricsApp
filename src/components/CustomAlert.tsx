@@ -1,12 +1,12 @@
 /**
- * LyricFlow - Custom Alert Modal
- * Dark-themed alert dialog
+ * Alert dialog on Allegra's floating glass: a frosted card, the primary
+ * action in the signal colour, cancel as a quiet glass button.
  */
 
 import React from 'react';
 import { StyleSheet, View, Text, Modal, Pressable } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { useThemeColors } from '../contexts/ThemeContext';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 interface CustomAlertProps {
   visible: boolean;
@@ -27,18 +27,15 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   buttons,
   onClose,
 }) => {
-  const colors = useThemeColors();
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-      </Pressable>
+      <Pressable style={styles.overlay} onPress={onClose} />
 
       <View style={styles.container}>
-        <View style={[styles.alertBox, { backgroundColor: colors.card }]}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+        <View style={styles.alertBox}>
+          <Frosted radius={26} intensity={60} tint={0.5} />
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.message}>{message}</Text>
 
           <View style={styles.buttons}>
             {buttons.map((button, index) => (
@@ -75,7 +72,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: Glass.scrim,
   },
   container: {
     flex: 1,
@@ -84,50 +81,50 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   alertBox: {
-    borderRadius: 20,
+    borderRadius: 26,
+    overflow: 'hidden',
     padding: 24,
     width: '100%',
     maxWidth: 340,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 10,
     textAlign: 'center',
+    color: Signal.ink,
   },
   message: {
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 22,
+    color: Signal.inkSoft,
   },
   buttons: {
-    gap: 12,
+    gap: 10,
   },
   button: {
-    backgroundColor: '#fff',
+    backgroundColor: Signal.wave,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: 'center',
   },
   buttonCancel: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Glass.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
   },
   buttonDestructive: {
-    backgroundColor: '#FF453A',
+    backgroundColor: Signal.accent,
   },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: Signal.waveInk,
   },
   buttonTextCancel: {
-    color: '#fff',
+    color: Signal.ink,
   },
   buttonTextDestructive: {
     color: '#fff',

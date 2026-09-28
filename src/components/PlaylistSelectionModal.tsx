@@ -3,9 +3,9 @@ import {
     View, Text, StyleSheet, Modal, Pressable, TextInput,
     FlatList, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../contexts/ThemeContext';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 import { usePlaylistStore } from '../store/playlistStore';
 import { Playlist } from '../types/song';
 
@@ -17,7 +17,6 @@ interface PlaylistSelectionModalProps {
 }
 
 export const PlaylistSelectionModal = ({ visible, onClose, onSelect, onSkip }: PlaylistSelectionModalProps) => {
-    const colors = useThemeColors();
     const playlists = usePlaylistStore(state => state.playlists);
     const fetchPlaylists = usePlaylistStore(state => state.fetchPlaylists);
     const createPlaylist = usePlaylistStore(state => state.createPlaylist);
@@ -47,47 +46,46 @@ export const PlaylistSelectionModal = ({ visible, onClose, onSelect, onSkip }: P
     const renderItem = ({ item }: { item: Playlist }) => (
         <Pressable style={styles.item} onPress={() => { onSelect(item.id, item.name); onClose(); }}>
             <View style={styles.iconContainer}>
-                <Ionicons name="musical-notes" size={20} color="#666" />
+                <Ionicons name="musical-notes" size={20} color={Signal.inkMuted} />
             </View>
             <View style={{ flex: 1 }}>
                 <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.itemCount}>{item.songCount} songs</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#444" />
+            <Ionicons name="chevron-forward" size={16} color={Signal.inkFaint} />
         </Pressable>
     );
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <View style={styles.container}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-                    <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-                </Pressable>
+                <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
                     <View style={styles.content}>
+                        <Frosted radius={28} intensity={60} tint={0.55} />
                         <View style={styles.header}>
-                            <Text style={styles.title}>{isCreating ? 'New Playlist' : 'Add to Playlist'}</Text>
+                            <Text style={styles.title}>{isCreating ? 'New playlist' : 'Add to playlist'}</Text>
                             <Pressable onPress={onClose} style={styles.closeBtn}>
-                                <Ionicons name="close" size={20} color="#fff" />
+                                <Ionicons name="close" size={20} color={Signal.ink} />
                             </Pressable>
                         </View>
 
                         {isCreating ? (
                             <View>
-                                <Text style={styles.subtitle}>Enter playlist name</Text>
+                                <Text style={styles.subtitle}>Name it</Text>
                                 <TextInput
                                     style={styles.input} value={newPlaylistName} onChangeText={setNewPlaylistName}
-                                    placeholder="My Awesome Playlist" placeholderTextColor="#555" autoFocus
+                                    placeholder="Late night drive" placeholderTextColor={Signal.inkFaint} autoFocus selectionColor={Signal.wave}
                                 />
                                 <View style={styles.createActions}>
                                     <Pressable style={styles.textBtn} onPress={() => setIsCreating(false)}>
-                                        <Text style={styles.textBtnText}>Back to List</Text>
+                                        <Text style={styles.textBtnText}>Back to the list</Text>
                                     </Pressable>
                                     <Pressable
-                                        style={[styles.primaryBtn, { backgroundColor: colors.primary }, !newPlaylistName.trim() && { opacity: 0.5 }]}
+                                        style={[styles.primaryBtn, !newPlaylistName.trim() && { opacity: 0.5 }]}
                                         onPress={handleCreate} disabled={!newPlaylistName.trim() || localLoading}
                                     >
-                                        {localLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>Create & Add</Text>}
+                                        {localLoading ? <ActivityIndicator color={Signal.waveInk} /> : <Text style={styles.primaryBtnText}>Create and add</Text>}
                                     </Pressable>
                                 </View>
                             </View>
@@ -95,27 +93,27 @@ export const PlaylistSelectionModal = ({ visible, onClose, onSelect, onSkip }: P
                             <>
                                 {onSkip && (
                                     <Pressable style={styles.skipBtn} onPress={() => { if (onSkip) onSkip(); onClose(); }}>
-                                        <View style={[styles.skipIcon, { backgroundColor: colors.primary }]}>
-                                            <Ionicons name="download-outline" size={20} color="#fff" />
+                                        <View style={styles.skipIcon}>
+                                            <Ionicons name="download-outline" size={20} color={Signal.waveInk} />
                                         </View>
-                                        <Text style={styles.skipText}>Download to Library Only</Text>
-                                        <Ionicons name="chevron-forward" size={16} color="#666" />
+                                        <Text style={styles.skipText}>Download to the library only</Text>
+                                        <Ionicons name="chevron-forward" size={16} color={Signal.inkMuted} />
                                     </Pressable>
                                 )}
                                 <View style={styles.searchRow}>
                                     <View style={styles.searchBar}>
-                                        <Ionicons name="search" size={16} color="#666" style={{ marginRight: 8 }} />
+                                        <Ionicons name="search" size={16} color={Signal.inkMuted} style={{ marginRight: 8 }} />
                                         <TextInput
-                                            style={styles.searchInput} placeholder="Search playlists..."
-                                            placeholderTextColor="#666" value={searchQuery} onChangeText={setSearchQuery}
+                                            style={styles.searchInput} placeholder="Search playlists"
+                                            placeholderTextColor={Signal.inkFaint} selectionColor={Signal.wave} value={searchQuery} onChangeText={setSearchQuery}
                                         />
                                     </View>
-                                    <Pressable style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={() => setIsCreating(true)}>
-                                        <Ionicons name="add" size={24} color="#000" />
+                                    <Pressable style={styles.addBtn} onPress={() => setIsCreating(true)} accessibilityLabel="New playlist">
+                                        <Ionicons name="add" size={24} color={Signal.waveInk} />
                                     </Pressable>
                                 </View>
                                 {storeLoading ? (
-                                    <ActivityIndicator size="large" color={colors.primary} style={{ margin: 20 }} />
+                                    <ActivityIndicator size="large" color={Signal.wave} style={{ margin: 20 }} />
                                 ) : (
                                     <FlatList
                                         data={filteredPlaylists} keyExtractor={item => item.id} renderItem={renderItem}
@@ -134,29 +132,30 @@ export const PlaylistSelectionModal = ({ visible, onClose, onSelect, onSkip }: P
 
 const styles = StyleSheet.create({
     container: { flex: 1, justifyContent: 'flex-end' },
+    scrim: { backgroundColor: Glass.scrim },
     keyboardView: { width: '100%' },
-    content: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10, borderWidth: 1, borderColor: '#333' },
+    content: { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', padding: 24, paddingBottom: 32, maxHeight: '80%' },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    title: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    closeBtn: { padding: 4 },
-    skipBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#333', padding: 12, borderRadius: 12, marginBottom: 16 },
-    skipIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    skipText: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-    searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#333' },
-    searchInput: { flex: 1, color: '#fff', fontSize: 14 },
-    addBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    title: { color: Signal.ink, fontSize: 20, fontWeight: '700' },
+    closeBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fillLight },
+    skipBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline, padding: 12, borderRadius: 16, marginBottom: 16 },
+    skipIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 12, backgroundColor: Signal.wave },
+    skipText: { flex: 1, color: Signal.ink, fontSize: 15, fontWeight: '600' },
+    searchRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: Glass.fillLight, borderRadius: 999, paddingHorizontal: 14, height: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+    searchInput: { flex: 1, color: Signal.ink, fontSize: 15 },
+    addBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: Signal.wave },
     list: { maxHeight: 400 },
-    item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
-    iconContainer: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    itemName: { color: '#fff', fontSize: 15, fontWeight: '500', marginBottom: 2 },
-    itemCount: { color: '#666', fontSize: 12 },
-    emptyText: { color: '#666', textAlign: 'center', marginTop: 20 },
-    subtitle: { color: '#aaa', marginBottom: 12 },
-    input: { backgroundColor: '#111', color: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#333', fontSize: 16, marginBottom: 24 },
+    item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Glass.hairline },
+    iconContainer: { width: 44, height: 44, borderRadius: 10, backgroundColor: Glass.fillLight, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    itemName: { color: Signal.ink, fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    itemCount: { color: Signal.inkMuted, fontSize: 12 },
+    emptyText: { color: Signal.inkMuted, textAlign: 'center', marginTop: 20 },
+    subtitle: { color: Signal.inkSoft, marginBottom: 12 },
+    input: { backgroundColor: Glass.fillLight, color: Signal.ink, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong, fontSize: 16, marginBottom: 24 },
     createActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 16 },
     textBtn: { padding: 8 },
-    textBtnText: { color: '#aaa' },
-    primaryBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 20, minWidth: 120, alignItems: 'center' },
-    primaryBtnText: { color: '#000', fontWeight: 'bold' },
+    textBtnText: { color: Signal.inkSoft },
+    primaryBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 999, minWidth: 130, alignItems: 'center', backgroundColor: Signal.wave },
+    primaryBtnText: { color: Signal.waveInk, fontWeight: '700' },
 });

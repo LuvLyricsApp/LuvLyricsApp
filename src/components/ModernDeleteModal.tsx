@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 interface ModernDeleteModalProps {
   visible: boolean;
@@ -30,12 +31,12 @@ export const ModernDeleteModal: React.FC<ModernDeleteModalProps> = ({
       onRequestClose={onCancel}
     >
       <View style={styles.overlay}>
-        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         
         <View style={styles.container}>
+          <Frosted radius={26} intensity={60} tint={0.5} />
           <View style={styles.iconContainer}>
-            <Ionicons name="trash-outline" size={32} color="#FF4444" />
+            <Ionicons name="trash-outline" size={30} color={Signal.accent} />
           </View>
           
           <Text style={styles.title}>{title}</Text>
@@ -61,36 +62,35 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: Glass.scrim,
   },
   container: {
-    width: '80%',
-    backgroundColor: '#1E1E1E',
-    borderRadius: 24,
+    width: '84%',
+    maxWidth: 360,
+    borderRadius: 26,
+    overflow: 'hidden',
     padding: 24,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   iconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    backgroundColor: 'rgba(238, 107, 95, 0.14)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontWeight: '700',
+    color: Signal.ink,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 16,
-    color: '#AAA',
+    color: Signal.inkSoft,
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
@@ -103,26 +103,26 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#333',
+    borderRadius: 999,
+    backgroundColor: Glass.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairlineStrong,
     alignItems: 'center',
   },
   cancelText: {
-    color: '#FFF',
+    color: Signal.ink,
     fontSize: 16,
     fontWeight: '600',
   },
   deleteBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 68, 68, 0.2)',
+    borderRadius: 999,
+    backgroundColor: Signal.accent,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 68, 68, 0.5)',
   },
   deleteText: {
-    color: '#FF4444',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

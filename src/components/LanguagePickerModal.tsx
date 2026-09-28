@@ -1,5 +1,5 @@
 /**
- * Language Preference Modal for Luvs
+ * Luvs languages: a frosted sheet of chips, at least one always on.
  */
 
 import React, { useState } from 'react';
@@ -7,7 +7,8 @@ import { Modal, View, Text, StyleSheet, Pressable, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useLuvsPreferencesStore, LuvLanguage } from '../store/luvsPreferencesStore';
 import { luvsEngine } from '../services/luvsEngine';
-import { useThemeColors } from '../contexts/ThemeContext';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 const AVAILABLE_LANGUAGES: LuvLanguage[] = [
   'English', 'Hindi', 'Tamil', 'Telugu', 'Punjabi',
@@ -20,7 +21,6 @@ interface LanguagePickerModalProps {
 }
 
 export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visible, onClose }) => {
-  const colors = useThemeColors();
   const preferredLanguages = useLuvsPreferencesStore(s => s.preferredLanguages);
   const setPreferredLanguages = useLuvsPreferencesStore(s => s.setPreferredLanguages);
   const [selectedLanguages, setSelectedLanguages] = useState<LuvLanguage[]>(() =>
@@ -47,27 +47,27 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visibl
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.modalContent}>
+          <Frosted radius={28} intensity={60} tint={0.55} />
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Luvs Language Preferences</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Select languages for your Luvs feed</Text>
+            <Text style={styles.title}>Languages for Luvs</Text>
+            <Text style={styles.subtitle}>Luvs mixes songs in the ones you pick.</Text>
           </View>
 
-          <ScrollView style={styles.languageList} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.languageList} contentContainerStyle={styles.chips} showsVerticalScrollIndicator={false}>
             {AVAILABLE_LANGUAGES.map((language) => {
               const isSelected = selectedLanguages.includes(language);
               return (
                 <Pressable
                   key={language}
-                  style={[styles.languageOption, isSelected && { backgroundColor: 'rgba(10,132,255,0.15)', borderWidth: 1, borderColor: colors.primary }]}
+                  style={[styles.chip, isSelected && styles.chipOn]}
                   onPress={() => toggleLanguage(language)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isSelected }}
                 >
-                  <View style={styles.languageRow}>
-                    <Text style={[styles.languageName, { color: isSelected ? colors.primary : colors.textPrimary }, isSelected && { fontWeight: '600' }]}>
-                      {language}
-                    </Text>
-                    {isSelected && <Ionicons name="checkmark-circle" size={24} color={colors.primary} />}
-                  </View>
+                  {isSelected ? <Ionicons name="checkmark" size={16} color={Signal.waveInk} /> : null}
+                  <Text style={[styles.chipText, isSelected && styles.chipTextOn]}>{language}</Text>
                 </Pressable>
               );
             })}
@@ -75,9 +75,9 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visibl
 
           <View style={styles.actions}>
             <Pressable style={styles.cancelButton} onPress={onClose}>
-              <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
-            <Pressable style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave}>
+            <Pressable style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.saveText}>Save</Text>
             </Pressable>
           </View>
@@ -88,18 +88,20 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({ visibl
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 20, paddingHorizontal: 20, paddingBottom: 40, maxHeight: '70%' },
-  header: { marginBottom: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
-  subtitle: { fontSize: 14 },
-  languageList: { maxHeight: 400 },
-  languageOption: { paddingVertical: 16, paddingHorizontal: 16, borderRadius: 12, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.05)' },
-  languageRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  languageName: { fontSize: 18, fontWeight: '500' },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 12 },
-  cancelButton: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
-  cancelText: { fontSize: 16, fontWeight: '600' },
-  saveButton: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  saveText: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: Glass.scrim, justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', paddingTop: 24, paddingHorizontal: 20, paddingBottom: 36, maxHeight: '70%' },
+  header: { marginBottom: 18 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 4, color: Signal.ink },
+  subtitle: { fontSize: 14, color: Signal.inkSoft },
+  languageList: { maxHeight: 360 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong },
+  chipOn: { backgroundColor: Signal.wave, borderColor: Signal.wave },
+  chipText: { fontSize: 15, fontWeight: '600', color: Signal.ink },
+  chipTextOn: { color: Signal.waveInk },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 22, gap: 12 },
+  cancelButton: { flex: 1, paddingVertical: 14, borderRadius: 999, backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong, alignItems: 'center' },
+  cancelText: { fontSize: 16, fontWeight: '600', color: Signal.ink },
+  saveButton: { flex: 1, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: Signal.wave },
+  saveText: { fontSize: 16, color: Signal.waveInk, fontWeight: '700' },
 });

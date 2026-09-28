@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Song } from '../types/song';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 interface LibraryBottomSheetProps {
   visible: boolean;
@@ -21,6 +23,17 @@ interface LibraryBottomSheetProps {
     primary: string;
   };
 }
+
+type Tone = 'normal' | 'warn' | 'danger';
+
+const Row: React.FC<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; tone?: Tone; tint: string }> = ({ icon, label, onPress, tone = 'normal', tint }) => (
+  <Pressable style={({ pressed }) => [styles.option, pressed && styles.optionPressed]} onPress={onPress}>
+    <View style={[styles.optionIcon, tone === 'danger' && styles.optionIconDanger]}>
+      <Ionicons name={icon} size={19} color={tone === 'danger' ? Signal.accent : tone === 'warn' ? Signal.accentBright : tint} />
+    </View>
+    <Text style={[styles.optionText, tone === 'danger' && { color: Signal.accent }]}>{label}</Text>
+  </Pressable>
+);
 
 const LibraryBottomSheet: React.FC<LibraryBottomSheetProps> = ({
   visible,
@@ -42,62 +55,39 @@ const LibraryBottomSheet: React.FC<LibraryBottomSheetProps> = ({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+          <Frosted radius={28} intensity={60} tint={0.55} />
           <View style={styles.handle} />
-          <Text style={styles.title}>{selectedSong?.title}</Text>
-          <Text style={styles.subtitle}>{selectedSong?.artist}</Text>
+          <Text style={styles.title} numberOfLines={1}>{selectedSong?.title}</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>{selectedSong?.artist}</Text>
 
-          <Pressable style={styles.option} onPress={onShare}>
-            <Ionicons name="share-social-outline" size={24} color={colors.primary} />
-            <Text style={styles.optionText}>Share Audio</Text>
-          </Pressable>
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
+            <Row icon="share-social-outline" label="Share the audio" onPress={onShare} tint={colors.primary} />
+            <Row icon="language-outline" label="Another language or version" onPress={onOpenVersionSearch} tint={colors.primary} />
+            <Row icon="image-outline" label="Cover from your photos" onPress={onPickImage} tint={colors.primary} />
+            <Row icon="globe-outline" label="Find a cover online" onPress={onOpenCoverSearch} tint={colors.primary} />
 
-          <Pressable style={styles.option} onPress={onOpenVersionSearch}>
-            <Ionicons name="language-outline" size={24} color={colors.primary} />
-            <Text style={styles.optionText}>Change Language / Version</Text>
-          </Pressable>
+            {recentArts.length > 0 && (
+              <View style={styles.recent}>
+                <Text style={styles.recentTitle}>Recent covers</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {recentArts.map((uri, index) => (
+                    <Pressable key={index} onPress={() => onSelectRecentArt(uri)} style={styles.recentItem}>
+                      <Image source={{ uri }} style={styles.recentImage} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
-          <Pressable style={styles.option} onPress={onPickImage}>
-            <Ionicons name="image-outline" size={24} color={colors.primary} />
-            <Text style={styles.optionText}>Choose from Gallery</Text>
-          </Pressable>
+            <Row icon="create-outline" label="Edit title and artist" onPress={onEditInfo} tint={colors.primary} />
+            <Row icon="eye-off-outline" label="Hide this song" onPress={onHideSong} tone="warn" tint={colors.primary} />
+            <Row icon="close-circle-outline" label="Remove the cover" onPress={onRemoveCover} tone="warn" tint={colors.primary} />
 
-          <Pressable style={styles.option} onPress={onOpenCoverSearch}>
-            <Ionicons name="globe-outline" size={24} color={colors.primary} />
-            <Text style={styles.optionText}>Search Web</Text>
-          </Pressable>
-
-          {recentArts.length > 0 && (
-            <View style={{ marginTop: 16 }}>
-              <Text style={[styles.subtitle, { textAlign: 'left', marginBottom: 12 }]}>Recent Cover Art</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                {recentArts.map((uri, index) => (
-                  <Pressable key={index} onPress={() => onSelectRecentArt(uri)} style={{ marginRight: 12 }}>
-                    <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#333' }} />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          <Pressable style={styles.option} onPress={onRemoveCover}>
-            <Ionicons name="trash-outline" size={24} color="#FF4444" />
-            <Text style={[styles.optionText, { color: '#FF4444' }]}>Remove Cover Art</Text>
-          </Pressable>
-
-          <Pressable style={styles.option} onPress={onHideSong}>
-            <Ionicons name="eye-off-outline" size={24} color="#FFA500" />
-            <Text style={[styles.optionText, { color: '#FFA500' }]}>Hide Song</Text>
-          </Pressable>
-
-          <Pressable style={styles.option} onPress={onEditInfo}>
-            <Ionicons name="create-outline" size={24} color={colors.primary} />
-            <Text style={styles.optionText}>Edit Song Info</Text>
-          </Pressable>
-
-          <Pressable style={[styles.option, styles.cancelOption, { borderBottomWidth: 0, marginTop: 12, backgroundColor: '#2A2A2A' }]} onPress={onDelete}>
-            <Ionicons name="trash" size={20} color="#FF4444" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#FF4444', marginLeft: 0 }}>Delete Song</Text>
-          </Pressable>
+            <Pressable style={({ pressed }) => [styles.delete, pressed && styles.optionPressed]} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+              <Text style={styles.deleteText}>Delete song</Text>
+            </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -105,14 +95,23 @@ const LibraryBottomSheet: React.FC<LibraryBottomSheetProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  container: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
-  handle: { width: 40, height: 4, backgroundColor: '#333', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 4, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#aaa', marginBottom: 24, textAlign: 'center' },
-  option: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#333' },
-  optionText: { fontSize: 16, color: '#fff', marginLeft: 12 },
-  cancelOption: { borderBottomWidth: 0, marginTop: 10, justifyContent: 'center', backgroundColor: '#333', borderRadius: 12 },
+  overlay: { flex: 1, backgroundColor: Glass.scrim, justifyContent: 'flex-end' },
+  container: { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 34, maxHeight: '86%' },
+  handle: { width: 36, height: 5, backgroundColor: 'rgba(244,241,234,0.28)', borderRadius: 3, alignSelf: 'center', marginBottom: 16 },
+  title: { fontSize: 19, fontWeight: '700', color: Signal.ink, marginBottom: 2, textAlign: 'center' },
+  subtitle: { fontSize: 14, color: Signal.inkMuted, marginBottom: 18, textAlign: 'center' },
+  scroll: { flexGrow: 0 },
+  option: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, borderRadius: 14 },
+  optionPressed: { backgroundColor: Glass.fillPressed },
+  optionIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fillLight },
+  optionIconDanger: { backgroundColor: 'rgba(238, 107, 95, 0.14)' },
+  optionText: { fontSize: 16, color: Signal.ink, marginLeft: 14, fontWeight: '500' },
+  recent: { marginVertical: 10 },
+  recentTitle: { fontSize: 13, color: Signal.inkMuted, marginBottom: 10, marginLeft: 6 },
+  recentItem: { marginRight: 10 },
+  recentImage: { width: 72, height: 72, borderRadius: 12, backgroundColor: Glass.fillLight },
+  delete: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 14, borderRadius: 999, backgroundColor: Signal.accent },
+  deleteText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 });
 
 export default React.memo(LibraryBottomSheet);

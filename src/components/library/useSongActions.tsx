@@ -20,15 +20,16 @@ import { CoverArtSearchScreen } from '../../screens/CoverArtSearchScreen';
 import { useSongsStore } from '../../store/songsStore';
 import { useArtHistoryStore } from '../../store/artHistoryStore';
 import { useLyricsScanQueueStore } from '../../store/lyricsScanQueueStore';
-import { useThemeColors } from '../../contexts/ThemeContext';
+import { Signal } from '../../constants/allegraTheme';
 import { songCanUpgradeToSyncedLyrics } from '../../utils/lyricsState';
 import { Song } from '../../types/song';
 import * as Haptics from '../../utils/haptics';
 
+const SHEET_COLORS = { primary: Signal.wave };
+
 type ToastState = { message: string; type: 'success' | 'error' | 'info' } | null;
 
 export const useSongActions = () => {
-  const colors = useThemeColors();
   const updateSong = useSongsStore(s => s.updateSong);
   const fetchSongs = useSongsStore(s => s.fetchSongs);
   const deleteSong = useSongsStore(s => s.deleteSong);
@@ -139,7 +140,7 @@ export const useSongActions = () => {
         }}
         onEditInfo={() => later(() => { setEditTitle(song?.title ?? ''); setEditArtist(song?.artist ?? ''); setEditing(true); })}
         onDelete={() => later(() => setConfirmDelete(true))}
-        colors={colors}
+        colors={SHEET_COLORS}
       />
       <ModernDeleteModal
         visible={confirmDelete}
@@ -187,7 +188,7 @@ export const useSongActions = () => {
             setToast({ message: 'Could not update the song', type: 'error' });
           }
         }}
-        primaryColor={colors.primary}
+        primaryColor={Signal.wave}
       />
       {toast ? <Toast visible message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
     </>
