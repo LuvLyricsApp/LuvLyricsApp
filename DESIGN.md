@@ -250,7 +250,7 @@ can't blank it.
 | --- | --- |
 | **Stream** | `DynamicAura`, title, mood chips, shortcut grid, quick picks, cover shelves. Double-tap the Stream tab: scroll to the top, focus search, keyboard up (the first tap still switches at once) |
 | **Search** | same room; one field for the phone *and* the catalog; scopes All · On this phone · Online; recent searches; mood tiles |
-| **Library** | same room; glass "+", Downloads row, two-column playlist mosaics rising in 40 ms apart |
+| **Library** | same room; the **cover deck** (recent songs as a staggered stack of sleeves — tap the front one to play, flick to leaf through; order lives on the UI thread so a flick never flickers), **Play all · Shuffle** under it and again in a frosted sticky bar once you scroll past, **Your artists** (round covers sized by how many songs you keep, tap to filter), Downloading, then Songs with filter, sort (Recently added · A–Z · By artist) and an **A–Z rail** (letter bubble, a tick per letter, jumps by fixed 64 pt rows) |
 | **Playlist** | CoverFlow deck, playlist name, meta + sort chip, **Play / Shuffle** (transport lives in the pill), glass header that fades in on scroll |
 | **Luvs** | dark frosted room; one rounded card per clip (art or canvas, thumb, title, "Full song" pill); scrubber and four round actions under it |
 | **Player** | canvas or artwork stage, grab handle, controls on a scrim, `wave` play button; tap the artist to open their page |

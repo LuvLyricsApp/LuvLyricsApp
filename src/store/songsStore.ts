@@ -238,7 +238,7 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
 
       // Toggle Like — delegates to playlistStore (single source of truth).
       // We still patch songsStore and playerStore in-memory so legacy
-      // consumers that read song.isLiked directly (RecentlyPlayedGrid,
+      // consumers that read song.isLiked directly (list rows,
       // SongCard) stay reactive without a full refetch.
       toggleLike: async (songId: string) => {
          // A streamed song has no library row to like — saving it downloads it
