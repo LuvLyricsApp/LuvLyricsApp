@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, Pressable,
-  FlatList, ActivityIndicator, Image, Keyboard
+  FlatList, ActivityIndicator, Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Frosted } from './allegra/Frosted';
+import { Artwork } from './allegra/Artwork';
+import { Glass, Signal } from '../constants/allegraTheme';
 import { UnifiedSong, Song } from '../types/song';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { useSongsStore } from '../store/songsStore';
@@ -21,7 +24,7 @@ interface Props {
 }
 
 export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, onClose, onSuccess }) => {
-  const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UnifiedSong[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,7 +36,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
 
   const deleteSongFile = async (uri: string) => {
     try { await FileSystem.deleteAsync(uri, { idempotent: true }); }
-    catch (e) { console.warn('Failed to delete old audio:', e); }
+    catch (e) { if (__DEV__) console.warn('Failed to delete old audio:', e); }
   };
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
       const searchResults = await MultiSourceSearchService.searchMusic(query);
       setResults(searchResults);
     } catch {
-      setToast({ message: 'Search failed', type: 'error' });
+      setToast({ message: "Couldn't search right now", type: 'error' });
     } finally { setLoading(false); }
   };
 
@@ -64,7 +67,7 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
     try {
       let downloadUrl = newVersion.downloadUrl;
       if (!downloadUrl && newVersion.streamUrl) downloadUrl = newVersion.streamUrl;
-      if (!downloadUrl) throw new Error('No audio URL found for this version.');
+      if (!downloadUrl) throw new Error('this version has no audio');
 
       const filename = `${targetSong.id}_${Date.now()}.mp3`;
       const fileUri = `${getDocumentDirectory()}music/${filename}`;
@@ -76,15 +79,16 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
         (progress) => setDownloadProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite)
       ).downloadAsync();
 
-      if (!downloadRes || !downloadRes.uri) throw new Error('Download failed');
+      if (!downloadRes || !downloadRes.uri) throw new Error('the download stopped');
       if (targetSong.audioUri) await deleteSongFile(targetSong.audioUri);
 
       await updateSong({ ...targetSong, audioUri: downloadRes.uri, duration: newVersion.duration || targetSong.duration, dateModified: new Date().toISOString() });
       onSuccess();
       onClose();
-    } catch (e: any) {
-      console.error(e);
-      setToast({ message: `Failed: ${e.message || 'Unknown error'}`, type: 'error' });
+    } catch (e) {
+      if (__DEV__) console.error('[SongVersion] replace failed:', e);
+      const reason = e instanceof Error && e.message ? e.message : 'something stopped it';
+      setToast({ message: `Couldn't swap it: ${reason}`, type: 'error' });
       setDownloadingId(null);
     }
   };
@@ -92,47 +96,63 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.container}>
-        <View style={styles.content}>
+        <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} accessibilityLabel="Close" />
+        <View style={[styles.content, { paddingBottom: 16 + insets.bottom }]}>
+          <Frosted radius={28} intensity={60} tint={0.55} />
+          <View style={styles.grabber} />
           <View style={styles.header}>
-            <Text style={styles.title}>Change Language / Version</Text>
-            <Pressable onPress={onClose}><Ionicons name="close" size={24} color="#FFF" /></Pressable>
+            <Text style={styles.title}>Another version</Text>
+            <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
+              <Ionicons name="close" size={20} color={Signal.ink} />
+            </Pressable>
           </View>
-          <Text style={styles.subtitle}>Search for "{targetSong?.title}" in another language:</Text>
+          <Text style={styles.subtitle}>
+            Find {targetSong ? `"${targetSong.title}"` : 'this song'} in another language or version. The one you pick replaces the audio on your phone.
+          </Text>
           <View style={styles.searchBar}>
+            <Ionicons name="search" size={16} color={Signal.inkMuted} />
             <TextInput
               style={styles.input} value={query} onChangeText={setQuery}
-              placeholder="e.g. Song Name (Tamil)" placeholderTextColor="#666"
+              placeholder="Song name and language" placeholderTextColor={Signal.inkFaint}
+              selectionColor={Signal.wave} returnKeyType="search"
               onSubmitEditing={handleSearch} autoFocus
             />
-            <Pressable onPress={handleSearch} style={[styles.searchButton, { backgroundColor: colors.primary }]}>
-              <Ionicons name="search" size={20} color="#000" />
-            </Pressable>
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+            <ActivityIndicator size="large" color={Signal.wave} style={{ marginTop: 40 }} />
           ) : (
             <FlatList
               data={results} keyExtractor={item => item.id} style={styles.list}
               contentContainerStyle={{ paddingBottom: 20 }}
-              renderItem={({ item }) => (
-                <Pressable style={styles.item} onPress={() => handleReplace(item)} disabled={!!downloadingId}>
-                  <Image source={{ uri: item.thumbnail || item.highResArt }} style={styles.thumb} />
-                  <View style={styles.info}>
-                    <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.itemArtist} numberOfLines={1}>{item.artist}</Text>
-                  </View>
-                  {downloadingId === item.id ? (
-                    <View>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <Text style={{ color: colors.primary, fontSize: 10 }}>{(downloadProgress * 100).toFixed(0)}%</Text>
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const busy = downloadingId === item.id;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [styles.item, pressed && styles.itemPressed, !!downloadingId && !busy && styles.itemDimmed]}
+                    onPress={() => handleReplace(item)} disabled={!!downloadingId}
+                    accessibilityRole="button" accessibilityLabel={`Use ${item.title} by ${item.artist}`}
+                  >
+                    <Artwork uri={item.thumbnail || item.highResArt} title={item.title} artist={item.artist} size={48} style={styles.thumb} />
+                    <View style={styles.info}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.itemArtist} numberOfLines={1}>{item.artist}</Text>
                     </View>
-                  ) : (
-                    <Ionicons name="download-outline" size={24} color={colors.primary} />
-                  )}
-                </Pressable>
-              )}
-              ListEmptyComponent={!loading && results.length === 0 ? <Text style={styles.empty}>No results found</Text> : null}
+                    {busy ? (
+                      <View style={styles.busy}>
+                        <ActivityIndicator size="small" color={Signal.wave} />
+                        <Text style={styles.busyText}>{Math.round(downloadProgress * 100)}%</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.use}>Use</Text>
+                    )}
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={styles.empty}>Search to see other versions.</Text>
+              }
             />
           )}
 
@@ -144,19 +164,29 @@ export const SongVersionSearchModal: React.FC<Props> = ({ visible, targetSong, o
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
-  content: { backgroundColor: '#1E1E1E', borderRadius: 20, height: '80%', padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#FFF' },
-  subtitle: { color: '#AAA', marginBottom: 12 },
-  searchBar: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  input: { flex: 1, backgroundColor: '#333', borderRadius: 10, padding: 12, color: '#FFF', fontSize: 16 },
-  searchButton: { padding: 12, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  list: { flex: 1 },
-  item: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#2A2A2A', borderRadius: 12, marginBottom: 10, gap: 12 },
-  thumb: { width: 50, height: 50, borderRadius: 6, backgroundColor: '#444' },
+  container: { flex: 1, justifyContent: 'flex-end' },
+  scrim: { backgroundColor: Glass.scrim },
+  content: { height: '85%', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', paddingHorizontal: 20 },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginTop: 8, backgroundColor: Glass.hairlineStrong },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: '700', color: Signal.ink },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fillLight },
+  subtitle: { color: Signal.inkMuted, fontSize: 14, lineHeight: 20, marginBottom: 14 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, height: 44, marginBottom: 12,
+    borderRadius: 999, backgroundColor: Glass.fillLight, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline,
+  },
+  input: { flex: 1, color: Signal.ink, fontSize: 15, paddingVertical: 0 },
+  list: { flex: 1, marginHorizontal: -8 },
+  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, borderRadius: 14, gap: 12 },
+  itemPressed: { backgroundColor: Glass.fillPressed },
+  itemDimmed: { opacity: 0.4 },
+  thumb: { width: 48, height: 48, borderRadius: 8 },
   info: { flex: 1 },
-  itemTitle: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  itemArtist: { color: '#AAA', fontSize: 12 },
-  empty: { color: '#666', textAlign: 'center', marginTop: 40 },
+  itemTitle: { color: Signal.ink, fontWeight: '600', fontSize: 15 },
+  itemArtist: { color: Signal.inkMuted, fontSize: 13, marginTop: 2 },
+  use: { color: Signal.wave, fontSize: 15, fontWeight: '600', paddingHorizontal: 8 },
+  busy: { alignItems: 'center', minWidth: 40 },
+  busyText: { color: Signal.wave, fontSize: 11, marginTop: 2 },
+  empty: { color: Signal.inkMuted, textAlign: 'center', marginTop: 40, fontSize: 14 },
 });

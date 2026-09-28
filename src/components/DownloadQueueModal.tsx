@@ -1,111 +1,96 @@
 import React from 'react';
-import { View, Text, Modal, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, Modal, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDownloadQueueStore, QueueItem } from '../store/downloadQueueStore';
+import { Frosted } from './allegra/Frosted';
+import { Artwork } from './allegra/Artwork';
+import { DownloadButton } from './stream/DownloadButton';
+import { Glass, Signal } from '../constants/allegraTheme';
+import * as Haptics from '../utils/haptics';
 
 interface DownloadQueueModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
-export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps) => {
-  const queue = useDownloadQueueStore(state => state.queue);
-  const removeItem = useDownloadQueueStore(state => state.removeItem);
-  const clearCompleted = useDownloadQueueStore(state => state.clearCompleted);
-  const pauseItem = useDownloadQueueStore(state => state.pauseItem);
-  const resumeItem = useDownloadQueueStore(state => state.resumeItem);
-  const retryItem = useDownloadQueueStore(state => state.retryItem);
-
-  const renderItem = ({ item }: { item: QueueItem }) => {
-    if (!item || !item.song) return null;
-    
-    return (
-      <View style={styles.itemContainer}>
-        <Image source={{ uri: item.song.highResArt }} style={styles.art} />
-        <View style={styles.info}>
-          <Text style={styles.title} numberOfLines={1}>{item.song.title || 'Unknown Title'}</Text>
-          <Text style={styles.artist} numberOfLines={1}>{item.song.artist || 'Unknown Artist'}</Text>
-          
-          {(item.status === 'downloading' || item.status === 'completed' || item.status === 'paused') ? (
-             <View style={styles.progressContainer}>
-                <View style={styles.progressRow}>
-                    <Text style={[styles.stageText, item.status === 'paused' && { color: '#FFA000' }]} numberOfLines={1}>
-                        {item.status === 'completed' ? 'Download Complete' : 
-                         item.status === 'paused' ? 'Download Paused' : 
-                         item.stageStatus || 'Downloading...'}
-                    </Text>
-                    <Text style={styles.percentageText}>
-                        {item.status === 'completed' ? '100%' : `${Math.round((item.progress || 0) * 100)}%`}
-                    </Text>
-                </View>
-                <View style={styles.track}>
-                    <View style={[
-                        styles.bar, 
-                        { width: item.status === 'completed' ? '100%' : `${(item.progress || 0) * 100}%` },
-                        item.status === 'completed' && { backgroundColor: '#4CAF50' },
-                        item.status === 'paused' && { backgroundColor: '#FFA000' }
-                    ]} />
-                </View>
-             </View>
-          ) : (
-             <View style={styles.statusRow}>
-                <Text style={[styles.status, getStatusColor(item.status)]}>
-                 {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Pending'}
-                </Text>
-                {item.status === 'failed' && !!item.error && (
-                  <Text style={styles.error} numberOfLines={1}> - {item.error}</Text>
-                )}
-             </View>
-          )}
-        </View>
-
-        <View style={styles.actions}>
-          {item.status === 'downloading' && (
-            <TouchableOpacity onPress={() => pauseItem(item.id)} style={styles.actionBtn}>
-              <Ionicons name="pause" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
-          {item.status === 'paused' && (
-            <TouchableOpacity onPress={() => resumeItem(item.id)} style={styles.actionBtn}>
-              <Ionicons name="play" size={20} color="#4CAF50" />
-            </TouchableOpacity>
-          )}
-          {item.status === 'failed' && (
-            <TouchableOpacity onPress={() => retryItem(item.id)} style={styles.actionBtn}>
-              <Ionicons name="refresh" size={20} color="#A1A1A1" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.actionBtn}>
-            <Ionicons name="close-circle" size={24} color="#666" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return { color: '#4CAF50' };
-      case 'failed': return { color: '#F44336' };
-      case 'downloading': return { color: '#A1A1A1' };
-      case 'staging': return { color: '#FFC107' };
-      case 'paused': return { color: '#FFA000' };
-      default: return { color: '#999' };
+/** One plain line under the song: what is happening to it right now. */
+const statusLine = (item: QueueItem): string => {
+  switch (item.status) {
+    case 'completed': return 'Saved to your library';
+    case 'paused': return `Paused at ${Math.round((item.progress || 0) * 100)}%`;
+    case 'downloading': {
+      const pct = `${Math.round((item.progress || 0) * 100)}%`;
+      return item.stageStatus ? `${item.stageStatus.replace(/\.+$/, '')} · ${pct}` : `Downloading · ${pct}`;
     }
-  };
+    case 'staging': return item.stageStatus?.replace(/\.+$/, '') || 'Getting ready';
+    case 'failed': return item.error ? `Didn't download: ${item.error}` : "Didn't download";
+    default: return 'Waiting for a slot';
+  }
+};
+
+const QueueRow: React.FC<{ item: QueueItem }> = ({ item }) => {
+  const removeItem = useDownloadQueueStore(state => state.removeItem);
+  const retryItem = useDownloadQueueStore(state => state.retryItem);
+  const title = item.song.title || 'Untitled';
+  const artist = item.song.artist || 'Unknown artist';
+  const moving = item.status === 'downloading' || item.status === 'paused';
+  const progress = item.status === 'completed' ? 1 : Math.max(0, Math.min(1, item.progress || 0));
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <BlurView intensity={80} tint="dark" style={styles.absolute}>
-        <View style={styles.container}>
+    <View style={styles.row}>
+      <Artwork uri={item.song.highResArt} title={title} artist={artist} size={52} style={styles.art} />
+      <View style={styles.info}>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        <Text
+          style={[styles.status, item.status === 'failed' && styles.statusFailed, item.status === 'completed' && styles.statusDone]}
+          numberOfLines={1}
+        >
+          {statusLine(item)}
+        </Text>
+        {moving ? (
+          <View style={styles.track}>
+            {/* Scaled from the left edge, not resized. */}
+            <View style={[styles.bar, { transform: [{ scaleX: progress }] }]} />
+          </View>
+        ) : null}
+      </View>
+      <DownloadButton song={{ id: item.id, title, artist }} onSave={() => retryItem(item.id)} />
+      <Pressable
+        onPress={() => { Haptics.selectionAsync().catch(() => {}); removeItem(item.id); }}
+        hitSlop={8}
+        style={styles.remove}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${title} from downloads`}
+      >
+        <Ionicons name="close" size={18} color={Signal.inkMuted} />
+      </Pressable>
+    </View>
+  );
+};
+
+const renderItem = ({ item }: { item: QueueItem }) => (item?.song ? <QueueRow item={item} /> : null);
+
+export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps) => {
+  const queue = useDownloadQueueStore(state => state.queue);
+  const clearCompleted = useDownloadQueueStore(state => state.clearCompleted);
+  const insets = useSafeAreaInsets();
+  const done = queue.filter(i => i.status === 'completed').length;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.root}>
+        <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} accessibilityLabel="Close downloads" />
+        <View style={[styles.sheet, { paddingBottom: 16 + insets.bottom }]}>
+          <Frosted radius={28} intensity={60} tint={0.55} />
+          <View style={styles.grabber} />
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Downloads</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
+            <Pressable onPress={onClose} style={styles.closeButton} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
+              <Ionicons name="close" size={20} color={Signal.ink} />
+            </Pressable>
           </View>
-          
+
           <FlatList
             data={queue}
             renderItem={renderItem}
@@ -113,133 +98,96 @@ export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons name="download-outline" size={48} color="#666" />
-                <Text style={styles.emptyText}>No active downloads</Text>
+                <Ionicons name="arrow-down-circle-outline" size={40} color={Signal.inkFaint} />
+                <Text style={styles.emptyTitle}>Nothing downloading</Text>
+                <Text style={styles.emptyText}>Songs you save from Stream or Search show up here while they download.</Text>
               </View>
             }
           />
 
-          {queue.some(i => i.status === 'completed') && (
-            <TouchableOpacity onPress={clearCompleted} style={styles.clearBtn}>
-              <Text style={styles.clearBtnText}>Clear Completed</Text>
-            </TouchableOpacity>
+          {done > 0 && (
+            <Pressable onPress={clearCompleted} style={styles.clearBtn} accessibilityRole="button">
+              <Text style={styles.clearBtnText}>Clear {done === 1 ? 'the saved song' : `${done} saved songs`}</Text>
+            </Pressable>
           )}
         </View>
-      </BlurView>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  absolute: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  container: {
-    height: '80%',
-    backgroundColor: 'rgba(20,20,20,0.95)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  root: { flex: 1, justifyContent: 'flex-end' },
+  scrim: { backgroundColor: Glass.scrim },
+  sheet: {
+    height: '78%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    marginTop: 8,
+    backgroundColor: Glass.hairlineStrong,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: Signal.ink },
   closeButton: {
-    padding: 5,
-  },
-  listContent: {
-    padding: 20,
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
-    padding: 10,
-  },
-  art: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#333',
-  },
-  info: {
-    flex: 1,
-    marginLeft: 15,
-    justifyContent: 'center',
-  },
-  title: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  artist: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  error: {
-    color: '#F44336',
-    fontSize: 12,
-    marginLeft: 5,
-    flex: 1,
-  },
-  removeBtn: {
-    padding: 5,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionBtn: {
-    padding: 8,
-  },
-  emptyContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    backgroundColor: Glass.fillLight,
   },
-  emptyText: {
-    color: '#666',
-    marginTop: 10,
-    fontSize: 16,
+  listContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12, flexGrow: 1 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+    borderRadius: 16,
+    backgroundColor: Glass.fillLight,
   },
+  art: { width: 52, height: 52, borderRadius: 8 },
+  info: { flex: 1, marginLeft: 12, marginRight: 4, justifyContent: 'center' },
+  title: { color: Signal.ink, fontSize: 15, fontWeight: '600', marginBottom: 2 },
+  status: { color: Signal.inkMuted, fontSize: 13 },
+  statusFailed: { color: Signal.accent },
+  statusDone: { color: Signal.wave },
+  track: {
+    alignSelf: 'stretch',
+    height: 3,
+    marginTop: 6,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: Glass.hairline,
+  },
+  bar: { width: '100%', height: '100%', borderRadius: 2, backgroundColor: Signal.wave, transformOrigin: 'left' },
+  remove: { paddingHorizontal: 6, paddingVertical: 8 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
+  emptyTitle: { color: Signal.ink, fontSize: 17, fontWeight: '600', marginTop: 12 },
+  emptyText: { color: Signal.inkMuted, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 },
   clearBtn: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    margin: 20,
-    padding: 15,
-    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 999,
     alignItems: 'center',
+    backgroundColor: Glass.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
   },
-  clearBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  progressContainer: { marginTop: 4 },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  stageText: { color: '#ccc', fontSize: 11, maxWidth: '80%' },
-  percentageText: { color: '#4CAF50', fontSize: 11, fontWeight: 'bold' },
-  track: { height: 4, backgroundColor: '#333', borderRadius: 2, overflow: 'hidden' },
-  bar: { height: '100%', backgroundColor: '#4CAF50' }
+  clearBtnText: { color: Signal.ink, fontSize: 15, fontWeight: '600' },
 });
