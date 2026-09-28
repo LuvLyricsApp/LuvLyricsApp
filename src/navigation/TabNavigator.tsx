@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import ArtistScreen from '../screens/ArtistScreen';
 import CollectionScreen from '../screens/CollectionScreen';
 import { SCREEN_BG, stackContentStyle } from './theme';
+import { PlayerSheetBackdrop } from '../components/PlayerSheetBackdrop';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -96,31 +98,35 @@ export const TabNavigator: React.FC = () => {
   const inactiveTint = isDark ? 'rgba(255,255,255,0.5)' : colors.textMuted;
 
   return (
-    <Tab.Navigator
-      id="MainTabs"
-      initialRouteName="Stream"
-      // Back from Settings / the downloader returns to the tab you came from.
-      backBehavior="history"
-      tabBar={navBarStyle === 'modern-pill' ? renderModernPillTabBar : renderCustomTabBar}
-      screenOptions={{
-        headerShown: false,
-        // Pages cross-fade over the dark room instead of cutting (or flashing
-        // the light default behind a screen that's still mounting).
-        animation: 'fade',
-        sceneStyle: { backgroundColor: SCREEN_BG },
-        tabBarActiveTintColor: activeTint,
-        tabBarInactiveTintColor: inactiveTint,
-        tabBarShowLabel: navBarStyle === 'classic',
-      }}
-    >
-      <Tab.Screen name="Stream" component={StreamScreen} options={{ tabBarLabel: 'Stream', tabBarIcon: StreamIcon }} />
-      <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
-      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
-      <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
-      <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarLabel: 'Downloader' }} />
-      <Tab.Screen name="Browse" component={BrowseStackScreen} options={{ tabBarLabel: 'Browse' }} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        id="MainTabs"
+        initialRouteName="Stream"
+        // Back from Settings / the downloader returns to the tab you came from.
+        backBehavior="history"
+        tabBar={navBarStyle === 'modern-pill' ? renderModernPillTabBar : renderCustomTabBar}
+        screenOptions={{
+          headerShown: false,
+          // Pages cross-fade over the dark room instead of cutting (or flashing
+          // the light default behind a screen that's still mounting).
+          animation: 'fade',
+          sceneStyle: { backgroundColor: SCREEN_BG },
+          tabBarActiveTintColor: activeTint,
+          tabBarInactiveTintColor: inactiveTint,
+          tabBarShowLabel: navBarStyle === 'classic',
+        }}
+      >
+        <Tab.Screen name="Stream" component={StreamScreen} options={{ tabBarLabel: 'Stream', tabBarIcon: StreamIcon }} />
+        <Tab.Screen name="Luvs" component={LuvsScreen} options={{ tabBarLabel: 'Luvs', tabBarIcon: LuvsIcon }} />
+        <Tab.Screen name="Library" component={LibraryStackScreen} options={{ tabBarLabel: 'Library', tabBarIcon: LibraryIcon }} />
+        <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search', tabBarIcon: SearchIcon }} />
+        <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
+        <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarLabel: 'Downloader' }} />
+        <Tab.Screen name="Browse" component={BrowseStackScreen} options={{ tabBarLabel: 'Browse' }} />
+      </Tab.Navigator>
+      {/* Blurs the page and tab bar while the player sheet moves over them. */}
+      <PlayerSheetBackdrop />
+    </View>
   );
 };
 

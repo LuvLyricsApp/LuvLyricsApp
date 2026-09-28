@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Dimensions, Platform, View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Dimensions, View, StyleSheet, useWindowDimensions } from 'react-native';
 import * as GestureHandler from 'react-native-gesture-handler';
 import { useFocusEffect, usePreventRemove } from '@react-navigation/native';
 import Animated, {
@@ -29,7 +29,6 @@ import { DISMISS_DISTANCE, DISMISS_VELOCITY, takeOpenVelocity } from '../navigat
 import { playerSheetRest } from '../navigation/tabs';
 import { playerSheetProgress } from '../navigation/sheetProgress';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { isLowEndDevice } from '../utils/performanceTier';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -75,9 +74,8 @@ const rubberBand = (overshoot: number, dimension: number): number => {
   const a = Math.abs(overshoot);
   return Math.sign(overshoot) * ((a * dimension * 0.55) / (dimension + 0.55 * a));
 };
-// The page underneath blurs while the sheet is up and clears as it lowers.
-// A live Android blur re-renders every frame, so it is only mounted while the
-// sheet moves, and low-end phones dim instead.
+// The page underneath blurs while the sheet moves (PlayerSheetBackdrop, in the
+// tab navigator); low-end phones get no blur, so this route dims deeper.
 const LIVE_BLUR = !isLowEndDevice();
 
 type Props = RootStackScreenProps<'NowPlaying'>;
@@ -107,18 +105,12 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // the route is only removed once the sheet is back on the pill.
   const [holdRoute, setHoldRoute] = useState(true);
   const closing = useSharedValue(false);
-  // The blur under the sheet only exists while the sheet moves.
-  const [blurOn, setBlurOn] = useState(true);
 
   useEffect(() => {
     const velocity = takeOpenVelocity();
-    const settled = (done?: boolean) => {
-      'worklet';
-      if (done) runOnJS(setBlurOn)(false);
-    };
     sheetY.value = reduceMotion
-      ? withTiming(0, { duration: 200 }, settled)
-      : withSpring(0, { ...OPEN_SPRING, velocity: -velocity }, settled);
+      ? withTiming(0, { duration: 200 })
+      : withSpring(0, { ...OPEN_SPRING, velocity: -velocity });
   // Mount only: the sheet opens once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -145,7 +137,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     'worklet';
     if (closing.value) return;
     closing.value = true;
-    runOnJS(setBlurOn)(true);
     runOnJS(revealPill)();
     const done = (finished?: boolean) => {
       'worklet';
@@ -187,7 +178,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       if (dy < -10) { state.fail(); return; }
       if (dy < 12) return;
       if (lyricsOffset.value > 2) { state.fail(); return; }
-      runOnJS(setBlurOn)(true);
       state.activate();
     })
     .failOffsetX([-24, 24])
@@ -211,9 +201,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       if ((past && e.velocityY > -200) || flung) {
         animateClose(e.velocityY);
       } else {
-        sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY }, done => {
-          if (done) runOnJS(setBlurOn)(false);
-        });
+        sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
       }
     });
 
@@ -230,10 +218,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       ] as const,
     };
   });
-  // The page underneath: blurred and a little dimmed while the sheet is up,
-  // clearing as it lowers. Opacity carries the change, so the blur itself is
-  // drawn once at one strength.
-  const blurStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  // The page underneath: a little dimmed while the sheet is up, clearing as it lowers.
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: progress.value * (LIVE_BLUR ? 0.3 : 0.6),
   }));
@@ -428,16 +413,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={styles.root}>
-      {LIVE_BLUR && blurOn ? (
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, blurStyle]}>
-          <BlurView
-            intensity={60}
-            tint="dark"
-            experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-      ) : null}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
       <GestureDetector gesture={dismissGesture}>
       <Animated.View style={[styles.container, sheetStyle]}>
