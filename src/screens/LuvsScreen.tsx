@@ -102,7 +102,9 @@ const LuvsScreen: React.FC = () => {
   const camX = useSharedValue(laneIndex);
 
   // ── Layout: the card fills what the header, rail, controls and bar leave ──
-  const controlsH = 58 + 46 + 84;
+  // Title and artist (50), scrubber or hint (46), actions (12 + 84), and the 8
+  // over the tab bar clearance: short of this, the controls overflow up into the card.
+  const controlsH = 50 + 46 + 12 + 84 + 8;
   const available = screenH - insets.top - 58 - 52 - controlsH - (TAB_BAR_CLEARANCE + insets.bottom) - 34;
   // A short screen narrows the card rather than letting it run into the title.
   const cardW = Math.round(Math.min(screenW * 0.8, 440, Math.max(160, available / 0.9)));
