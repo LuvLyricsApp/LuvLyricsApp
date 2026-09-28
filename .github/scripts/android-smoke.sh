@@ -212,6 +212,9 @@ if [ -n "$W" ] && [ -n "$H" ]; then
     sleep 3
     shot player-flicked
     alive_after "a quick flick down on the player"
+    # Closed means the pill is back (the open player's canvas can also hide it
+    # from uiautomator, so this is a hint to check player-flicked.png).
+    find_desc "Now playing:" > /dev/null || echo "flick: pill not found, the player may have stayed open" >> "$OUT/taps.txt"
     # A swipe down on the pill: it bounces back, nothing else happens.
     adb shell input swipe "$PX" "$PY" "$PX" $((PY + H * 10 / 100)) 200
     sleep 2

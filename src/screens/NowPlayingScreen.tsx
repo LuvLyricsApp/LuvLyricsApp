@@ -159,28 +159,19 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // Drag down from anywhere to dismiss. Over the lyrics it only takes over once
   // the list is scrolled to its top — otherwise the drag scrolls the lyrics.
   const lyricsOffset = useSharedValue(0);
-  const startY = useSharedValue(0);
   const grabY = useSharedValue(0);
+  // Activation is the handler's own (12pt down, native side): a manual
+  // activate() from onTouchesMove could land after a quick flick had already
+  // lifted, and the flick did nothing.
   const dismissGesture = Gesture.Pan()
     .enabled(!ambient)
-    .manualActivation(true)
-    .onTouchesDown((e, state) => {
-      'worklet';
-      const t = e.allTouches[0];
-      if (!t || closing.value) { state.fail(); return; }
-      startY.value = t.absoluteY;
-    })
-    .onTouchesMove((e, state) => {
-      'worklet';
-      const t = e.allTouches[0];
-      if (!t) return;
-      const dy = t.absoluteY - startY.value;
-      if (dy < -10) { state.fail(); return; }
-      if (dy < 12) return;
-      if (lyricsOffset.value > 2) { state.fail(); return; }
-      state.activate();
-    })
+    .activeOffsetY(12)
+    .failOffsetY(-10)
     .failOffsetX([-24, 24])
+    .onTouchesDown((_e, state) => {
+      'worklet';
+      if (closing.value || lyricsOffset.value > 2) state.fail();
+    })
     .onStart(() => {
       'worklet';
       // Grabbed mid-flight: carry on from where the sheet is, not from 0.
