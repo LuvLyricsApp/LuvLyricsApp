@@ -1,31 +1,36 @@
 /**
- * Time-synced lyrics, YouTube Music's way: every line set in the same bold
- * weight, the sung one bright and full size, the rest dimmed and a touch
- * smaller, and the list gliding up to the next line on one decelerating curve.
+ * Time-synced lyrics, the way Apple Music moves them (after AMLL, the open
+ * Apple Music-like lyrics player): every line in the same bold weight, the
+ * sung one bright and full size, the rest dimmed and a touch smaller.
  *
- * What keeps it smooth:
- *   - A line never changes its layout when it becomes the sung one — only
- *     opacity and scale move — so the measured offsets never shift under the
- *     scroll (swapping to a bold face used to re-wrap the line and jolt it).
- *   - The scroll is our own animation on the UI thread (`followY`, Material's
- *     emphasized decelerate) fed to `scrollTo` frame by frame, instead of the
- *     platform's fixed smooth-scroll, so a new target mid-glide carries on
- *     from where it is rather than restarting.
- *   - Spacing is padding on each line's row, the same for every line, and the
- *     first guess at a line's height comes from the text style.
+ * How a line change moves:
+ *   - The list jumps to its new offset in one frame and every visible line is
+ *     pushed back by the same distance (`shift`), so nothing moves on screen
+ *     yet. Each line then springs home on its own, a few tens of ms after the
+ *     one above it — the cascade that makes Apple's lyrics read as a wave
+ *     rather than a scrolling page. A new line mid-flight adds to the shift,
+ *     so motion never restarts from rest.
+ *   - The spring follows the song: lines that come quickly get a stiffer
+ *     spring, slow ones a softer one (AMLL's policy: stiffness 170–220,
+ *     damping 2.2·√k). A seek slides without the cascade on a gentle spring.
+ *   - A line never changes its layout when it is sung — only opacity and
+ *     scale move — so the measured offsets never shift under the list.
+ *   - The sung line's centre sits at `activeLinePosition` of the height, so a
+ *     wrapped line is balanced around the same point as a short one.
  *
- * Scroll by hand and the lines stay put; they glide back to the sung line a
- * few seconds after you let go (or at once from the pill, or when you scroll
- * back to it yourself).
+ * Scroll by hand and the lines stay put, every line bright enough to read.
+ * Following resumes on the next line change once you've let go for half a
+ * second and the sung line is on screen (Apple's rule), after 3.5 s
+ * regardless, at once from the pill, or when you scroll back to it yourself.
  */
 import React, { useEffect, useRef, useCallback, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Dimensions, Text, Pressable, StyleSheet, LayoutChangeEvent, TextStyle, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   cancelAnimation,
-  Easing,
   useSharedValue,
   useAnimatedStyle,
+  withDelay,
   withSpring,
   withTiming,
   interpolate,
@@ -50,16 +55,69 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
  * within this many px of it and auto-follow re-attaches without a tap.
  */
 const RESUME_SNAP_PX = 72;
-/** Hands off for this long after a manual scroll, then the lines glide back. */
+/** Hands off for at most this long after a manual scroll. */
 const AUTO_RESUME_MS = 3500;
-/** One line to the next: long enough to read as a glide, short enough to keep up with fast verses. */
-const GLIDE_MS = 620;
-const GLIDE_EASE = Easing.bezier(0.2, 0, 0, 1);
-/** Further than this many lines (a seek) cuts instead of gliding through the song. */
+/** Apple's rule: the next line change re-attaches once the list has been still this long. */
+const EARLY_RESUME_MS = 500;
+/** Further than this many lines (a seek) slides without the cascade. */
 const JUMP_LINES = 4;
+/** Lines further than this from the sung one skip the animation (off screen). */
+const FAR_LINES = 14;
 
 const DEFAULT_TEXT: TextStyle = { fontSize: 28, lineHeight: 34, textAlign: 'left' };
 const DEFAULT_GAP = 16;
+
+/** Inactive lines sit at 97% (AMLL), the sung one grows to full size on a soft spring. */
+const REST_SCALE = 0.97;
+const SCALE_SPRING = { mass: 2, damping: 25, stiffness: 100 } as const;
+/** A seek or a layout change: a gentle spring, no cascade. */
+const SLIDE_SPRING = { mass: 0.9, stiffness: 90, damping: 15 } as const;
+/** Opacity is a state change: a short tween. */
+const DIM_MS = 280;
+
+type WaveKind = 0 | 1 | 2; // 0 = line change (cascade), 1 = seek, 2 = layout
+interface Wave {
+  seq: number;
+  /** How far the list jumped; every line starts pushed back by this much. */
+  delta: number;
+  /** The sung line the list now centres on. */
+  idx: number;
+  /** First line on screen after the jump: the cascade starts there. */
+  first: number;
+  kind: WaveKind;
+  stiffness: number;
+  damping: number;
+  /** Largest push, so a seek slides in from nearby instead of across the song. */
+  cap: number;
+}
+
+/**
+ * AMLL's spring policy for the list following the sung line: the shorter the
+ * gap to the previous line, the stiffer the spring.
+ */
+const followSpring = (intervalMs: number): { stiffness: number; damping: number } => {
+  'worklet';
+  const clamped = Math.min(Math.max(intervalMs, 100), 800);
+  const ratio = Math.pow(1 - (clamped - 100) / 700, 0.2);
+  const stiffness = 170 + ratio * 50;
+  return { stiffness, damping: Math.sqrt(stiffness) * 2.2 };
+};
+
+/**
+ * When line `i` starts moving: 50 ms after the line above it from the first
+ * line on screen, the gaps shrinking by 5% per line past the sung one (AMLL).
+ */
+const cascadeDelay = (i: number, first: number, idx: number): number => {
+  'worklet';
+  if (i <= first) return 0;
+  let delay = 0;
+  let step = 50;
+  for (let j = first; j < i; j++) {
+    delay += step;
+    if (j >= idx) step /= 1.05;
+  }
+  return Math.min(delay, 700);
+};
 
 // ------------------------------------------------------------------
 // LyricLine
@@ -68,6 +126,8 @@ const DEFAULT_GAP = 16;
 interface LyricLineProps {
   text: string;
   activeIndexSV: SharedValue<number>;
+  readingSV: SharedValue<boolean>;
+  waveSV: SharedValue<Wave>;
   timestamp: number;
   index: number;
   onLyricPress: (timestamp: number) => void;
@@ -77,11 +137,21 @@ interface LyricLineProps {
   songTitle?: string;
 }
 
-const LINE_SPRING = { damping: 24, stiffness: 190, mass: 0.8 } as const;
+/** How bright a line is when it isn't being sung. */
+const restOpacity = (index: number, active: number, reading: boolean): number => {
+  'worklet';
+  if (reading) return 0.62;
+  if (active < 0) return 0.5;
+  if (index < active) return 0.34;
+  // Upcoming lines fade a little with distance — depth without a blur.
+  return Math.max(0.3, 0.56 - 0.06 * (index - active - 1));
+};
 
 const LyricLine = React.memo(({
   text,
   activeIndexSV,
+  readingSV,
+  waveSV,
   timestamp,
   index,
   onLyricPress,
@@ -102,20 +172,46 @@ const LyricLine = React.memo(({
     }
   }, [onMeasured, index]);
 
-  // 0 = waiting / sung, 1 = being sung. Everything below is opacity and scale.
-  const activeValue = useDerivedValue(() =>
-    withSpring(activeIndexSV.value === index ? 1 : 0, LINE_SPRING),
+  // ── Where the line is: pushed back by each jump, springing home ─────────
+  const shift = useSharedValue(0);
+  useAnimatedReaction(
+    () => waveSV.value.seq,
+    (seq, prev) => {
+      if (prev === null || seq === prev) return;
+      const w = waveSV.value;
+      if (Math.abs(index - w.idx) > FAR_LINES) {
+        cancelAnimation(shift);
+        shift.value = 0;
+        return;
+      }
+      const from = Math.max(-w.cap, Math.min(w.cap, shift.value + w.delta));
+      shift.value = from;
+      const spring = { mass: 0.9, stiffness: w.stiffness, damping: w.damping };
+      shift.value = w.kind === 0
+        ? withDelay(cascadeDelay(index, w.first, w.idx), withSpring(0, spring))
+        : withSpring(0, spring);
+    },
   );
 
-  const align = textStyle.textAlign ?? 'left';
-  const origin = align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
-  const animatedStyle = useAnimatedStyle((): ViewStyle => {
-    const rest = activeIndexSV.value > index ? 0.36 : 0.5;
+  // ── How it looks: dimmed at rest, bright while sung ─────────────────────
+  const rowStyle = useAnimatedStyle((): ViewStyle => {
+    const active = activeIndexSV.value;
+    const target = active === index ? 1 : restOpacity(index, active, readingSV.value);
+    // Far from the sung line: plain values, no animation to run.
+    const far = active >= 0 && Math.abs(index - active) > 6;
     return {
-      opacity: interpolate(activeValue.value, [0, 1], [rest, 1], Extrapolation.CLAMP),
-      transform: [{ scale: interpolate(activeValue.value, [0, 1], [0.955, 1], Extrapolation.CLAMP) }],
+      opacity: far ? target : withTiming(target, { duration: DIM_MS }),
+      transform: [{ translateY: shift.value }],
     };
   });
+  const emphasis = useDerivedValue(() =>
+    withSpring(activeIndexSV.value === index ? 1 : 0, SCALE_SPRING),
+  );
+  const align = textStyle.textAlign ?? 'left';
+  const origin = align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
+  const scaleStyle = useAnimatedStyle((): ViewStyle => ({
+    transform: [{ scale: interpolate(emphasis.value, [0, 1], [REST_SCALE, 1], Extrapolation.CLAMP) }],
+  }));
 
   const renderedText = useMemo(() => {
     if (!songTitle) return text;
@@ -134,30 +230,25 @@ const LyricLine = React.memo(({
   }, [text, songTitle]);
 
   return (
-    <Pressable onPress={handlePress} onLayout={handleLayout} style={[styles.linePressable, { paddingVertical: gap }]}>
-      {isInstrumental ? (
-        <InstrumentalLine activeIndexSV={activeIndexSV} index={index} activeValue={activeValue} />
-      ) : (
-        <Animated.View style={[animatedStyle, { transformOrigin: origin }]}>
-          <Text style={[styles.lyricText, textStyle]}>{renderedText}</Text>
-        </Animated.View>
-      )}
-    </Pressable>
+    <Animated.View onLayout={handleLayout} style={[{ paddingVertical: gap }, rowStyle]}>
+      <Pressable onPress={handlePress} style={styles.linePressable}>
+        {isInstrumental ? (
+          <InstrumentalLine activeIndexSV={activeIndexSV} index={index} scaleStyle={scaleStyle} />
+        ) : (
+          <Animated.View style={[scaleStyle, { transformOrigin: origin }]}>
+            <Text style={[styles.lyricText, textStyle]}>{renderedText}</Text>
+          </Animated.View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 });
 
 /** A music break: the waveform instead of a blank line. */
-const InstrumentalLine: React.FC<{ activeIndexSV: SharedValue<number>; index: number; activeValue: SharedValue<number> }> = ({ activeIndexSV, index, activeValue }) => {
+const InstrumentalLine: React.FC<{ activeIndexSV: SharedValue<number>; index: number; scaleStyle: ViewStyle }> = ({ activeIndexSV, index, scaleStyle }) => {
   const isActiveLine = useIsActiveLine(activeIndexSV, index);
-  const style = useAnimatedStyle((): ViewStyle => {
-    const rest = activeIndexSV.value > index ? 0.36 : 0.5;
-    return {
-      opacity: interpolate(activeValue.value, [0, 1], [rest, 1], Extrapolation.CLAMP),
-      transform: [{ scale: interpolate(activeValue.value, [0, 1], [0.92, 1], Extrapolation.CLAMP) }],
-    };
-  });
   return (
-    <Animated.View style={[styles.instrumentalWrap, style]}>
+    <Animated.View style={[styles.instrumentalWrap, scaleStyle]}>
       <InstrumentalWaveform active={isActiveLine} size="lg" />
     </Animated.View>
   );
@@ -202,7 +293,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
   headerContent,
   textStyle: textStyleProp,
   scrollEnabled = true,
-  activeLinePosition = 0.5,
+  activeLinePosition = 0.35,
   songTitle,
   topSpacerHeight = SCREEN_HEIGHT * 0.4,
   bottomSpacerHeight = SCREEN_HEIGHT * 0.4,
@@ -223,24 +314,30 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
-  // Line offsets, mirrored to the UI thread for the scroll worklets.
+  // Line offsets and heights, mirrored to the UI thread for the worklets.
   const itemHeights = useRef<number[]>([]);
   const itemOffsets = useRef<number[]>([]);
   const itemOffsetsSV = useSharedValue<number[]>([]);
+  const itemHeightsSV = useSharedValue<number[]>([]);
   const containerHeightSV = useSharedValue(SCREEN_HEIGHT);
+  const contentHeightSV = useSharedValue(0);
   const isUserScrollingSV = useSharedValue(false);
   useEffect(() => { isUserScrollingSV.value = isUserScrolling; }, [isUserScrolling, isUserScrollingSV]);
 
   const recomputeOffsets = useCallback(() => {
     let offset = topSpacerHeight;
     const offsets: number[] = [];
+    const heights: number[] = [];
     for (let i = 0; i < lyrics.length; i++) {
+      const h = itemHeights.current[i] ?? estimate;
       offsets.push(offset);
-      offset += itemHeights.current[i] ?? estimate;
+      heights.push(h);
+      offset += h;
     }
     itemOffsets.current = offsets;
     itemOffsetsSV.value = offsets;
-  }, [topSpacerHeight, lyrics.length, itemOffsetsSV, estimate]);
+    itemHeightsSV.value = heights;
+  }, [topSpacerHeight, lyrics.length, itemOffsetsSV, itemHeightsSV, estimate]);
 
   // New lyrics (another song) or a new text size: forget the old measurements.
   useEffect(() => { itemHeights.current = []; }, [lyrics, gap, textStyle.fontSize]);
@@ -298,42 +395,84 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     },
   );
 
-  /** Where the sung line wants the list to be. */
+  /** Where the list wants to be: the sung line's centre at `activeLinePosition`. */
   const activeTargetYSV = useDerivedValue(() => {
     const idx = activeIndexDV.value;
     const offsets = itemOffsetsSV.value;
+    const heights = itemHeightsSV.value;
     if (idx < 0 || idx >= offsets.length) return -1;
-    return Math.max(0, offsets[idx] - containerHeightSV.value * activeLinePosition);
+    const centre = offsets[idx] + (heights[idx] ?? 0) / 2;
+    return Math.max(0, centre - containerHeightSV.value * activeLinePosition);
   });
 
-  // ─── The glide ───────────────────────────────────────────────────
+  // ─── Following the sung line ─────────────────────────────────────
   const scrollYSV = useSharedValue(0);
-  const followY = useSharedValue(0);
   const lastIndexSV = useSharedValue(-1);
+  const waveSV = useSharedValue<Wave>({ seq: 0, delta: 0, idx: -1, first: 0, kind: 0, stiffness: 200, damping: 31, cap: SCREEN_HEIGHT });
+
+  // Reading on your own: dragging, flinging, and when the list came to rest.
+  const draggingSV = useSharedValue(false);
+  const flingingSV = useSharedValue(false);
+  const scrollEndAtSV = useSharedValue(0);
+
+  const resumeFollowingRef = useRef<() => void>(() => {});
+  const requestResume = useCallback(() => resumeFollowingRef.current(), []);
 
   useAnimatedReaction(
     () => ({ target: activeTargetYSV.value, user: isUserScrollingSV.value, idx: activeIndexDV.value }),
     (now, prev) => {
-      if (now.user || now.target < 0) return;
-      if (prev && prev.target === now.target && prev.user === now.user) return;
-      const resuming = !!prev && prev.user && !now.user;
-      // A seek (or the first frame) cuts; a reader coming back glides from
-      // where they are; everything else glides on from the current position.
-      const jump = !prev || (!resuming && Math.abs(now.idx - lastIndexSV.value) > JUMP_LINES);
-      lastIndexSV.value = now.idx;
-      if (resuming) followY.value = scrollYSV.value;
-      if (jump) {
-        cancelAnimation(followY);
-        followY.value = now.target;
-      } else {
-        followY.value = withTiming(now.target, { duration: GLIDE_MS, easing: GLIDE_EASE });
+      if (now.target < 0) return;
+      if (now.user) {
+        // Apple's rule: the next line re-attaches the list once it has been
+        // still for a moment and the sung line is on screen.
+        if (prev && now.idx !== prev.idx && !draggingSV.value && !flingingSV.value
+          && Date.now() - scrollEndAtSV.value >= EARLY_RESUME_MS) {
+          const top = itemOffsetsSV.value[now.idx] ?? -1;
+          const bottom = top + (itemHeightsSV.value[now.idx] ?? 0);
+          const viewTop = scrollYSV.value;
+          if (top >= viewTop && bottom <= viewTop + containerHeightSV.value) runOnJS(requestResume)();
+        }
+        return;
       }
-    },
-  );
-  useAnimatedReaction(
-    () => followY.value,
-    y => {
-      if (!isUserScrollingSV.value) scrollTo(scrollRef, 0, y, false);
+      if (prev && prev.target === now.target && prev.user === now.user) return;
+      const maxY = Math.max(0, contentHeightSV.value - containerHeightSV.value);
+      const toY = contentHeightSV.value > 0 ? Math.min(now.target, maxY) : now.target;
+      const fromY = scrollYSV.value;
+      const delta = toY - fromY;
+      const resuming = !!prev && prev.user;
+      const firstFrame = !prev || lastIndexSV.value < 0;
+      const jumped = !resuming && Math.abs(now.idx - lastIndexSV.value) > JUMP_LINES;
+      const sameLine = !resuming && now.idx === lastIndexSV.value;
+      lastIndexSV.value = now.idx;
+      scrollTo(scrollRef, 0, toY, false);
+      scrollYSV.value = toY;
+      if (firstFrame || Math.abs(delta) < 0.5) return;
+
+      // The first line on screen after the jump starts the cascade.
+      const offsets = itemOffsetsSV.value;
+      const heights = itemHeightsSV.value;
+      let first = 0;
+      while (first < offsets.length - 1 && offsets[first] + (heights[first] ?? 0) < toY) first++;
+
+      const kind: WaveKind = jumped ? 1 : sameLine ? 2 : 0;
+      // A line re-measured by a pixel or two: not worth a motion.
+      if (kind === 2 && Math.abs(delta) < 2) return;
+      let spring: { stiffness: number; damping: number } = SLIDE_SPRING;
+      if (kind === 0) {
+        const prevTs = lyrics[now.idx - 1]?.timestamp;
+        const ts = lyrics[now.idx]?.timestamp;
+        spring = followSpring(prevTs === undefined || ts === undefined ? 800 : (ts - prevTs) * 1000);
+      }
+      waveSV.value = {
+        seq: waveSV.value.seq + 1,
+        delta,
+        idx: now.idx,
+        first,
+        kind,
+        stiffness: spring.stiffness,
+        damping: spring.damping,
+        cap: containerHeightSV.value * 0.6,
+      };
     },
   );
 
@@ -356,6 +495,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     isUserScrollingSV.value = false;
     notifyScrollState(false);
   }, [clearResume, isUserScrollingSV, notifyScrollState]);
+  resumeFollowingRef.current = resumeFollowing;
 
   const scheduleResume = useCallback(() => {
     clearResume();
@@ -384,22 +524,27 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
       if (scrollOffset) scrollOffset.value = e.contentOffset.y;
     },
     onBeginDrag: () => {
-      cancelAnimation(followY);
+      draggingSV.value = true;
       runOnJS(clearResume)();
       if (isUserScrollingSV.value) return;
       isUserScrollingSV.value = true;
       runOnJS(notifyScrollState)(true);
     },
     onEndDrag: () => {
+      draggingSV.value = false;
+      scrollEndAtSV.value = Date.now();
       // Always arm the resume here: on Android a slow release that isn't a
       // fling fires no momentum events, and the list stayed detached for good.
       runOnJS(scheduleResume)();
     },
     onMomentumBegin: () => {
       // A fling: wait until it settles instead.
+      flingingSV.value = true;
       runOnJS(clearResume)();
     },
     onMomentumEnd: () => {
+      flingingSV.value = false;
+      scrollEndAtSV.value = Date.now();
       if (isUserScrollingSV.value) runOnJS(scheduleResume)();
     },
   });
@@ -418,6 +563,8 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
     <LyricLine
       key={`lyric_${index}`}
       activeIndexSV={activeIndexSV}
+      readingSV={isUserScrollingSV}
+      waveSV={waveSV}
       text={item.text}
       timestamp={item.timestamp}
       index={index}
@@ -427,7 +574,7 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
       gap={gap}
       songTitle={songTitle}
     />
-  ), [activeIndexSV, onLyricPress, handleItemMeasured, textStyle, gap, songTitle]);
+  ), [activeIndexSV, isUserScrollingSV, waveSV, onLyricPress, handleItemMeasured, textStyle, gap, songTitle]);
 
   return (
     <View style={styles.container}>
@@ -442,6 +589,9 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
         fadingEdgeLength={edgeFade > 0 ? edgeFade : undefined}
         onLayout={e => {
           containerHeightSV.value = e.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_w, h) => {
+          contentHeightSV.value = h;
         }}
       >
         <View style={{ height: topSpacerHeight }} />

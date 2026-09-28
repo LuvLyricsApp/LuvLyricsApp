@@ -66,8 +66,8 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   }
 
   // Apple Music's lyrics view: the lines own the space between the header and
-  // the controls, and the sung line rides a third of the way down — not in
-  // the middle of a list whose lower half sits under the controls.
+  // the controls, and the sung line's centre rides at 35% of that space — not
+  // in the middle of a list whose lower half sits under the controls.
   return (
     <View style={[styles.lyricsFrame, { paddingTop: insets.top + HEADER_CLEARANCE }]}>
       <SynchronizedLyrics
@@ -77,7 +77,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
         currentTime={currentTime}
         onLyricPress={onLyricPress}
         songTitle={songTitle}
-        activeLinePosition={0.3}
+        activeLinePosition={0.35}
         topSpacerHeight={24}
         edgeFade={56}
         scrollOffset={scrollOffset}
