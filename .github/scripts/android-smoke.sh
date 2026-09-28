@@ -28,6 +28,7 @@ APK="$1"
 OUT=smoke
 PKG=com.lyricflow.app
 mkdir -p "$OUT"
+touch "$OUT/run-start"
 
 # Every adb call is bounded: if the emulator dies, a bare adb waits for the
 # device forever and the job only ends at its 75-minute limit.
@@ -39,6 +40,19 @@ alive() { [ "$(timeout 10 "$ADB_BIN" get-state 2>/dev/null)" = "device" ]; }
 step() {
   echo "== $(date -u +%H:%M:%S) $1"
   if ! alive; then echo "== emulator is gone — stopping here"; finish; exit 0; fi
+}
+# The emulator runs on this host, so when it dies the host knows why: a
+# segfault in qemu (and the library it was in) or the OOM killer shows in
+# the kernel log, and crashpad leaves a minidump whose strings name modules.
+host_diag() {
+  {
+    echo "== emulator processes"; pgrep -a -f qemu-system || echo "none"
+    echo "== memory"; free -m
+    echo "== kernel log"; sudo dmesg -T 2>/dev/null | grep -i -E "qemu|emulator|segfault|oom|killed process|trap" | tail -n 40
+    for d in $(find /tmp/android-* "$HOME/.android" -name "*.dmp" -newer "$OUT/run-start" 2>/dev/null); do
+      echo "== minidump $d"; strings -n 8 "$d" | grep -E "\.so|codec|vulkan|gfxstream|swiftshader|abort|assert" | sort | uniq -c | sort -rn | head -n 40
+    done
+  } > "$OUT/host.txt" 2>&1
 }
 # adb joins its arguments into one command for the device's shell, so the URL
 # is quoted again for that shell — a bare `&` in `?q=…&lyrics=1` ended the
@@ -94,6 +108,7 @@ burst() {
 }
 
 finish() {
+  alive || host_diag
   adb logcat -d -v time > "$OUT/logcat.txt" 2>/dev/null
   # Emulator gone: fall back to what the live stream caught before it died.
   [ -s "$OUT/logcat.txt" ] || cp "$OUT/logcat-live.txt" "$OUT/logcat.txt" 2>/dev/null
@@ -101,6 +116,7 @@ finish() {
   adb shell pidof "$PKG" > "$OUT/pid.txt" || echo "not running" > "$OUT/pid.txt"
 
   echo "===== app process: $(cat "$OUT/pid.txt")"
+  [ -f "$OUT/host.txt" ] && { echo "===== host (emulator died)"; cat "$OUT/host.txt"; }
   echo "===== playback"; cat "$OUT/playback.txt" 2>/dev/null
   echo "===== diagnostics"; cat "$OUT/diag.txt"
   echo "===== JS, React Native and crash lines"
