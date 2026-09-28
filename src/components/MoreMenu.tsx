@@ -139,7 +139,7 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
   };
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, styles.layer]} pointerEvents={open ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close menu">
           <Frosted radius={0} intensity={22} tint={0.18} edge={false} />
@@ -211,6 +211,9 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
 };
 
 const styles = StyleSheet.create({
+  // Painting after the pill isn't enough: the pill carries zIndex 10 and the
+  // tab bar 1000 / elevation 100, and both drew over a menu with none.
+  layer: { zIndex: 2000, elevation: 200 },
   card: {
     position: 'absolute',
     width: 292,

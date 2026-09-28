@@ -48,7 +48,7 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
 
   if (!mounted) return null;
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, styles.layer]} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrim]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       </Animated.View>
@@ -127,6 +127,9 @@ export const SleepTimerList: React.FC<{ onPicked: () => void }> = ({ onPicked })
 };
 
 const styles = StyleSheet.create({
+  // Above the player's header (zIndex 20) and controls (15), which otherwise
+  // drew their buttons straight through the menu.
+  layer: { zIndex: 100, elevation: 100 },
   scrim: { backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     position: 'absolute',
