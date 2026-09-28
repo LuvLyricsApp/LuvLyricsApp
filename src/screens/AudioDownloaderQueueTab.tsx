@@ -116,7 +116,7 @@ export const AudioDownloaderQueueTab = memo(() => {
       />
       {hasCompleted && (
         <TouchableOpacity onPress={clearCompleted} style={styles.clearBtn}>
-          <Text style={styles.clearBtnText}>Clear Completed</Text>
+          <Text style={styles.clearBtnText}>Clear completed</Text>
         </TouchableOpacity>
       )}
     </View>

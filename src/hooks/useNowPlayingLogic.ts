@@ -54,7 +54,7 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
         }
 
         if (!songToPlay?.audioUri) {
-          Alert.alert('No Audio', 'This song has no audio file attached');
+          Alert.alert('No audio', 'This song has no audio file attached.');
           return;
         }
 

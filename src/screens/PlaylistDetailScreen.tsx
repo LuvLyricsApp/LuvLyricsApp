@@ -275,8 +275,8 @@ export const PlaylistDetailScreen: React.FC = () => {
       switch(sortOption) {
           case 'title': return `Alphabetical ${dirArrow}`;
           case 'artist': return `Artist ${dirArrow}`;
-          case 'date': return `Recently Uploaded ${dirArrow}`;
-          default: return 'Custom Order';
+          case 'date': return `Recently added ${dirArrow}`;
+          default: return 'Custom order';
       }
   };
 
@@ -865,7 +865,7 @@ export const PlaylistDetailScreen: React.FC = () => {
       
       {isEditMode && (
           <BlurView intensity={20} tint="dark" style={[styles.editModeToast, { top: 60 + insets.top }]}>
-              <Text style={styles.editModeText}>Editing Playlist</Text>
+              <Text style={styles.editModeText}>Editing playlist</Text>
           </BlurView>
       )}
 
@@ -873,7 +873,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         options={menuOptions}
-        title="Edit Cover Art"
+        title="Edit cover art"
         anchorPosition={menuPosition}
       />
 
@@ -882,7 +882,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         onClose={() => setSortMenuVisible(false)}
         options={[
             { 
-               label: 'Custom Order', 
+               label: 'Custom order', 
                icon: sortOption === 'custom' ? 'checkmark' : undefined, 
                onPress: () => handleSortChange('custom') 
             },
@@ -892,7 +892,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                onPress: () => handleSortChange('title') 
             },
             { 
-               label: `Recently Uploaded ${sortOption === 'date' ? (sortDirection === 'asc' ? '(Oldest)' : '(Newest)') : ''}`, 
+               label: `Recently added ${sortOption === 'date' ? (sortDirection === 'asc' ? '(Oldest)' : '(Newest)') : ''}`, 
                icon: sortOption === 'date' ? (sortDirection === 'asc' ? 'arrow-up' : 'arrow-down') : 'time', 
                onPress: () => handleSortChange('date') 
             },
@@ -902,7 +902,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                onPress: () => handleSortChange('artist') 
             },
         ]}
-        title="Sort Playlist"
+        title="Sort playlist"
         anchorPosition={sortMenuAnchor}
       />
 
@@ -929,7 +929,7 @@ export const PlaylistDetailScreen: React.FC = () => {
 
       <ModernDeleteModal
         visible={showDeleteConfirm}
-        title="Remove Song"
+        title="Remove song"
         message="Remove this song from the playlist?"
         confirmText="Remove"
         onConfirm={async () => {

@@ -101,7 +101,7 @@ const BulkHeader: React.FC<BulkHeaderProps> = memo((props) => (
                 style={styles.playlistInput}
                 value={props.bulkPlaylistName}
                 onChangeText={props.setBulkPlaylistName}
-                placeholder="My Awesome Playlist"
+                placeholder="Playlist name"
                 placeholderTextColor="#555"
             />
         </View>
@@ -564,7 +564,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                 <View style={styles.actionBar}>
                     <Text style={styles.selectionText}>{selectedCount} selected</Text>
                     <Pressable style={styles.reviewBtn} onPress={handleBatchDownload}>
-                        <Text style={styles.reviewBtnText}>Download Selected</Text>
+                        <Text style={styles.reviewBtnText}>Download selected</Text>
                         <Ionicons name="download" size={18} color="#fff" />
                     </Pressable>
                     <Pressable style={styles.clearBtn} onPress={clearAllSelections}>

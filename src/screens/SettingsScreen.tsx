@@ -464,7 +464,7 @@ const SettingsScreen: React.FC<Props> = () => {
             </View>
             <Pressable style={styles.selectAllButton} onPress={toggleSelectAll}>
               <Ionicons name={selectedFiles.size === availableAudioFiles.length ? 'checkbox' : 'square-outline'} size={24} color="#EDEDED" />
-              <Text style={styles.selectAllText}>Select All</Text>
+              <Text style={styles.selectAllText}>Select all</Text>
             </Pressable>
             <ScrollView style={styles.selectionList} keyboardShouldPersistTaps="handled">
               {filteredAudioFiles.length === 0 && searchQuery.trim() !== '' ? (

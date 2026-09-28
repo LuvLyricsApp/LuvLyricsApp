@@ -97,7 +97,7 @@ export const PlaylistsScreen: React.FC = () => {
       if (!selectedPlaylist) return;
       
       Alert.alert(
-          'Delete Playlist',
+          'Delete playlist',
           `Are you sure you want to delete "${selectedPlaylist.name}"?`,
           [
               { text: 'Cancel', style: 'cancel' },
@@ -125,12 +125,12 @@ export const PlaylistsScreen: React.FC = () => {
 
   const menuOptions = [
       {
-          label: 'Rename Playlist',
+          label: 'Rename playlist',
           icon: 'pencil-outline' as const,
           onPress: handleRename
       },
       {
-          label: 'Delete Playlist',
+          label: 'Delete playlist',
           icon: 'trash-outline' as const,
           onPress: handleDeleteConfirm,
           isDestructive: true
