@@ -147,7 +147,7 @@ const DEFAULT_SETTINGS = {
   playInMiniPlayerOnly: false,
   miniPlayerStyle: 'bar' as const, // the island mini player is retired; see TabNavigator
   navBarStyle: 'modern-pill' as const, // Default to modern pill navbar
-  voiceMode: 'tap' as const,
+  voiceMode: 'hold' as const,
   micEnabled: true,
   libraryBackgroundMode: 'daily' as const,
   islandBgMode: 'album-art' as const,
@@ -258,10 +258,16 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'lyricflow-settings',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
-      migrate: (persisted) => {
+      version: 2,
+      migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<SettingsState>;
-        return { ...state, playerBackground: normalizePlayerBackground(state.playerBackground) } as SettingsState;
+        return {
+          ...state,
+          playerBackground: normalizePlayerBackground(state.playerBackground),
+          // v2: hold-to-talk became the default. The old default was 'tap',
+          // which kept listening after the finger lifted.
+          voiceMode: version < 2 ? 'hold' : state.voiceMode ?? 'hold',
+        } as SettingsState;
       },
     }
   )

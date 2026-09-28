@@ -13,7 +13,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
-import Animated, {
+import Animated, { useAnimatedReaction,
   FadeIn,
   FadeOut,
   runOnJS,
@@ -36,6 +36,7 @@ import { StreamService } from '../services/stream/StreamService';
 import { Tactile } from './allegra/motion';
 import Artwork from './allegra/Artwork';
 import Frosted from './allegra/Frosted';
+import { voiceLevel } from '../playback/voiceLevel';
 import { useArtworkPalette } from './allegra/useArtworkPalette';
 
 const pickArt = (p: VoicePick) => (p.kind === 'local' ? p.song.coverImageUri : p.song.highResArt);
@@ -46,11 +47,12 @@ const pickArtist = (p: VoicePick) => p.song.artist ?? '';
 const BAR_SHAPE = [0.55, 0.85, 1, 0.8, 0.5];
 
 const LevelBar: React.FC<{ weight: number }> = ({ weight }) => {
-  const level = useVoiceSearchStore(s => s.level);
   const h = useSharedValue(0.25);
-  useEffect(() => {
-    h.value = withSpring(0.25 + Math.min(1, level) * 0.75 * weight, Motion.spring.tactile);
-  }, [level, weight, h]);
+  // The live mic level, on the UI thread (no render per report).
+  useAnimatedReaction(
+    () => 0.25 + Math.min(1, voiceLevel.value) * 0.75 * weight,
+    target => { h.value = withSpring(target, Motion.spring.tactile); },
+  );
   const style = useAnimatedStyle(() => ({ transform: [{ scaleY: h.value }] }));
   return <Animated.View style={[styles.bar, style]} />;
 };

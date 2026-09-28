@@ -339,6 +339,9 @@ const SettingsScreen: React.FC<Props> = () => {
           {(settings.micEnabled ?? true) ? (
             <Choice<'hold' | 'tap'>
               label="Voice button works by"
+              hint={(settings.voiceMode ?? 'hold') === 'hold'
+                ? 'Hold, say a song, let go. A quick tap listens until you stop talking.'
+                : 'Tap to start, tap again (or stop talking) to search.'}
               value={settings.voiceMode ?? 'hold'}
               options={[{ value: 'hold', label: 'Hold to talk' }, { value: 'tap', label: 'Tap to talk' }]}
               onChange={settings.setVoiceMode}
