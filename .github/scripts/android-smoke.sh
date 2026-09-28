@@ -24,8 +24,11 @@ mkdir -p "$OUT"
 
 # Every adb call is bounded: if the emulator dies, a bare adb waits for the
 # device forever and the job only ends at its 75-minute limit.
-adb() { timeout 60 command adb "$@"; }
-alive() { [ "$(timeout 10 command adb get-state 2>/dev/null)" = "device" ]; }
+# `timeout` runs programs, not shell builtins: `timeout 60 command adb` failed
+# every call ("failed to run command 'command'"), so resolve adb's path once.
+ADB_BIN=$(command -v adb)
+adb() { timeout 60 "$ADB_BIN" "$@"; }
+alive() { [ "$(timeout 10 "$ADB_BIN" get-state 2>/dev/null)" = "device" ]; }
 step() {
   echo "== $(date -u +%H:%M:%S) $1"
   if ! alive; then echo "== emulator is gone — stopping here"; finish; exit 0; fi
@@ -90,7 +93,7 @@ finish() {
 adb install -r "$APK"
 adb logcat -c
 # Streamed live (unbounded on purpose) so a crash of the emulator itself still leaves a log.
-command adb logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
+"$ADB_BIN" logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
 adb shell am start -W -n "$PKG/.MainActivity"
 sleep 45
 step "launched"
