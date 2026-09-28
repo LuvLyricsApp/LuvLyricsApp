@@ -23,6 +23,7 @@ import {
   kickUser,
   leaveRoom,
   rejectJoin,
+  blockUser,
   rejectSuggestion,
   requestSync,
   transferHost,
@@ -170,6 +171,15 @@ const Room: React.FC = () => {
           {requests.map(r => (
             <View key={r.user_id} style={styles.personRow}>
               <Text style={[styles.person, styles.flex]} numberOfLines={1}>{r.username}</Text>
+              <Pressable
+                onPress={() => { tap(); blockUser(r.username); }}
+                hitSlop={8}
+                style={styles.round}
+                accessibilityRole="button"
+                accessibilityLabel={`Block ${r.username}`}
+              >
+                <MaterialCommunityIcons name="account-cancel-outline" size={18} color="#fff" />
+              </Pressable>
               <Button label="Decline" onPress={() => rejectJoin(r.user_id)} />
               <Button label="Let in" primary onPress={() => approveJoin(r.user_id)} />
             </View>

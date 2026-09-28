@@ -31,6 +31,8 @@ import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
 import { MiniPlayerBackground, PlayerBackground, useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
+import { Toast } from '../components/Toast';
+import ListenTogetherSettings from '../components/settings/ListenTogetherSettings';
 import { Colors } from '../constants/colors';
 import { SettingsStrings } from '../constants/uiStrings';
 import { exportAllSongs, shareExportedFile, importSongsFromJson } from '../utils/exportImport';
@@ -82,6 +84,7 @@ const SettingsScreen: React.FC<Props> = () => {
   const [pairingBusy, setPairingBusy] = React.useState(false);
   const [, setTrustedDesktops] = React.useState<TrustedDesktopRecord[]>([]);
 
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [alertConfig, setAlertConfig] = React.useState<{
     visible: boolean; title: string; message: string;
     buttons: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }[];
@@ -227,6 +230,7 @@ const SettingsScreen: React.FC<Props> = () => {
                 { key: 'lyrics', label: 'Lyrics' },
                 { key: 'nav', label: 'Navigation' },
                 { key: 'discover', label: 'Discover' },
+                { key: 'together', label: 'Listen together' },
                 { key: 'library', label: 'Library & data' },
                 { key: 'desktop', label: 'Desktop' },
                 { key: 'about', label: 'About' },
@@ -368,6 +372,8 @@ const SettingsScreen: React.FC<Props> = () => {
           ) : null}
         </Section>
 
+        <ListenTogetherSettings onLayout={at('together')} onNotice={setNotice} />
+
         <Section icon="folder-open-outline" title="Library and data" lead="Your songs, backups and clean-up." onLayout={at('library')}>
           <Action label="Add songs from this phone" hint="Find music files already on your device." onPress={handleImportLocalAudio} />
           <Action label="Export library" hint="Songs, lyrics and playlists as one file." onPress={handleExport} />
@@ -425,6 +431,7 @@ const SettingsScreen: React.FC<Props> = () => {
         onClose={() => setLanguagePickerVisible(false)}
       />
 
+      <Toast visible={notice !== null} message={notice ?? ''} type="info" onDismiss={() => setNotice(null)} />
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}

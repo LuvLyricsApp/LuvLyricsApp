@@ -31,15 +31,33 @@ jest.mock('./client', () => ({
   onListenTogetherEvent: (l: (e: unknown) => void) => { emit = l; return () => {}; },
   sendBufferReady: jest.fn(),
   sendPlaybackAction: jest.fn(),
+  requestSync: jest.fn(),
+}));
+let volumeListener: (e: { volume: number }) => void = () => {};
+jest.mock('../NativeAudioPlayer', () => ({
+  NativeAudioPlayer: {
+    setVolume: jest.fn(),
+    addListener: (_: string, cb: (e: { volume: number }) => void) => { volumeListener = cb; return { remove: jest.fn() }; },
+  },
 }));
 jest.mock('../../store/listenTogetherStore', () => {
   const { create } = jest.requireActual('zustand');
-  return { useListenTogetherStore: create(() => ({ room: { room_code: 'R', current_track: null }, role: 'guest', announce: jest.fn() })) };
+  return {
+    useListenTogetherStore: create(() => ({
+      room: { room_code: 'R', current_track: null },
+      role: 'guest',
+      announce: jest.fn(),
+      syncHostVolume: true,
+      smartResync: true,
+    })),
+  };
 });
 
 import { usePlayerStore, playerControls } from '../../store/playerStore';
 import { durationSV } from '../../playback/positionBus';
-import { sendBufferReady, sendPlaybackAction } from './client';
+import { requestSync, sendBufferReady, sendPlaybackAction } from './client';
+import { NativeAudioPlayer } from '../NativeAudioPlayer';
+import { useListenTogetherStore } from '../../store/listenTogetherStore';
 import { startListenTogetherSync } from './sync';
 import { Song } from '../../types/song';
 
@@ -73,6 +91,39 @@ describe('listen together sync', () => {
     emit({ kind: 'buffer_complete', trackId: 'yt-cardigan' });
     expect(playerControls.seekTo).toHaveBeenCalledWith(42);
     expect(player.requestPlayback).toHaveBeenLastCalledWith(true);
+  });
+
+  it('a guest takes the host volume only while Sync host volume is on', () => {
+    control = false;
+    emit({ kind: 'playback', payload: { action: 'set_volume', volume: 0.4 } });
+    expect(NativeAudioPlayer.setVolume).toHaveBeenCalledWith(0.4);
+
+    (NativeAudioPlayer.setVolume as jest.Mock).mockClear();
+    useListenTogetherStore.setState({ syncHostVolume: false });
+    emit({ kind: 'playback', payload: { action: 'set_volume', volume: 0.9 } });
+    expect(NativeAudioPlayer.setVolume).not.toHaveBeenCalled();
+    useListenTogetherStore.setState({ syncHostVolume: true });
+  });
+
+  it('a host sends its volume when it moves by at least 1%', () => {
+    control = true;
+    useListenTogetherStore.setState({ role: 'host' });
+    volumeListener({ volume: 0.5 });
+    volumeListener({ volume: 0.505 });
+    const sent = (sendPlaybackAction as jest.Mock).mock.calls.filter(c => c[0].action === 'set_volume');
+    expect(sent).toHaveLength(1);
+    expect(sent[0][0].volume).toBe(0.5);
+    useListenTogetherStore.setState({ role: 'guest' });
+  });
+
+  it('a guest asks for a fresh sync a second after reconnecting (smart resync)', () => {
+    jest.useFakeTimers();
+    control = false;
+    emit({ kind: 'reconnected', payload: { is_host: false, state: { current_track: null, volume: null } } });
+    expect(requestSync).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(1000);
+    expect(requestSync).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it('a host broadcasts its own song change with the YouTube Music id', async () => {

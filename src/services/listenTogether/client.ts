@@ -10,7 +10,7 @@
 import { AppState } from 'react-native';
 import { fetchJson } from '../net/fetchWithTimeout';
 import { decodeFrame, encodeFrame } from './codec';
-import { useListenTogetherStore } from '../../store/listenTogetherStore';
+import { isServerUrl, useListenTogetherStore } from '../../store/listenTogetherStore';
 import {
   BufferCompletePayload,
   BufferWaitPayload,
@@ -80,7 +80,13 @@ let intentionalClose = false;
 const store = () => useListenTogetherStore.getState();
 const patch = (p: Partial<ReturnType<typeof store>>) => useListenTogetherStore.setState(p);
 
+/** The servers Settings offers: Echo's published one, or the Metrolist default. */
+export const KNOWN_SERVERS = [{ name: 'Metrolist server', url: FALLBACK_SERVER }] as const;
+
 const resolveServer = async (): Promise<string> => {
+  // Settings → Listen together → Server. Takes effect on the next connection.
+  const chosen = store().serverUrl;
+  if (chosen && isServerUrl(chosen)) return chosen;
   if (serverUrl) return serverUrl;
   const json = await fetchJson<{ serverUrl?: string }>(SERVER_JSON_URL, { timeoutMs: 5000 });
   const url = json?.serverUrl;
@@ -197,6 +203,11 @@ const handleMessage = (data: ArrayBuffer) => {
     case MessageTypes.JOIN_REQUEST: {
       const pl = p as JoinRequestPayload;
       if (store().role !== 'host') break;
+      // Echo: a blocked name is turned away before anyone sees the request.
+      if (store().blocked.includes(pl.username)) {
+        rejectJoin(pl.user_id, 'You are blocked');
+        break;
+      }
       if (store().autoApprove) {
         approveJoin(pl.user_id);
         break;
@@ -317,7 +328,7 @@ const handleMessage = (data: ArrayBuffer) => {
     }
     case MessageTypes.SUGGESTION_RECEIVED: {
       const pl = p as SuggestionReceivedPayload;
-      if (store().role !== 'host') break;
+      if (store().role !== 'host' || store().blocked.includes(pl.from_username)) break;
       patch({ suggestions: [...store().suggestions, pl] });
       store().announce(`${pl.from_username} suggested ${pl.track_info.title}`);
       break;
@@ -456,6 +467,17 @@ export const approveJoin = (userId: string): void => {
 export const rejectJoin = (userId: string, reason?: string): void => {
   send(MessageTypes.REJECT_JOIN, { user_id: userId, reason: reason ?? null });
   patch({ joinRequests: store().joinRequests.filter(r => r.user_id !== userId) });
+};
+
+/**
+ * Echo's block: their pending request is turned away now and every future
+ * one automatically; their suggestions stop showing.
+ */
+export const blockUser = (username: string): void => {
+  const pending = store().joinRequests.filter(r => r.username === username);
+  pending.forEach(r => rejectJoin(r.user_id, 'You are blocked'));
+  store().block(username);
+  store().announce(`${username} is blocked`);
 };
 
 export const kickUser = (userId: string, reason?: string): void => {

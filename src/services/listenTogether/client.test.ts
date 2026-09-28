@@ -4,7 +4,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('../net/fetchWithTimeout', () => ({ fetchJson: jest.fn(async () => ({ serverUrl: 'wss://rooms.test/ws' })) }));
 
 import { decodeFrame, encodeFrame } from './codec';
-import { approveJoin, connect, createRoom, disconnect, joinRoom, onListenTogetherEvent } from './client';
+import { approveJoin, blockUser, connect, createRoom, disconnect, joinRoom, onListenTogetherEvent } from './client';
 import { useListenTogetherStore } from '../../store/listenTogetherStore';
 
 /** Stands in for the platform WebSocket: records frames, lets the test answer. */
@@ -33,7 +33,7 @@ const flush = () => new Promise(r => setTimeout(r, 0));
 beforeAll(() => { (global as unknown as { WebSocket: unknown }).WebSocket = FakeSocket; });
 afterEach(() => {
   disconnect();
-  useListenTogetherStore.setState({ room: null, role: 'none', session: null, joinRequests: [], pendingJoinCode: null, autoApprove: false, connection: 'disconnected' });
+  useListenTogetherStore.setState({ room: null, role: 'none', session: null, joinRequests: [], pendingJoinCode: null, autoApprove: false, connection: 'disconnected', blocked: [], serverUrl: '' });
 });
 
 describe('listen together client', () => {
@@ -82,6 +82,36 @@ describe('listen together client', () => {
     expect(s.role).toBe('guest');
     expect(s.pendingJoinCode).toBeNull();
     expect(s.room?.users[0].username).toBe('Ann');
+  });
+
+  it('turns away a blocked name, now and on every later request', async () => {
+    createRoom('Ann');
+    await flush();
+    const ws = FakeSocket.last!;
+    ws.open();
+    ws.receive('room_created', { room_code: 'ABC123', user_id: 'u1', session_token: 'tok' });
+
+    ws.receive('join_request', { user_id: 'u3', username: 'Cal' });
+    blockUser('Cal');
+    expect(ws.sent.at(-1)).toEqual({ type: 'reject_join', payload: { user_id: 'u3', reason: 'You are blocked' } });
+    expect(useListenTogetherStore.getState().joinRequests).toHaveLength(0);
+
+    ws.receive('join_request', { user_id: 'u4', username: 'Cal' });
+    expect(ws.sent.at(-1)).toEqual({ type: 'reject_join', payload: { user_id: 'u4', reason: 'You are blocked' } });
+    expect(useListenTogetherStore.getState().joinRequests).toHaveLength(0);
+    expect(useListenTogetherStore.getState().blocked).toEqual(['Cal']);
+  });
+
+  it('connects to the server chosen in Settings', async () => {
+    useListenTogetherStore.getState().setServerUrl('wss://my.rooms/ws');
+    createRoom('Ann');
+    await flush();
+    expect(FakeSocket.last!.url).toBe('wss://my.rooms/ws');
+  });
+
+  it('ignores a server address that is not ws or wss', () => {
+    useListenTogetherStore.getState().setServerUrl('https://not.a.socket');
+    expect(useListenTogetherStore.getState().serverUrl).toBe('');
   });
 
   it('resumes a saved session with reconnect instead of joining again', async () => {

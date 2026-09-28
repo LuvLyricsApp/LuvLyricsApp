@@ -26,16 +26,20 @@ import { youtubeIdFor } from '../player/playerMenuActions';
 import {
   canControl,
   onListenTogetherEvent,
+  requestSync,
   sendBufferReady,
   sendPlaybackAction,
   ListenTogetherEvent,
 } from './client';
 import { PlaybackActionPayload, PlaybackActions, TrackInfo } from './protocol';
+import { NativeAudioPlayer } from '../NativeAudioPlayer';
 
 const POSITION_TOLERANCE_MS = 2000;
 const PLAYBACK_POSITION_TOLERANCE_MS = 3000;
 const SYNC_DEBOUNCE_THRESHOLD_MS = 1000;
 const HEARTBEAT_MS = 10_000;
+/** Echo asks for a fresh sync this long after a guest reconnects. */
+const SMART_RESYNC_DELAY_MS = 1000;
 const LOAD_TIMEOUT_MS = 12_000;
 
 // ── Bookkeeping ────────────────────────────────────────────────────────────
@@ -321,12 +325,33 @@ const handlePlayback = (action: PlaybackActionPayload) => {
       holdSync(1500);
       player().previousInPlaylist();
       return;
+    case PlaybackActions.SET_VOLUME:
+      applyHostVolume(action.volume);
+      return;
     default:
-      // Queue edits and volume: our guests follow the host's current song, not
-      // a mirrored queue, so there is nothing to do.
+      // Queue edits: our guests follow the host's current song, not a
+      // mirrored queue, so there is nothing to do.
       return;
   }
 };
+
+// ── Host volume (Echo's "Sync host volume") ────────────────────────────────
+/** A guest takes the host's volume (0–1) when the setting is on. */
+function applyHostVolume(volume: number | null | undefined) {
+  if (!room().syncHostVolume || !followsRoom()) return;
+  if (typeof volume !== 'number' || !Number.isFinite(volume)) return;
+  NativeAudioPlayer.setVolume(Math.max(0, Math.min(1, volume)));
+}
+
+let lastSentVolume: number | null = null;
+/** The host's volume moved: send it, ignoring changes under 1%. */
+function onHostVolume(volume: number) {
+  if (!inRoom() || room().role !== 'host' || !room().syncHostVolume) return;
+  const v = Math.max(0, Math.min(1, volume));
+  if (lastSentVolume !== null && Math.abs(lastSentVolume - v) < 0.01) return;
+  lastSentVolume = v;
+  sendAction({ action: PlaybackActions.SET_VOLUME, volume: v });
+}
 
 const followsRoom = () => inRoom() && !canControl();
 
@@ -340,6 +365,7 @@ const handleEvent = (event: ListenTogetherEvent) => {
       return;
     case 'join_approved': {
       const s = event.payload.state;
+      applyHostVolume(s.volume);
       if (s.current_track) {
         const elapsed = s.is_playing ? Math.max(0, Date.now() - s.last_update) : 0;
         applyTrack(s.current_track, s.is_playing, s.position + elapsed, false).catch(() => {});
@@ -352,10 +378,18 @@ const handleEvent = (event: ListenTogetherEvent) => {
         const local = player().currentSongId;
         if (local && trackIdBySong.get(local) !== event.payload.state.current_track?.id) announceCurrent();
         else if (player().isPlaying) setTimeout(() => sendAction({ action: PlaybackActions.PLAY, position: positionMs() }), 500);
-      } else if (event.payload.state.current_track) {
+      } else {
         const s = event.payload.state;
-        const elapsed = s.is_playing ? Math.max(0, Date.now() - s.last_update) : 0;
-        applyTrack(s.current_track!, s.is_playing, s.position + elapsed, true).catch(() => {});
+        applyHostVolume(s.volume);
+        if (s.current_track) {
+          const elapsed = s.is_playing ? Math.max(0, Date.now() - s.last_update) : 0;
+          applyTrack(s.current_track, s.is_playing, s.position + elapsed, true).catch(() => {});
+        }
+        // Echo's smart resync: the state carried by the reconnect can be a
+        // moment old, so ask the host for a fresh one once settled.
+        if (room().smartResync) {
+          setTimeout(() => { if (followsRoom()) requestSync(); }, SMART_RESYNC_DELAY_MS);
+        }
       }
       return;
     }
@@ -436,10 +470,14 @@ export const startListenTogetherSync = (): (() => void) => {
   });
 
   const seekWatch = setInterval(() => { if (inRoom()) watchForSeeks(); }, 1000);
+  const volumeSub = NativeAudioPlayer.addListener('onVolumeChanged', (e: { volume?: number }) => {
+    if (typeof e?.volume === 'number') onHostVolume(e.volume);
+  });
 
   return () => {
     offEvents();
     offStore();
+    volumeSub.remove();
     clearInterval(seekWatch);
     stopHeartbeat();
   };
