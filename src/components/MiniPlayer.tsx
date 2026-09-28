@@ -1516,10 +1516,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20
   },
   expandedLyricText: {
-    // fontFamily intentionally omitted — SynchronizedLyrics owns the
-    // SF Pro / Inter face + bold-active weight swap.
     color: '#fff',
     fontSize: 23,
+    lineHeight: 28,
+    marginVertical: 10,
     textAlign: 'center',
   },
   expandedContent: {
