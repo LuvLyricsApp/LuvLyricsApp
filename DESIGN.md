@@ -93,7 +93,7 @@ One glass surface plus quieter wells. Don't stack opaque cards to fake depth.
 | Tab bar | pill | cover bitmap blur + tint, hairline, top highlight |
 | Now playing pill | pill, 56 px, max 330 | blurred cover / glow / solid; `wave` progress ring round the art |
 | More menu / sheets | 26–30 | `Frosted`, dim + blur behind |
-| Luvs card | 30 | art full-bleed, cover colour rising at the foot |
+| Luvs card | 30 | art (or canvas while playing) full-bleed, hairline edge; the next in the lane peeks over its top |
 | Content wells, search field | 16 / pill | `rgba(255,255,255,0.06–0.10)` + hairline |
 | Artwork | 16 (thumbs 10–12) | crisp; never over-rounded |
 | Icon buttons | circle, ≥ 40 px | `Glass.fillLight` + hairline |
@@ -252,7 +252,7 @@ can't blank it.
 | **Search** | same room; one field for the phone *and* the catalog; scopes All · On this phone · Online; recent searches; mood tiles |
 | **Library** | same room; the **cover deck** (recent songs as a staggered stack of sleeves — tap the front one to play, flick to leaf through; order lives on the UI thread so a flick never flickers), **Play all · Shuffle** under it and again in a frosted sticky bar once you scroll past, **Your artists** (round covers sized by how many songs you keep, tap to filter), Downloading, then Songs with filter, sort (Recently added · A–Z · By artist) and an **A–Z rail** (letter bubble, a tick per letter, jumps by fixed 64 pt rows) |
 | **Playlist** | CoverFlow deck, playlist name, meta + sort chip, **Play / Shuffle** (transport lives in the pill), glass header that fades in on scroll |
-| **Luvs** | dark frosted room; one rounded card per clip (art or canvas, thumb, title, "Full song" pill); scrubber and four round actions under it |
+| **Luvs** | a **taste map**, not a feed: lanes of taste side by side (For you, one per favourite artist, your chill and energy mixes) that turn like a carousel with the neighbours peeking at the edges; each lane is a stack — swipe up and the card lifts away while the next grows from behind, swipe down to bring the last one back. A lane rail slides with the camera and counts how deep you are. Under the map: title, clip scrubber, Luv · Save · Full song · Share (springy presses, a heart burst on Luv). The cover blurred small is the room |
 | **Player** | canvas or artwork stage, grab handle, controls on a scrim, `wave` play button; tap the artist to open their page |
 | **Artist** | Echo's layout: one sharp square photo masked into the shader (drifts at ⅓ scroll, stretches on overscroll), 40/700 name on its foot, subscriber + `wave` monthly chips, About, Play · Radio · Shuffle, Top songs, On this phone, shelves (albums, singles, fans also like as round avatars) |
 

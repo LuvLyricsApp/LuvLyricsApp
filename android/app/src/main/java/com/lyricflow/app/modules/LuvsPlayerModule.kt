@@ -15,6 +15,13 @@ class LuvsPlayerModule : Module() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val players = mutableMapOf<Int, ExoPlayer>()
     private var activeIndex = -1
+    // The taste map (lanes × depth) addresses songs by URL: an index means
+    // nothing once there is more than one list.
+    private val byUrl = mutableMapOf<String, ExoPlayer>()
+    private var activeUrl: String? = null
+
+    /** Whichever player is live, however it was chosen. */
+    private fun activePlayer(): ExoPlayer? = activeUrl?.let { byUrl[it] } ?: players[activeIndex]
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
@@ -67,6 +74,9 @@ class LuvsPlayerModule : Module() {
                 players.values.forEach { it.release() }
                 players.clear()
                 activeIndex = -1
+                byUrl.values.forEach { it.release() }
+                byUrl.clear()
+                activeUrl = null
             }
         }
 
@@ -74,6 +84,11 @@ class LuvsPlayerModule : Module() {
             val oldIndex = activeIndex
             if (newIndex == oldIndex) return@AsyncFunction
             activeIndex = newIndex
+            if (activeUrl != null) {
+                activeUrl = null
+                byUrl.values.forEach { it.release() }
+                byUrl.clear()
+            }
 
             scope.launch {
                 // 1. Pause and detach listener from previous active player
@@ -106,16 +121,56 @@ class LuvsPlayerModule : Module() {
             }
         }
 
+        /**
+         * Plays `url` (from the start) and keeps `warm` prepared — the songs a
+         * swipe can reach next. Everything else is released. Players already
+         * warm start instantly.
+         */
+        AsyncFunction("activateUrl") { url: String, warm: List<String>, shouldPlay: Boolean ->
+            scope.launch {
+                activePlayer()?.pause()
+                stopStatusPoller()
+                if (activeIndex != -1) {
+                    players.values.forEach { it.release() }
+                    players.clear()
+                    activeIndex = -1
+                }
+                activeUrl = url
+                val player = byUrl[url] ?: try {
+                    createPlayerForUrl(url).also { byUrl[url] = it }
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (shouldPlay) {
+                    player.seekTo(0)
+                    player.play()
+                    startStatusPoller(player)
+                }
+
+                val keep = (warm + url).toSet()
+                byUrl.keys.filter { it !in keep }.forEach { key -> byUrl.remove(key)?.release() }
+                // Warm the rest just after, so the song you landed on loads first.
+                delay(300)
+                if (activeUrl != url) return@launch
+                for (next in warm) {
+                    if (next.isBlank() || byUrl.containsKey(next)) continue
+                    try {
+                        byUrl[next] = createPlayerForUrl(next)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
         Function("pause") {
             scope.launch {
-                players[activeIndex]?.pause()
+                activePlayer()?.pause()
                 stopStatusPoller()
             }
         }
 
         Function("resume") {
             scope.launch {
-                val player = players[activeIndex]
+                val player = activePlayer()
                 player?.play()
                 player?.let { startStatusPoller(it) }
             }
@@ -123,7 +178,7 @@ class LuvsPlayerModule : Module() {
 
         Function("seekTo") { millis: Double ->
             scope.launch {
-                players[activeIndex]?.seekTo(millis.toLong())
+                activePlayer()?.seekTo(millis.toLong())
             }
         }
     }
