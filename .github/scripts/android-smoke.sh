@@ -26,7 +26,7 @@
 set -u
 APK="$1"
 # full: the whole walk. luvs: a second boot that only opens Luvs (the workflow
-# pauses the main song first, to see whether overlapping audio is what freezes the emulator there).
+# draws the UI through Vulkan, to see whether the emulator's GLES pipe is what freezes there).
 MODE="${2:-full}"
 OUT=smoke
 [ "$MODE" = luvs ] && OUT=smoke/pass2
@@ -156,6 +156,12 @@ luvs_steps() {
 }
 
 adb install -r "$APK"
+# The Luvs pass draws the UI through Vulkan instead of GLES: if the freeze is
+# the emulator's GLES pipe deadlocking on some draw, this pass survives it.
+if [ "$MODE" = luvs ]; then
+  adb shell setprop debug.hwui.renderer skiavk
+  echo "hwui renderer: $(adb shell getprop debug.hwui.renderer)" > "$OUT/renderer.txt"
+fi
 adb logcat -c
 # Streamed live (unbounded on purpose) so a crash of the emulator itself still leaves a log.
 "$ADB_BIN" logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
@@ -174,9 +180,6 @@ if [ "$MODE" = luvs ]; then
   # Same state as the main run reaches Luvs in: a song playing, player closed.
   link "lyricflow://play?q=Blinding%20Lights%20The%20Weeknd"
   sleep 25
-  # Paused before Luvs opens, unlike the main walk: only Luvs' own audio plays.
-  adb shell input keyevent KEYCODE_MEDIA_PAUSE
-  sleep 2
   adb shell input keyevent KEYCODE_BACK
   sleep 3
   luvs_steps
