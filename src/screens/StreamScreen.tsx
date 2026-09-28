@@ -118,6 +118,13 @@ const StreamScreen: React.FC = () => {
     }
   }), [navigation]);
 
+  // Settings mounts lazily and its first open showed one empty frame while it
+  // laid out; once launch has settled, build it in the background instead.
+  useEffect(() => {
+    const t = setTimeout(() => navigation.preload('Settings'), 8000);
+    return () => clearTimeout(t);
+  }, [navigation]);
+
   // YouTube Music's own home (Echo's feed): mood chips and shelves.
   const [ytHome, setYtHome] = useState<HomePage | null>(null);
   const [ytChip, setYtChip] = useState<HomeChip | null>(null);
