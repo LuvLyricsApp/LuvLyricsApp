@@ -29,7 +29,7 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue, takeResumePosition } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
@@ -385,6 +385,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           setLoadedAudioId(songId);
           // Stage the following queue item in Media3 (Android) for gapless advance.
           prepareNextInQueue();
+          // A recovery reload carries on from where the song stopped.
+          const resumeAt = takeResumePosition(songId);
+          if (resumeAt !== null) playerControls.seekTo(resumeAt);
 
           // On app startup (first load), don't auto-play
           // On user-initiated song change, auto-play

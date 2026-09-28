@@ -23,6 +23,13 @@ object PlayerBridge {
     var onRemoteCommand: ((command: String) -> Unit)? = null
     /** Fires when Media3 lands on a new item (auto end-of-track or seekToNext). */
     var onTrackAdvanced: ((mediaId: String) -> Unit)? = null
+    /**
+     * Playback stopped for good and the player can't fix it in place:
+     * "expired" (the link was refused), "network" (retries ran out), "stall"
+     * (bytes stopped coming), "error", or "released" (the service is gone).
+     */
+    var onPlaybackError: ((reason: String, position: Double) -> Unit)? = null
+    private var lastPositionSeconds = 0.0
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -87,6 +94,7 @@ object PlayerBridge {
 
         val position = player.currentPosition.toDouble() / 1000.0
         val duration = player.duration.toDouble() / 1000.0
+        lastPositionSeconds = position
 
         onStatusUpdate?.invoke(
             position,
@@ -97,6 +105,22 @@ object PlayerBridge {
             finished,
             player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE
         )
+    }
+
+    fun emitError(reason: String) {
+        val player = activePlayerRef.get()
+        val position = player?.currentPosition?.let { it.toDouble() / 1000.0 } ?: lastPositionSeconds
+        emitStatus()
+        onPlaybackError?.invoke(reason, position)
+    }
+
+    /** The service is going away: a last "stopped" status, then the reason. */
+    fun emitReleased() {
+        val player = activePlayerRef.get()
+        val position = player?.currentPosition?.let { it.toDouble() / 1000.0 } ?: lastPositionSeconds
+        val duration = player?.duration?.takeIf { it > 0 }?.let { it.toDouble() / 1000.0 } ?: 0.0
+        onStatusUpdate?.invoke(position, duration, false, false, false, false, false)
+        onPlaybackError?.invoke("released", position)
     }
 
     private fun startProgressPoller() {

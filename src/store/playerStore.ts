@@ -59,6 +59,21 @@ export function endAudioLoad(songId: string): void {
   if (audioLoadInFlight === songId) audioLoadInFlight = null;
 }
 
+// A reload that should carry on from where the song stopped (recovery after
+// the player gave up, the menu's Refetch) rather than start from zero. The
+// loader seeks before it plays, so there is no blip from the top.
+let pendingResume: { songId: string; at: number } | null = null;
+export function resumeNextLoadAt(songId: string, at: number): void {
+  pendingResume = at > 0 ? { songId, at } : null;
+}
+/** Where the load of `songId` that just finished should start, once. */
+export function takeResumePosition(songId: string): number | null {
+  if (!pendingResume || pendingResume.songId !== songId) return null;
+  const { at } = pendingResume;
+  pendingResume = null;
+  return at;
+}
+
 interface PlayerState {
   currentSongId: string | null;
   currentSong: Song | null;

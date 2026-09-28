@@ -51,7 +51,7 @@ class MainPlayerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("MainPlayer")
 
-        Events("onPlaybackStatus", "onRemoteCommand", "onTrackAdvanced", "onVolumeChanged")
+        Events("onPlaybackStatus", "onRemoteCommand", "onTrackAdvanced", "onVolumeChanged", "onPlaybackError")
 
         OnCreate {
             Log.d(TAG, "MainPlayerModule.OnCreate — registering callbacks")
@@ -71,6 +71,9 @@ class MainPlayerModule : Module() {
             }
             PlayerBridge.onTrackAdvanced = { mediaId ->
                 sendEvent("onTrackAdvanced", mapOf("mediaId" to mediaId))
+            }
+            PlayerBridge.onPlaybackError = { reason, position ->
+                sendEvent("onPlaybackError", mapOf("reason" to reason, "position" to position))
             }
         }
 
@@ -239,6 +242,7 @@ class MainPlayerModule : Module() {
             PlayerBridge.onStatusUpdate = null
             PlayerBridge.onRemoteCommand = null
             PlayerBridge.onTrackAdvanced = null
+            PlayerBridge.onPlaybackError = null
         }
 
         AsyncFunction("load") { uri: String, metadata: Map<String, String> ->
@@ -323,21 +327,22 @@ class MainPlayerModule : Module() {
             ok.get()
         }
 
+        /** False when there is no player (the service is gone): JS reloads the song. */
         Function("play") {
-            PlayerBridge.getPlayer()?.let { player ->
-                mainHandler.post {
-                    // After a stream error the player sits idle; play() alone
-                    // would do nothing, so re-prepare at the same position.
-                    if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) player.prepare()
-                    // Suppressed by another app's audio focus: playWhenReady is
-                    // already true, so play() would be a no-op. Toggle it so
-                    // ExoPlayer asks for focus again and actually resumes.
-                    if (player.playWhenReady && player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
-                        player.pause()
-                    }
-                    player.play()
+            val player = PlayerBridge.getPlayer() ?: return@Function false
+            mainHandler.post {
+                // After a stream error the player sits idle; play() alone
+                // would do nothing, so re-prepare at the same position.
+                if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) player.prepare()
+                // Suppressed by another app's audio focus: playWhenReady is
+                // already true, so play() would be a no-op. Toggle it so
+                // ExoPlayer asks for focus again and actually resumes.
+                if (player.playWhenReady && player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                    player.pause()
                 }
+                player.play()
             }
+            true
         }
 
         /** Re-sends the current status (the app came back to the foreground). */

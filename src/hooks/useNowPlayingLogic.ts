@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
+import { usePlayerStore, beginAudioLoad, endAudioLoad, playerControls, prepareNextInQueue, takeResumePosition } from '../store/playerStore';
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { useSongsStore } from '../store/songsStore';
 import { useArtHistoryStore } from '../store/artHistoryStore';
@@ -74,6 +74,8 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
           if (cancelled) { endAudioLoad(targetSongId); return; }
           setLoadedAudioId(targetSongId);
           prepareNextInQueue();
+          const resumeAt = takeResumePosition(targetSongId);
+          if (resumeAt !== null) playerControls.seekTo(resumeAt);
           didAutoPlayRef.current = true;
           requestPlayback(true);
           endAudioLoad(targetSongId);

@@ -34,7 +34,13 @@ shot() {
   # An empty file (device gone mid-capture) breaks the release upload.
   [ -s "$OUT/$1.png" ] || rm -f "$OUT/$1.png"
 }
-session() { adb shell dumpsys media_session | grep -E "package=|state=PlaybackState" | head -n 6; }
+# Our media session (state + position) and whether the playback service is
+# in the foreground — without that Android stops it about a minute after the
+# app leaves the screen.
+session() {
+  adb shell dumpsys media_session | grep -A 12 "package=$PKG" | grep -E "package=|active=|state=PlaybackState" | head -n 6
+  adb shell dumpsys activity services "$PKG" | grep -E "ServiceRecord|isForeground|foregroundServiceType" | head -n 6
+}
 
 # Taps the first view whose accessibility label starts with $1 (uiautomator);
 # logs what happened to taps.txt. Continuous animations can keep uiautomator
@@ -102,6 +108,8 @@ shot player-cover-2
   adb shell input keyevent KEYCODE_HOME
   sleep 45
   echo "== after 45s in the background"; session
+  sleep 45
+  echo "== after 90s in the background"; session
 } > "$OUT/playback.txt" 2>&1
 
 step "playing Levitating"

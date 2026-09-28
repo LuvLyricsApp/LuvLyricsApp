@@ -5,7 +5,8 @@ type MainPlayerNative = {
   load: (uri: string, metadata: PlayerMetadata) => Promise<void>;
   prepareNext: (uri: string, metadata: PlayerMetadata, mediaId: string) => void;
   seekToNextIfReady: (mediaId: string) => Promise<boolean>;
-  play: () => void;
+  /** False when the playback service is gone (older builds return nothing). */
+  play: () => boolean | void;
   pause: () => void;
   seekTo: (seconds: number) => void;
   updateMetadata: (metadata: PlayerMetadata) => void;
@@ -58,9 +59,10 @@ export const NativeAudioPlayer = {
     return !!(await MainPlayerModule.seekToNextIfReady(mediaId));
   },
 
-  play() {
-    if (!this.isAvailable() || !MainPlayerModule) return;
-    MainPlayerModule.play();
+  /** False when there was no player to play (the service is gone): reload the song. */
+  play(): boolean {
+    if (!this.isAvailable() || !MainPlayerModule) return true;
+    return MainPlayerModule.play() !== false;
   },
 
   pause() {
@@ -131,7 +133,7 @@ export const NativeAudioPlayer = {
   },
 
   addListener(
-    eventName: 'onPlaybackStatus' | 'onRemoteCommand' | 'onTrackAdvanced' | 'onVolumeChanged',
+    eventName: 'onPlaybackStatus' | 'onRemoteCommand' | 'onTrackAdvanced' | 'onVolumeChanged' | 'onPlaybackError',
     callback: (data: any) => void,
   ) {
     if (!this.isAvailable()) return EMPTY_SUB;

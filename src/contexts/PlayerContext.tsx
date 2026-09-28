@@ -8,6 +8,7 @@ import { shouldPreservePlayingStateDuringSeek, shouldAdoptNativePlayingState } f
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
 import { usePlaybackModesStore } from '../store/playbackModesStore';
+import { PlaybackLoss, recoverPlayback } from '../playback/recovery';
 
 const PlayerContext = createContext<any>(null);
 
@@ -37,7 +38,11 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const currentSong = usePlayerStore(state => state.currentSong);
 
   const player = useRef({
-    play: () => NativeAudioPlayer.play(),
+    // No player means the playback service was torn down: reload the song
+    // where it stopped instead of doing nothing.
+    play: () => {
+      if (!NativeAudioPlayer.play()) recoverPlayback('tapped').catch(() => {});
+    },
     pause: () => NativeAudioPlayer.pause(),
     seekTo: (time: number) => NativeAudioPlayer.seekTo(time),
     replace: (source: any) => {
@@ -145,6 +150,13 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
+    // Media3 stopped for good (link refused, stream stalled, service gone).
+    // The status already says paused; pick the song up where it stopped.
+    const errorSub = NativeAudioPlayer.addListener('onPlaybackError', (event: { reason?: PlaybackLoss; position?: number }) => {
+      if (!event?.reason) return;
+      recoverPlayback(event.reason, event.position).catch(() => {});
+    });
+
     // Back from another app: get the real state at once instead of trusting
     // whatever the UI last showed.
     const appStateSub = AppState.addEventListener('change', state => {
@@ -155,6 +167,7 @@ const AndroidPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       statusSub.remove();
       advancedSub.remove();
       commandSub.remove();
+      errorSub.remove();
       appStateSub.remove();
     };
   }, [endHandledForSongIdRef]);

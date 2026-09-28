@@ -23,6 +23,9 @@ private const val TAG = "LyrFlow"
 private const val MAX_RETRIES = 4
 private const val WATCHDOG_MS = 4_000L
 private const val STALL_TICKS = 4 // ~16s without progress while buffering
+// Reloading in place can't fix a dead link; after this many stall reloads the
+// player stops and tells JS, which fetches the song again.
+private const val MAX_STALL_RELOADS = 2
 private val RETRY_TOKEN = Any()
 
 /**
@@ -47,6 +50,7 @@ class PlaybackService : MediaSessionService() {
     // the position hasn't moved for STALL_TICKS checks, reload from where it is.
     private var lastPosition = -1L
     private var stalledTicks = 0
+    private var stallReloads = 0
     private val watchdog = object : Runnable {
         override fun run() {
             val p = exoPlayer
@@ -54,12 +58,24 @@ class PlaybackService : MediaSessionService() {
             if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING && position == lastPosition) {
                 stalledTicks++
                 if (stalledTicks >= STALL_TICKS) {
-                    Log.w(TAG, "stream stalled at ${position}ms; reloading")
                     stalledTicks = 0
-                    p.seekTo(position)
+                    if (stallReloads < MAX_STALL_RELOADS) {
+                        stallReloads++
+                        Log.w(TAG, "stream stalled at ${position}ms; reloading ($stallReloads)")
+                        p.seekTo(position)
+                    } else {
+                        // Re-seeking every 16s kept the read timeout from ever
+                        // firing, so a dead stream buffered forever while the
+                        // app said "playing". Stop and hand it to JS.
+                        Log.w(TAG, "stream stalled at ${position}ms; giving up")
+                        stallReloads = 0
+                        p.playWhenReady = false
+                        PlayerBridge.emitError("stall")
+                    }
                 }
             } else {
                 stalledTicks = 0
+                if (p.isPlaying) stallReloads = 0
             }
             lastPosition = position
             retryHandler.postDelayed(this, WATCHDOG_MS)
@@ -75,6 +91,17 @@ class PlaybackService : MediaSessionService() {
      */
     private val recovery = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
+            // The CDN refused the link (streamed links are signed and expire):
+            // retrying the same URL can never work, JS has to fetch a new one.
+            val refused = error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_NO_PERMISSION
+            if (refused) {
+                Log.w(TAG, "playback error ${error.errorCodeName}; link refused")
+                exoPlayer.playWhenReady = false
+                PlayerBridge.emitError("expired")
+                return
+            }
             val network = error.errorCode in 2000..2999 || error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
             if (network && retries < MAX_RETRIES) {
                 val delayMs = 1000L shl retries
@@ -86,6 +113,7 @@ class PlaybackService : MediaSessionService() {
             } else {
                 Log.w(TAG, "playback error ${error.errorCodeName}; giving up")
                 exoPlayer.playWhenReady = false
+                PlayerBridge.emitError(if (network) "network" else "error")
             }
         }
 
@@ -95,6 +123,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             retries = 0
+            stallReloads = 0
             retryHandler.removeCallbacksAndMessages(RETRY_TOKEN)
         }
     }
@@ -155,9 +184,18 @@ class PlaybackService : MediaSessionService() {
         // The session drives the notification, so it gets the queue-aware wrapper.
         // PlayerBridge keeps the raw ExoPlayer for status polling and seeks.
         val sessionPlayer = QueueForwardingPlayer(exoPlayer)
-        mediaSession = MediaSession.Builder(this, sessionPlayer)
+        val session = MediaSession.Builder(this, sessionPlayer)
             .apply { sessionActivity?.let { setSessionActivity(it) } }
             .build()
+        mediaSession = session
+        // The app starts this service with startService and never binds a
+        // MediaController, so onGetSession is never asked for the session and
+        // Media3 never tracked it: no media notification, no foreground
+        // promotion, and Android stopped the "background" service about a
+        // minute after the app left the screen — the music died while the UI
+        // still said playing. Adding it here lets Media3 post the notification
+        // and hold the foreground while music plays.
+        addSession(session)
 
         PlayerBridge.setPlayer(exoPlayer, this)
         Log.d(TAG, "PlaybackService.onCreate() done — media session ready")
@@ -179,6 +217,9 @@ class PlaybackService : MediaSessionService() {
         Log.d(TAG, "PlaybackService.onDestroy()")
         retryHandler.removeCallbacksAndMessages(null)
         exoPlayer.removeListener(recovery)
+        // Tell JS the player is gone, so the transport shows play and the next
+        // tap reloads the song where it stopped instead of doing nothing.
+        PlayerBridge.emitReleased()
         PlayerBridge.clearPlayer()
         mediaSession?.run {
             player.release()

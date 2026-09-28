@@ -3,7 +3,7 @@
  * player). Each action reports back in plain words for a toast.
  */
 import { Share } from 'react-native';
-import { playerControls, prepareNextInQueue, usePlayerStore } from '../../store/playerStore';
+import { prepareNextInQueue, resumeNextLoadAt, usePlayerStore } from '../../store/playerStore';
 import { Song, UnifiedSong } from '../../types/song';
 import { defaultDeps, findSeedVideoId } from '../stream/recommend';
 import { StreamService } from '../stream/StreamService';
@@ -72,11 +72,11 @@ export const refetchCurrent = async (): Promise<boolean> => {
   if (!id) return false;
   const at = positionSV.value;
   const wasPlaying = s.isPlaying;
+  // The loader seeks to `at` before it plays, so it carries on, not from zero.
+  resumeNextLoadAt(id, at);
   s.setLoadedAudioId(null);
   const loaded = await waitFor(() => usePlayerStore.getState().loadedAudioId === id, 10_000);
   if (!loaded || usePlayerStore.getState().currentSongId !== id) return false;
-  // Scrub/seek pattern: seek, then resume only if the user was playing.
-  playerControls.seekTo(at);
   usePlayerStore.getState().requestPlayback(wasPlaying);
   return true;
 };
