@@ -5,9 +5,8 @@
  *   apple  — Echo's APPLE_MUSIC: the cover blurred across the screen, the
  *            sharp cover over the top 65% dissolving into it, and the motion
  *            canvas playing inside that same dissolving hero (Canvas on).
- *   glow   — Echo's GLOW_ANIMATED: six drifting glows of the cover's palette.
- *   blend  — apple while the cover is on show, gliding into glow when lyrics
- *            open (the two cross-fade).
+ *   blend  — "Apple + glow": apple while the cover is on show, gliding into
+ *            Echo's drifting glow when lyrics open (the two cross-fade).
  *
  * With "Apple Music inspired" off, the sharp hero is left out and the player
  * shows a floating artwork card instead (NowPlayingLyricsArea).
@@ -50,7 +49,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   const appleInspired = useSettingsStore(s => s.appleMusicInspired);
   const palette = useArtworkPalette(coverImageUri, gradientColors);
 
-  const glowOn = style === 'glow' || (style === 'blend' && showLyrics);
+  const glowOn = style === 'blend' && showLyrics;
   const glowColors = useGlowColors(style === 'apple' ? null : coverImageUri);
 
   // Apple <-> glow cross-fade.
@@ -76,40 +75,33 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
 
   const heroH = heroHeight(width, height);
 
-  // The veil comes and goes with the video, so the still cover is never shaded twice.
-  const veil = useSharedValue(0);
-  useEffect(() => {
-    veil.value = withTiming(canvasShown ? 1 : 0, { duration: CROSSFADE_MS });
-  }, [canvasShown, veil]);
-  const veilStyle = useAnimatedStyle(() => ({ opacity: veil.value }));
   useEffect(() => {
     diag('player', `background ${style}, apple inspired ${appleInspired}, lyrics ${showLyrics}, glow ${glowOn}, hero ${heroOn}, canvas ${canvas ? canvas.source : 'none'}`);
   }, [style, appleInspired, showLyrics, glowOn, heroOn, canvas]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
-      {style !== 'glow' ? (
-        // The cover stays under the canvas: the canvas fades in over it, and
-        // when the canvas fades out (song change, loop seam) the cover is what
-        // shows through — never an empty gap.
-        <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} />
-      ) : null}
+      {/* The cover stays under the canvas: the canvas fades in over it, and
+          when it fades out (song change) the cover is what shows through —
+          never an empty gap. */}
+      <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} />
 
       {canvas || canvasShown ? (
-        // The canvas plays across the hero; the veil over it paints the blurred
-        // room back in through the hero's dissolve, so it melts like the cover.
-        // It stays mounted while leaving, so CanvasVideoLayer can fade it out
-        // (lyrics opened, song changed) instead of cutting it.
-        <>
-          <View style={[styles.hero, { height: heroH }]}>
-            <CanvasVideoLayer canvas={canvasAllowed ? canvas : null} playing={playing && canvasAllowed} onVisibleChange={onVisibleChange} scrimStrength={0} />
-          </View>
-          {style !== 'glow' ? (
-            <Animated.View style={[StyleSheet.absoluteFill, veilStyle]} pointerEvents="none">
-              <AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} veil />
-            </Animated.View>
-          ) : null}
-        </>
+        // The canvas plays across the hero. Its veil paints the blurred room
+        // back in through the hero's dissolve, so the video melts like the
+        // cover; it rides inside the canvas's own fade, so cover -> video is a
+        // single cross-dissolve with the shade applied exactly once. It stays
+        // mounted while leaving, so CanvasVideoLayer can fade it out (lyrics
+        // opened, song changed) instead of cutting it.
+        <View style={[styles.hero, { height: heroH }]}>
+          <CanvasVideoLayer
+            canvas={canvasAllowed ? canvas : null}
+            playing={playing && canvasAllowed}
+            onVisibleChange={onVisibleChange}
+            scrimStrength={0}
+            overlay={<AppleBackdrop uri={coverImageUri} palette={palette} showHero={heroOn} frame={frame} veil />}
+          />
+        </View>
       ) : null}
 
       {style !== 'apple' ? (

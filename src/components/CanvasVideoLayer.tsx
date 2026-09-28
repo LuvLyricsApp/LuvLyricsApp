@@ -7,6 +7,13 @@
  * vanishing) when the song changes. When the song is paused the loop
  * pauses too; with Reduce Motion on it holds the first frame instead of moving.
  *
+ * The layer has no backing of its own. Whatever sits under it (the cover in
+ * the player, the card art in Luvs) is what shows before the first frame and
+ * through any frame the decoder hasn't filled yet — a dark backing here used
+ * to fade in ahead of the video and read as a black flash. The loop is left to
+ * the player's own repeat, which holds the last frame until the first one is
+ * ready; the old "dip" at the seam faded the clip out and back every loop.
+ *
  * Cover fit is done here, not by `contentFit`: on Android the native cover
  * mode could lose to the video's own aspect, so a 4:5 canvas drew at full
  * width and stopped with a hard edge halfway down the screen. We read the
@@ -16,7 +23,7 @@
  * SurfaceView punches through all three.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, Platform, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { requireOptionalNativeModule } from 'expo';
 import Animated, {
@@ -28,7 +35,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { VideoTrack } from 'expo-video';
 import { CanvasArtwork } from '../services/canvas/types';
-import { Motion, Signal } from '../constants/allegraTheme';
+import { Motion } from '../constants/allegraTheme';
 import { diag } from '../utils/diag';
 
 // expo-video needs its native module, which Android only gets if it is listed
@@ -46,12 +53,17 @@ interface CanvasVideoLayerProps {
   /** Extra darkening for text contrast. 0 = none, 1 = heavy. */
   scrimStrength?: number;
   onVisibleChange?: (visible: boolean) => void;
+  /**
+   * Drawn over the video inside the same fade, so it comes and goes at
+   * exactly the video's opacity (the player's veil). A separately timed
+   * overlay shaded the still cover a second time while the two fades
+   * disagreed — a dark band that came and went.
+   */
+  overlay?: React.ReactNode;
 }
 
 /** How long a canvas takes to leave (song change, feature off). */
 const FADE_OUT_MS = 520;
-/** The loop point: dip this close to the end, recover after the restart. */
-const LOOP_EDGE_S = 0.55;
 
 const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   lib,
@@ -59,13 +71,10 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   playing,
   scrimStrength = 0.6,
   onVisibleChange,
+  overlay,
 }) => {
   const reduceMotion = useReducedMotion();
   const opacity = useSharedValue(0);
-  // Softens the loop point: most community canvases aren't cut to loop
-  // seamlessly, so the jump back to frame one is hidden inside a short dip
-  // to the artwork underneath and back.
-  const loopDip = useSharedValue(1);
 
   // The canvas on screen trails the requested one: when it changes or goes
   // away, the old clip fades out first instead of vanishing mid-frame.
@@ -103,28 +112,9 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   // New canvas: hide until its first frame lands, forget the old track size.
   useEffect(() => {
     opacity.value = 0;
-    loopDip.value = 1;
     setVideo(null);
     onVisibleChange?.(false);
-  }, [canvas?.url, opacity, loopDip, onVisibleChange]);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    player.timeUpdateEventInterval = 0.2;
-    let dipped = false;
-    const sub = player.addListener('timeUpdate', ({ currentTime }) => {
-      const d = player.duration;
-      if (!d || d < 3) return;
-      if (!dipped && d - currentTime < LOOP_EDGE_S) {
-        dipped = true;
-        loopDip.value = withTiming(0.2, { duration: 300, easing: Motion.ease.accelerate });
-      } else if (dipped && currentTime > 0.05 && currentTime < 1.5) {
-        dipped = false;
-        loopDip.value = withTiming(1, { duration: 650, easing: Motion.ease.decelerate });
-      }
-    });
-    return () => sub.remove();
-  }, [player, reduceMotion, loopDip]);
+  }, [canvas?.url, opacity, onVisibleChange]);
 
   // The real pixel size of what is playing. HLS can switch variants mid-loop,
   // so keep listening rather than reading it once.
@@ -164,7 +154,7 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
     else player.pause();
   }, [canvas, playing, reduceMotion, player]);
 
-  const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value * loopDip.value }));
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   if (!canvas) return null;
 
@@ -190,7 +180,6 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.clip, fadeStyle]} pointerEvents="none" onLayout={onLayout}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Signal.bgDeep }]} />
       <lib.VideoView
         player={player}
         style={videoStyle}
@@ -213,6 +202,7 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
         locations={[0, 0.35, 1]}
         style={StyleSheet.absoluteFill}
       />
+      {overlay}
     </Animated.View>
   );
 };

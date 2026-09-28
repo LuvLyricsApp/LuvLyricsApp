@@ -191,9 +191,10 @@ shows a floating artwork card.
 
 | Style | What it is |
 | --- | --- |
-| **Blend** (default) | Apple Music's room under the cover, with the glow drifting through it |
 | **Apple Music** | Echo's style: the cover blurred soft behind a sharp hero |
-| **Glow animated** | Echo's glow: soft radial blobs of the cover's colours drifting over near-black — only their transforms move |
+| **Apple + glow** (default, `blend`) | the Apple Music room, cross-fading into Echo's drifting glow while lyrics are open |
+
+"Glow animated" on its own was retired; a stored `glow` migrates to Apple + glow.
 
 **Mini player background:** glow animated (two blobs in the cover's colours) or
 cover tint.
@@ -222,8 +223,10 @@ the title underneath, keeps the screen awake, and returns on a tap or back.
 Decorative, muted, never takes audio focus. The cover stays under it, so
 whatever the canvas reveals is the cover, never a gap. It never vanishes mid-frame: when
 the song changes the old clip fades out (520 ms) before the next one fades in
-on its first frame, and the loop point dips to 20% and back so a clip that
-isn't cut to loop doesn't visibly jump. `CanvasVideoLayer` sizes the video
+on its first frame. The layer has no backing of its own, so before the first
+frame (or on a frame the decoder hasn't filled) the cover underneath shows,
+never black. The loop is the player's own repeat, which holds the last frame
+until the next one is ready — no fade at the seam. `CanvasVideoLayer` sizes the video
 from its real track dimensions to a true cover fit and renders into a
 TextureView on Android (a SurfaceView ignores fades, clips and the sheet's
 drag). The lookup keys on title + artist only, so metadata backfill mid-song
