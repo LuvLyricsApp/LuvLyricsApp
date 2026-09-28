@@ -27,6 +27,7 @@ describe('titleCaseShouting', () => {
     expect(titleCaseShouting('ABHIJEET BHATTACHARYA, ALKA YAGNIK')).toBe('Abhijeet Bhattacharya, Alka Yagnik');
     expect(titleCaseShouting('BTS, HALSEY')).toBe('BTS, HALSEY');
     expect(titleCaseShouting('ABBA & MARIAH CAREY')).toBe('ABBA & Mariah Carey');
+    expect(titleCaseShouting('JAVED ALI, A.R. RAHMAN')).toBe('Javed Ali, A.R. Rahman');
   });
   it('leaves mixed-case text alone', () => {
     expect(titleCaseShouting('Blinding Lights')).toBe('Blinding Lights');

@@ -21,7 +21,7 @@ const titleCaseName = (name: string): string => {
   const letters = name.replace(/[^A-Za-z]/g, '');
   const words = name.trim().split(/\s+/).filter(w => /[A-Za-z]/.test(w));
   if (words.length < 2 || letters.length < 4 || letters !== letters.toUpperCase()) return name;
-  return name.toLowerCase().replace(/(^|[\s([\-/"'])([a-z])/g, (_, before: string, c: string) => before + c.toUpperCase());
+  return name.toLowerCase().replace(/(^|[\s(.[\-/"'])([a-z])/g, (_, before: string, c: string) => before + c.toUpperCase());
 };
 
 export const titleCaseShouting = (text: string): string =>

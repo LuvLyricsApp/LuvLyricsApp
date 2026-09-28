@@ -13,6 +13,7 @@ import { cacheKey, TtlCache } from '../net/fetchWithTimeout';
 import { artistsOverlap, fuzzyContains } from '../canvas/matching';
 import { streamUrlOf } from '../stream/streamSong';
 import { YTSong } from './parsers';
+import { titleCaseShouting } from '../../utils/sentenceCase';
 
 export type CatalogSearch = (query: string) => Promise<UnifiedSong[]>;
 
@@ -80,8 +81,8 @@ const bestMatch = (yt: YTSong, candidates: UnifiedSong[]): UnifiedSong | null =>
 /** Catalog audio, YouTube Music's official identity (Echo Music's model). */
 const withOfficialIdentity = (yt: YTSong, song: UnifiedSong): UnifiedSong => ({
   ...song,
-  title: yt.title || song.title,
-  artist: yt.artists.length > 0 ? yt.artists.join(', ') : song.artist,
+  title: titleCaseShouting(yt.title || song.title),
+  artist: titleCaseShouting(yt.artists.length > 0 ? yt.artists.join(', ') : song.artist),
   highResArt: yt.thumbnail || song.highResArt,
   duration: yt.duration || song.duration,
 });
