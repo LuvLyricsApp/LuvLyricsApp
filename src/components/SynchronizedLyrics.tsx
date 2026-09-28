@@ -390,9 +390,14 @@ const SynchronizedLyrics = forwardRef<SynchronizedLyricsRef, SynchronizedLyricsP
       isUserScrollingSV.value = true;
       runOnJS(notifyScrollState)(true);
     },
-    onEndDrag: e => {
-      // No fling: the list is already still.
-      if (Math.abs(e.velocity?.y ?? 0) < 0.05) runOnJS(scheduleResume)();
+    onEndDrag: () => {
+      // Always arm the resume here: on Android a slow release that isn't a
+      // fling fires no momentum events, and the list stayed detached for good.
+      runOnJS(scheduleResume)();
+    },
+    onMomentumBegin: () => {
+      // A fling: wait until it settles instead.
+      runOnJS(clearResume)();
     },
     onMomentumEnd: () => {
       if (isUserScrollingSV.value) runOnJS(scheduleResume)();
