@@ -11,6 +11,10 @@
 #   player-nudged.png    a small pull let go: the player springs back open
 #   player-drag.png      halfway through a slow drag down (page under it, blurred)
 #   player-dragged.png   after the drag: the sheet back on the pill
+#   pill-pulled.png      the pill mid-way through a long pull up: only a few points off
+#   pill-opened.png      that pull let go: the player open
+#   player-flicked.png   a quick flick down on the player: back on the page, app alive
+#   pill-swiped-down.png a swipe down on the pill: it bounced back, app alive
 #   player-menu.png      the ••• menu sheet
 #   listen-together.png  the Listen together sheet
 #   after-close-2.png    back from the player a second time
@@ -56,7 +60,7 @@ session() {
 # Taps the first view whose accessibility label starts with $1 (uiautomator);
 # logs what happened to taps.txt. Continuous animations can keep uiautomator
 # from ever seeing an idle UI, so each dump is retried.
-tap_desc() {
+find_desc() {
   local b=""
   for _ in 1 2 3; do
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
@@ -66,12 +70,20 @@ tap_desc() {
     [ -n "$b" ] && break
     sleep 2
   done
-  local label="$1"
+  [ -n "$b" ] && echo "$b"
+}
+tap_desc() {
+  local label="$1" b
+  b=$(find_desc "$1")
   if [ -z "$b" ]; then echo "tap '$label': not found" >> "$OUT/taps.txt"; return 1; fi
   set -- $b
   local x=$(( ($1 + $3) / 2 )) y=$(( ($2 + $4) / 2 ))
   adb shell input tap "$x" "$y"
   echo "tap '$label' at $x,$y" >> "$OUT/taps.txt"
+}
+# Is the app still running? Logs "crashed after <what>" to taps.txt if not.
+alive_after() {
+  adb shell pidof "$PKG" > /dev/null || echo "crashed after $1" >> "$OUT/taps.txt"
 }
 
 # A burst of frames while a page changes, to catch a white flash.
@@ -155,7 +167,7 @@ if [ -n "$W" ] && [ -n "$H" ]; then
   adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 36 / 100)) 400
   sleep 2
   shot player-nudged
-  adb shell pidof "$PKG" > /dev/null || echo "crashed after a small pull" >> "$OUT/taps.txt"
+  alive_after "a small pull"
   adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 85 / 100)) 2600 &
   swipe_pid=$!
   sleep 1.4
@@ -164,6 +176,34 @@ if [ -n "$W" ] && [ -n "$H" ]; then
   wait "$swipe_pid"
   sleep 2
   shot player-dragged
+  alive_after "a slow drag down"
+
+  # The pill, pulled up slowly and far: it gives a few points and no more.
+  b=$(find_desc "Now playing:")
+  if [ -n "$b" ]; then
+    set -- $b
+    PX=$(( ($1 + $3) / 2 )); PY=$(( ($2 + $4) / 2 ))
+    adb shell input swipe "$PX" "$PY" "$PX" $((PY - H * 45 / 100)) 2400 &
+    swipe_pid=$!
+    sleep 1.4
+    shot pill-pulled
+    wait "$swipe_pid"
+    # Letting go of that pull opens the player; a quick flick down closes it.
+    sleep 3
+    shot pill-opened
+    alive_after "a long pull on the pill"
+    adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 90 / 100)) 120
+    sleep 3
+    shot player-flicked
+    alive_after "a quick flick down on the player"
+    # A swipe down on the pill: it bounces back, nothing else happens.
+    adb shell input swipe "$PX" "$PY" "$PX" $((PY + H * 10 / 100)) 200
+    sleep 2
+    shot pill-swiped-down
+    alive_after "a swipe down on the pill"
+  else
+    echo "pill: not found" >> "$OUT/taps.txt"
+  fi
 fi
 tap_desc "Now playing:" && sleep 3
 # The canvas video keeps uiautomator from seeing an idle UI inside the player,
