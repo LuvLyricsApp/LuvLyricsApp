@@ -20,8 +20,20 @@ OUT=smoke
 PKG=com.lyricflow.app
 mkdir -p "$OUT"
 
+# Every adb call is bounded: if the emulator dies, a bare adb waits for the
+# device forever and the job only ends at its 75-minute limit.
+adb() { timeout 60 command adb "$@"; }
+alive() { [ "$(timeout 10 command adb get-state 2>/dev/null)" = "device" ]; }
+step() {
+  echo "== $(date -u +%H:%M:%S) $1"
+  if ! alive; then echo "== emulator is gone — stopping here"; finish; exit 0; fi
+}
 link() { adb shell am start -W -a android.intent.action.VIEW -d "$1" "$PKG" >/dev/null 2>&1; }
-shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
+shot() {
+  adb exec-out screencap -p > "$OUT/$1.png"
+  # An empty file (device gone mid-capture) breaks the release upload.
+  [ -s "$OUT/$1.png" ] || rm -f "$OUT/$1.png"
+}
 session() { adb shell dumpsys media_session | grep -E "package=|state=PlaybackState" | head -n 6; }
 
 # Taps the first view whose accessibility label starts with $1 (uiautomator);
@@ -52,14 +64,33 @@ burst() {
   for i in 1 2 3; do shot "transition-$name-$i"; done
 }
 
+finish() {
+  adb logcat -d -v time > "$OUT/logcat.txt" 2>/dev/null
+  # Emulator gone: fall back to what the live stream caught before it died.
+  [ -s "$OUT/logcat.txt" ] || cp "$OUT/logcat-live.txt" "$OUT/logcat.txt" 2>/dev/null
+  grep -F "[diag:" "$OUT/logcat.txt" > "$OUT/diag.txt" || true
+  adb shell pidof "$PKG" > "$OUT/pid.txt" || echo "not running" > "$OUT/pid.txt"
+
+  echo "===== app process: $(cat "$OUT/pid.txt")"
+  echo "===== playback"; cat "$OUT/playback.txt" 2>/dev/null
+  echo "===== diagnostics"; cat "$OUT/diag.txt"
+  echo "===== JS, React Native and crash lines"
+  grep -E "ReactNativeJS|AndroidRuntime|FATAL|Unhandled|Exception" "$OUT/logcat.txt" \
+    | grep -v -E "chatty|GnssHAL|WifiService|Bluetooth" | tail -n 150
+}
+
 adb install -r "$APK"
 adb logcat -c
+# Streamed live (unbounded on purpose) so a crash of the emulator itself still leaves a log.
+command adb logcat -v time > "$OUT/logcat-live.txt" 2>/dev/null &
 adb shell am start -W -n "$PKG/.MainActivity"
 sleep 45
+step "launched"
 shot after-45s
 
 link "lyricflow://diagnose"
 sleep 2
+step "playing Blinding Lights"
 link "lyricflow://play?q=Blinding%20Lights%20The%20Weeknd"
 sleep 40
 shot player-cover
@@ -73,23 +104,28 @@ shot player-cover-2
   echo "== after 45s in the background"; session
 } > "$OUT/playback.txt" 2>&1
 
+step "playing Levitating"
 link "lyricflow://play?q=Levitating%20Dua%20Lipa&lyrics=1"
 sleep 35
 shot player-lyrics
 
+step "closing the player"
 # Back from the player: the sheet falls away and the mini pill must be there.
 adb shell input keyevent KEYCODE_BACK
 sleep 3
 shot after-close
 
+step "reopening from the pill"
 # Open the player again from the pill, then its ••• menu and Listen together.
 tap_desc "Now playing:" && sleep 3
 shot player-reopened
 # The canvas video keeps uiautomator from seeing an idle UI inside the player,
 # so the sheets are opened with the app's own links.
+step "menu sheet"
 link "lyricflow://player?sheet=menu"
 sleep 3
 shot player-menu
+step "listen together sheet"
 link "lyricflow://together?code=TEST42"
 sleep 3
 shot listen-together
@@ -97,33 +133,30 @@ adb shell input keyevent KEYCODE_BACK
 sleep 3
 shot after-close-2
 
+step "library"
 burst library link "lyricflow://open/library"
 sleep 6
 shot library
+step "settings"
 burst settings link "lyricflow://open/settings"
 sleep 6
 shot settings
+step "stream"
 burst stream link "lyricflow://open/stream"
 sleep 4
 shot stream-back
+step "search"
 link "lyricflow://open/search"
 sleep 5
 shot search
+step "playlists"
 link "lyricflow://open/playlists"
 sleep 5
 shot playlists
+step "luvs"
 link "lyricflow://open/luvs"
 sleep 12
 shot luvs
 
-adb logcat -d -v time > "$OUT/logcat.txt"
-grep -F "[diag:" "$OUT/logcat.txt" > "$OUT/diag.txt" || true
-adb shell pidof "$PKG" > "$OUT/pid.txt" || echo "not running" > "$OUT/pid.txt"
-
-echo "===== app process: $(cat "$OUT/pid.txt")"
-echo "===== playback"; cat "$OUT/playback.txt"
-echo "===== diagnostics"; cat "$OUT/diag.txt"
-echo "===== JS, React Native and crash lines"
-grep -E "ReactNativeJS|AndroidRuntime|FATAL|Unhandled|Exception" "$OUT/logcat.txt" \
-  | grep -v -E "chatty|GnssHAL|WifiService|Bluetooth" | tail -n 150
+finish
 exit 0

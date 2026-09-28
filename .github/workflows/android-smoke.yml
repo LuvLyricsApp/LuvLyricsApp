@@ -95,6 +95,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           [ -f smoke/after-45s.png ] || exit 0
+          find smoke -type f -size 0 -delete
           gh release delete smoke-latest --yes --cleanup-tag || true
           gh release create smoke-latest smoke/*.png smoke/*.txt \
             --prerelease --target "$GITHUB_SHA" \
