@@ -146,7 +146,8 @@ luvs_steps() {
   shot luvs
   # The taste map: across to the next lane, then deeper into it.
   if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
-    adb shell input swipe $((W * 80 / 100)) $((H * 40 / 100)) $((W * 15 / 100)) $((H * 40 / 100)) 180
+    # A deliberate drag: a 180ms swipe reached the app as a third of its length.
+    adb shell input swipe $((W * 80 / 100)) $((H * 40 / 100)) $((W * 15 / 100)) $((H * 40 / 100)) 400
     sleep 4
     shot luvs-across
     adb shell input swipe $((W / 2)) $((H * 55 / 100)) $((W / 2)) $((H * 15 / 100)) 180
