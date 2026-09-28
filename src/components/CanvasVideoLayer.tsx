@@ -79,6 +79,7 @@ const REVEAL_MAX_MS = 1500;
 const REVEAL_POLL_MS = 80;
 /** Same shape within this (a quality switch): keep the laid-out size. */
 const ASPECT_TOLERANCE = 0.01;
+const NO_FULLSCREEN = { enable: false };
 
 const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   lib,
@@ -126,8 +127,13 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
 
   // New canvas: hide until it is ready to show, forget the old track size.
   const [firstFrame, setFirstFrame] = useState(false);
+  // The clip already dissolved in. A clip reveals once: a pause, or the song
+  // changing under it, must never replay the reveal — that cancelled the
+  // outgoing clip's fade-out and brought it back over the next song.
+  const revealedUrl = useRef<string | null>(null);
   useEffect(() => {
     opacity.value = 0;
+    revealedUrl.current = null;
     setVideo(null);
     setFirstFrame(false);
     onVisibleChange?.(false);
@@ -181,7 +187,7 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
   // Motion) holds a still frame, so it only waits for the size.
   const sizeKnown = video !== null;
   useEffect(() => {
-    if (!canvas || !firstFrame) return;
+    if (!canvas || !firstFrame || revealedUrl.current === canvas.url) return;
     let done = false;
     const startedAt = Date.now();
     const startTime = player.currentTime;
@@ -190,6 +196,9 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
       if (done) return;
       done = true;
       clearInterval(timer);
+      // On its way out (song changed, lyrics opened): let the fade-out finish.
+      if (latest.current?.url !== canvas.url) return;
+      revealedUrl.current = canvas.url;
       diag('canvas', `revealed after ${Date.now() - startedAt}ms: ${canvas.url}`);
       opacity.value = withTiming(1, {
         duration: reduceMotion ? Motion.duration.fast : Motion.duration.crossfade,
@@ -242,7 +251,7 @@ const CanvasVideo: React.FC<CanvasVideoLayerProps & { lib: ExpoVideo }> = ({
         contentFit={box && video ? 'fill' : 'cover'}
         surfaceType={Platform.OS === 'android' ? 'textureView' : undefined}
         nativeControls={false}
-        allowsFullscreen={false}
+        fullscreenOptions={NO_FULLSCREEN}
         allowsPictureInPicture={false}
         onFirstFrameRender={() => {
           diag('canvas', `first frame: ${canvas.url}`);
