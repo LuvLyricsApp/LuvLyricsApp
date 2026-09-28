@@ -141,9 +141,11 @@ size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -n 1)
 W=${size%x*}; H=${size#*x}
 if [ -n "$W" ] && [ -n "$H" ]; then
   adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 85 / 100)) 2600 &
+  swipe_pid=$!
   sleep 1.4
   shot player-drag
-  wait
+  # Only the swipe: a bare `wait` also waits on the live logcat and never returns.
+  wait "$swipe_pid"
   sleep 2
   shot player-dragged
 fi
