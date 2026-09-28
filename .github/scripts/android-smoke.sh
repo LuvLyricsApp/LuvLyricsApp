@@ -109,6 +109,10 @@ shot player-cover
 sleep 12
 shot player-cover-2
 
+# Make sure it is playing (a media key also proves the session takes buttons),
+# then check it keeps playing with the app in the background.
+adb shell input keyevent KEYCODE_MEDIA_PLAY
+sleep 4
 {
   echo "== playing in the foreground"; session
   adb shell input keyevent KEYCODE_HOME

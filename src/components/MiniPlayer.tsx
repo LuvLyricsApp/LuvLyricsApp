@@ -29,7 +29,7 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue, takeResumePosition } from '../store/playerStore';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue, takeRestoredLoad, takeResumePosition } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
@@ -371,7 +371,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   }, []);
 
   // Track if this is the first song loore)
-  const isInitialLoad = useRef(true);
 
   // Audio Sync Logic: Auto-load song if it changes in the store
   useEffect(() => {
@@ -394,15 +393,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           const resumeAt = takeResumePosition(songId);
           if (resumeAt !== null) playerControls.seekTo(resumeAt);
 
-          // On app startup (first load), don't auto-play
-          // On user-initiated song change, auto-play
-          if (isInitialLoad.current) {
-            isInitialLoad.current = false;
-            if (__DEV__) console.log('[MiniPlayer] Initial load - staying paused');
-          } else {
-            requestPlayback(true);
-            if (__DEV__) console.log('[MiniPlayer] User selected song - auto-playing');
-          }
+          // The last-played song restored at launch waits for a tap; anything
+          // the listener picked plays. (Keyed to that song: a fresh install
+          // used to swallow its first pick because it was the "first load".)
+          if (!takeRestoredLoad(songId)) requestPlayback(true);
         } catch (error) {
           if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
         } finally {

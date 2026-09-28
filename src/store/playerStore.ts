@@ -59,6 +59,16 @@ export function endAudioLoad(songId: string): void {
   if (audioLoadInFlight === songId) audioLoadInFlight = null;
 }
 
+// The song restored at launch (last played) loads paused; every other load
+// plays. Keyed to that song, so a fresh install's first tap still plays.
+let restoredSongId: string | null = null;
+/** True once, for the load of the song restored at launch. */
+export function takeRestoredLoad(songId: string): boolean {
+  if (restoredSongId !== songId) return false;
+  restoredSongId = null;
+  return true;
+}
+
 // Which way the last song change went, so titles and covers can move with it:
 // 1 = forward (next, auto-advance), -1 = back (previous), 0 = a song picked.
 let songDirection: -1 | 0 | 1 = 0;
@@ -213,6 +223,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setInitialSong: (song: Song) => {
+      restoredSongId = song.id;
       set({ currentSongId: song.id, currentSong: song });
   },
   

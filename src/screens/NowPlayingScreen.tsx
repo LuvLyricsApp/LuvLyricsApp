@@ -65,7 +65,10 @@ const CLOSE_SPRING = {
   restSpeedThreshold: 8,
 } as const;
 /** Momentum projection: where a flick would come to rest (deceleration 0.99/ms). */
-const projectMomentum = (velocity: number): number => (velocity / 1000) * (0.99 / (1 - 0.99));
+const projectMomentum = (velocity: number): number => {
+  'worklet';
+  return (velocity / 1000) * (0.99 / (1 - 0.99));
+};
 /** Progressive resistance past the top, instead of a hard stop. */
 const rubberBand = (overshoot: number, dimension: number): number => {
   'worklet';
