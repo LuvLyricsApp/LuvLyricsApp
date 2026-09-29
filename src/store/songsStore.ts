@@ -10,6 +10,7 @@ import { useDailyStatsStore } from './dailyStatsStore';
 import { nativeSearch } from '../services/NativeSearch';
 import { libraryLookup, matchKey } from '../utils/downloadState';
 import { useStreamLikesStore } from './streamLikesStore';
+import { reconcileSongs } from './songsReconcile';
 
 // Deliberately no static import of './playerStore' here: playerStore imports this
 // module, and a back-edge evaluated at init left playerStore half-initialised
@@ -31,6 +32,8 @@ interface SongsState {
   updateSong: (song: Song) => Promise<void>;
   /** Fill in a missing cover (backfill). No-op if the song gained one meanwhile. */
   patchCover: (songId: string, coverImageUri: string) => Promise<void>;
+  /** Several backfilled covers with one store update. */
+  patchCovers: (items: { songId: string; coverImageUri: string }[]) => Promise<void>;
   deleteSong: (id: string) => Promise<void>;
   hideSong: (id: string, hide: boolean) => Promise<void>;
   setCurrentSong: (song: Song | null) => void;
@@ -61,9 +64,11 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
         if (!isBackgroundSync) set({ isLoading: true, error: null });
         
         try {
-          const songs = await queries.getAllSongs();
-          if (__DEV__) console.log('[STORE] Fetched songs:', songs.length);
-          set({ songs, isLoading: false });
+          const fetched = await queries.getAllSongs();
+          if (__DEV__) console.log('[STORE] Fetched songs:', fetched.length);
+          // Same rows keep the same array (and row objects): a refetch on every
+          // Library focus must not re-run the sorts and re-render every screen.
+          set(state => ({ songs: reconcileSongs(state.songs, fetched), isLoading: false }));
         } catch (error) {
           console.error('[STORE] Fetch error:', error);
           set({ 
@@ -120,20 +125,47 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       },
       
       // Update existing song
-      patchCover: async (songId: string, coverImageUri: string) => {
-        const existing = get().songs.find(s => s.id === songId);
-        if (!existing || existing.coverImageUri) return;
-        await queries.patchCoverImageUri(songId, coverImageUri);
+      patchCover: (songId: string, coverImageUri: string) => get().patchCovers([{ songId, coverImageUri }]),
+
+      // Several covers land with one store update, so a backfill of forty songs
+      // re-renders the library a handful of times instead of forty.
+      patchCovers: async (items: { songId: string; coverImageUri: string }[]) => {
+        const bare = new Set(get().songs.filter(s => !s.coverImageUri).map(s => s.id));
+        const wanted = new Map<string, string>();
+        for (const item of items) if (bare.has(item.songId)) wanted.set(item.songId, item.coverImageUri);
+        if (wanted.size === 0) return;
+
+        const saved = new Map<string, string>();
+        for (const [songId, coverImageUri] of wanted) {
+          try {
+            await queries.patchCoverImageUri(songId, coverImageUri);
+            saved.set(songId, coverImageUri);
+          } catch {
+            // One row failing must not stop the rest; it is retried next session.
+          }
+        }
+        if (saved.size === 0) return;
+
         set(state => ({
-          songs: state.songs.map(s => (s.id === songId && !s.coverImageUri ? { ...s, coverImageUri } : s)),
+          songs: state.songs.map(s => {
+            const uri = saved.get(s.id);
+            return uri && !s.coverImageUri ? { ...s, coverImageUri: uri } : s;
+          }),
         }));
         const { usePlayerStore } = await import('./playerStore');
         const player = usePlayerStore.getState();
-        if (player.currentSong?.id === songId && !player.currentSong.coverImageUri) {
-          player.updateCurrentSong({ coverImageUri });
+        const current = player.currentSong;
+        const currentUri = current && saved.get(current.id);
+        if (current && currentUri && !current.coverImageUri) {
+          player.updateCurrentSong({ coverImageUri: currentUri });
         }
-        if (player.playlistQueue?.some(s => s.id === songId)) {
-          player.updateQueue(player.playlistQueue.map(s => (s.id === songId && !s.coverImageUri ? { ...s, coverImageUri } : s)));
+        if (player.playlistQueue?.some(s => saved.has(s.id))) {
+          player.updateQueue(
+            player.playlistQueue.map(s => {
+              const uri = saved.get(s.id);
+              return uri && !s.coverImageUri ? { ...s, coverImageUri: uri } : s;
+            }),
+          );
         }
       },
 

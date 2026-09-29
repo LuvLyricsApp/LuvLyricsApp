@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow } from 'zustand/react/shallow';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { LayoutChangeEvent } from 'react-native';
@@ -57,7 +58,10 @@ const APP_VERSION = appConfig.expo.version;
 const SettingsScreen: React.FC<Props> = () => {
   const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
-  const { fetchSongs, addSong, songs } = useSongsStore();
+  // Selectors, not the whole store: this page stays mounted behind the others.
+  const fetchSongs = useSongsStore(s => s.fetchSongs);
+  const addSong = useSongsStore(s => s.addSong);
+  const songs = useSongsStore(s => s.songs);
   const playerCurrentCover = usePlayerStore(state => state.currentSong?.coverImageUri);
 
   const [, setIsImporting] = React.useState(false);
@@ -80,8 +84,17 @@ const SettingsScreen: React.FC<Props> = () => {
     : activeLanguages.length <= 2
       ? activeLanguages.join(', ')
       : `${activeLanguages.length} selected`;
-  const { hiddenSongs, fetchHiddenSongs, hideSong: unhideSong } = useSongsStore();
-  const { desktopConnectEnabled, allowDesktopDownloads, setDesktopConnectEnabled, setAllowDesktopDownloads } = useDesktopBridgeSettingsStore();
+  const hiddenSongs = useSongsStore(s => s.hiddenSongs);
+  const fetchHiddenSongs = useSongsStore(s => s.fetchHiddenSongs);
+  const unhideSong = useSongsStore(s => s.hideSong);
+  const { desktopConnectEnabled, allowDesktopDownloads, setDesktopConnectEnabled, setAllowDesktopDownloads } = useDesktopBridgeSettingsStore(
+    useShallow(s => ({
+      desktopConnectEnabled: s.desktopConnectEnabled,
+      allowDesktopDownloads: s.allowDesktopDownloads,
+      setDesktopConnectEnabled: s.setDesktopConnectEnabled,
+      setAllowDesktopDownloads: s.setAllowDesktopDownloads,
+    })),
+  );
   const [pairingModalVisible, setPairingModalVisible] = React.useState(false);
   const [pairingPayloadText, setPairingPayloadText] = React.useState('');
   const [pairingBusy, setPairingBusy] = React.useState(false);

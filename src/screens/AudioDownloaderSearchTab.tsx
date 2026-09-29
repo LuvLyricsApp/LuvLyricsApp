@@ -4,6 +4,7 @@ import {
     ActivityIndicator, ScrollView, FlatList, SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
 
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { Tactile } from '../components/allegra/motion';
@@ -131,7 +132,18 @@ interface AudioDownloaderSearchTabProps {
 export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, onDownloadStarted }: AudioDownloaderSearchTabProps) => {
 
     // --- Store ---
-    const { tabs, activeTabId, setActiveTab, closeTab, createTab, updateTab, clearAllSelections, getSelectedSongs } = useDownloaderTabStore();
+    const { tabs, activeTabId, setActiveTab, closeTab, createTab, updateTab, clearAllSelections, getSelectedSongs } = useDownloaderTabStore(
+        useShallow(s => ({
+            tabs: s.tabs,
+            activeTabId: s.activeTabId,
+            setActiveTab: s.setActiveTab,
+            closeTab: s.closeTab,
+            createTab: s.createTab,
+            updateTab: s.updateTab,
+            clearAllSelections: s.clearAllSelections,
+            getSelectedSongs: s.getSelectedSongs,
+        })),
+    );
     const activeTab = tabs.find(t => t.id === activeTabId) ?? tabs[0];
 
     // --- Derived from activeTab ---
@@ -165,7 +177,8 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     // --- Other stores ---
     const existingSongs = useSongsStore(state => state.songs);
-    const { addToQueue } = useDownloadQueueStore();
+    // Just the action: the whole store would re-render this tab on every download tick.
+    const addToQueue = useDownloadQueueStore(s => s.addToQueue);
 
     // --- Handlers ---
     const runSearchWithQuery = useCallback(async (q: string, mode: 'title' | 'artist' = 'title') => {
@@ -657,7 +670,7 @@ const styles = StyleSheet.create({
     },
     searchIcon: { marginLeft: 14 },
     unifiedInput: {
-        flex: 1, color: Signal.ink, fontSize: 15, height: '100%',
+        flex: 1, minWidth: 0, color: Signal.ink, fontSize: 15, height: '100%',
         paddingLeft: 10, paddingRight: 8,
     },
     clearSearchBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 2 },

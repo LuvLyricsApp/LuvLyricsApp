@@ -9,6 +9,7 @@ const RETRY_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const START_DELAY_MS = 4000; // let startup, the library and the first play settle first
 const MAX_PER_SESSION = 40;
 const CONCURRENCY = 2;
+const FLUSH_EVERY = 8; // covers per store update
 
 const sources = [itunesSource, catalogSource(q => searchMusic(q))];
 
@@ -33,6 +34,14 @@ async function runBackfill(): Promise<void> {
       .sort((a, b) => b.playCount - a.playCount)
       .slice(0, MAX_PER_SESSION - doneThisSession);
 
+    // Found covers land in batches: each store update re-renders every screen
+    // that reads the library, so forty single patches were forty re-renders.
+    const found: { songId: string; coverImageUri: string }[] = [];
+    const flush = async () => {
+      const batch = found.splice(0);
+      if (batch.length > 0) await useSongsStore.getState().patchCovers(batch).catch(() => {});
+    };
+
     let cursor = 0;
     const worker = async () => {
       while (cursor < pending.length) {
@@ -40,10 +49,12 @@ async function runBackfill(): Promise<void> {
         const hit = await findCover({ title: song.title, artist: song.artist, duration: song.duration }, sources);
         attempts[song.id] = Date.now();
         doneThisSession++;
-        if (hit) await useSongsStore.getState().patchCover(song.id, hit.artwork).catch(() => {});
+        if (hit) found.push({ songId: song.id, coverImageUri: hit.artwork });
+        if (found.length >= FLUSH_EVERY) await flush();
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
+    await flush();
     await AsyncStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts)).catch(() => {});
   } finally {
     running = false;
