@@ -108,3 +108,17 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "LuvLyrics — luvlyricsapp.apk" \
             --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Download luvlyricsapp.apk below and open it on your Android phone to install. Direct link: https://github.com/${GITHUB_REPOSITORY}/releases/download/luvlyricsapp/luvlyricsapp.apk"
+
+      # The same build as "apk-latest" too: the one link people keep (and the
+      # app's About → Update, services/appUpdate) always gets the newest build.
+      - name: Publish to the apk-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp luvlyricsapp.apk LuvLyrics.apk
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest LuvLyrics.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "LuvLyrics — latest build" \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Download LuvLyrics.apk below and open it on your Android phone to install. Direct link: https://github.com/${GITHUB_REPOSITORY}/releases/download/apk-latest/LuvLyrics.apk"
