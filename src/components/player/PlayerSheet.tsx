@@ -17,6 +17,7 @@ import { SLEEP_CHOICES, SleepChoice, useSleepTimerStore } from '../../store/slee
 import { durationSV, positionSV } from '../../playback/positionBus';
 import * as Haptics from '../../utils/haptics';
 import { shouldCloseSheet } from '../../navigation/sheetClose';
+import { diag } from '../../utils/diag';
 
 const { Gesture, GestureDetector } = GestureHandler;
 
@@ -77,7 +78,11 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
   const shown = useSharedValue(0);
   const drag = useSharedValue(0);
   const scrolled = useSharedValue(0);
-  const list = useMemo(() => Gesture.Native(), []);
+  const list = useMemo(() => Gesture.Native()
+    .onStart(() => {
+      'worklet';
+      runOnJS(diag)('sheet', 'list scroll start');
+    }), []);
   const scrollState = useMemo(() => ({ offset: scrolled, list }), [scrolled, list]);
 
   useEffect(() => {
@@ -112,10 +117,24 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
       'worklet';
       drag.value = Math.max(0, e.translationY);
     })
+    .onStart(() => {
+      'worklet';
+      runOnJS(diag)('sheet', `pan start (list scrolled ${scrolled.value.toFixed(0)})`);
+    })
     .onEnd(e => {
       'worklet';
-      if (shouldCloseSheet(e.translationY, e.velocityY)) runOnJS(onClose)();
+      const close = shouldCloseSheet(e.translationY, e.velocityY);
+      runOnJS(diag)('sheet', `pan end dy ${e.translationY.toFixed(0)} vy ${e.velocityY.toFixed(0)} -> ${close ? 'close' : 'settle'}`);
+      if (close) runOnJS(onClose)();
       else drag.value = withSpring(0, Motion.spring.sheet);
+    })
+    .onFinalize((_e, success) => {
+      'worklet';
+      // A pan the list's scroll cancels never reaches onEnd: settle back
+      // instead of leaving the sheet where the finger let go.
+      if (success) return;
+      runOnJS(diag)('sheet', 'pan cancelled or failed');
+      drag.value = withSpring(0, Motion.spring.sheet);
     });
 
   if (!mounted) return null;
