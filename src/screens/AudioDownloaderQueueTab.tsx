@@ -3,7 +3,7 @@
  * progress as a wave-coloured bar that grows by transform (never width), with
  * pause / resume / retry / remove one tap away.
  */
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Artwork from '../components/allegra/Artwork';
@@ -12,6 +12,7 @@ import { GlassButton } from '../components/allegra/home';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import * as Haptics from '../utils/haptics';
 import { useDownloadQueueStore, QueueItem } from '../store/downloadQueueStore';
+import { useDownloadItem, useQueueShape } from '../store/downloadQueueSelectors';
 import { countOf } from '../utils/formatters';
 
 const STATUS_TEXT: Record<QueueItem['status'], string> = {
@@ -34,16 +35,18 @@ const IconAction: React.FC<{ icon: React.ComponentProps<typeof Ionicons>['name']
   </Tactile>
 );
 
-const QueueRow = memo(({ item }: { item: QueueItem }) => {
+// Each row reads its own item, so a progress tick re-renders one row, not the list.
+const QueueRow = memo(({ id }: { id: string }) => {
+  const item = useDownloadItem(id);
   const removeItem = useDownloadQueueStore(s => s.removeItem);
   const pauseItem = useDownloadQueueStore(s => s.pauseItem);
   const resumeItem = useDownloadQueueStore(s => s.resumeItem);
   const retryItem = useDownloadQueueStore(s => s.retryItem);
 
-  const handlePause = useCallback(() => pauseItem(item.id), [pauseItem, item.id]);
-  const handleResume = useCallback(() => resumeItem(item.id), [resumeItem, item.id]);
-  const handleRetry = useCallback(() => retryItem(item.id), [retryItem, item.id]);
-  const handleRemove = useCallback(() => removeItem(item.id), [removeItem, item.id]);
+  const handlePause = useCallback(() => pauseItem(id), [pauseItem, id]);
+  const handleResume = useCallback(() => resumeItem(id), [resumeItem, id]);
+  const handleRetry = useCallback(() => retryItem(id), [retryItem, id]);
+  const handleRemove = useCallback(() => removeItem(id), [removeItem, id]);
 
   if (!item?.song) return null;
 
@@ -86,22 +89,26 @@ const QueueRow = memo(({ item }: { item: QueueItem }) => {
   );
 });
 
-// Isolated: only this subtree re-renders on queue changes (max 4/sec due to store throttle)
+// The list follows the queue's shape (items and their state), not its progress.
 export const AudioDownloaderQueueTab = memo(() => {
-  const queue = useDownloadQueueStore(s => s.queue);
+  const shape = useQueueShape();
   const clearCompleted = useDownloadQueueStore(s => s.clearCompleted);
-  const done = queue.filter(i => i.status === 'completed').length;
-  const active = queue.length - done;
+  const { ids, done } = useMemo(() => {
+    const queue = useDownloadQueueStore.getState().queue;
+    return { ids: queue.map(i => i.id), done: queue.filter(i => i.status === 'completed').length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shape]);
+  const active = ids.length - done;
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={queue}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => <QueueRow item={item} />}
+        data={ids}
+        keyExtractor={id => id}
+        renderItem={({ item }) => <QueueRow id={item} />}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          queue.length > 0 ? (
+          ids.length > 0 ? (
             <View style={styles.summary}>
               <Text style={styles.summaryText}>
                 {active > 0 ? `${countOf(active, 'song')} on the way` : 'Everything is saved'}

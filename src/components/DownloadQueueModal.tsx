@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Modal, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDownloadQueueStore, QueueItem } from '../store/downloadQueueStore';
+import { useDownloadItem, useQueueShape } from '../store/downloadQueueSelectors';
 import { Frosted } from './allegra/Frosted';
 import { Artwork } from './allegra/Artwork';
 import { DownloadButton } from './stream/DownloadButton';
@@ -29,9 +30,12 @@ const statusLine = (item: QueueItem): string => {
   }
 };
 
-const QueueRow: React.FC<{ item: QueueItem }> = ({ item }) => {
+// Reads its own item, so a progress tick re-renders one row, not the sheet.
+const QueueRow: React.FC<{ id: string }> = ({ id }) => {
+  const item = useDownloadItem(id);
   const removeItem = useDownloadQueueStore(state => state.removeItem);
   const retryItem = useDownloadQueueStore(state => state.retryItem);
+  if (!item?.song) return null;
   const title = item.song.title || 'Untitled';
   const artist = item.song.artist || 'Unknown artist';
   const moving = item.status === 'downloading' || item.status === 'paused';
@@ -69,13 +73,18 @@ const QueueRow: React.FC<{ item: QueueItem }> = ({ item }) => {
   );
 };
 
-const renderItem = ({ item }: { item: QueueItem }) => (item?.song ? <QueueRow item={item} /> : null);
+const renderItem = ({ item }: { item: string }) => <QueueRow id={item} />;
 
 export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps) => {
-  const queue = useDownloadQueueStore(state => state.queue);
+  // The list follows the queue's shape (items and their state), not its progress.
+  const shape = useQueueShape();
   const clearCompleted = useDownloadQueueStore(state => state.clearCompleted);
   const insets = useSafeAreaInsets();
-  const done = queue.filter(i => i.status === 'completed').length;
+  const { ids, done } = useMemo(() => {
+    const queue = useDownloadQueueStore.getState().queue;
+    return { ids: queue.map(i => i.id), done: queue.filter(i => i.status === 'completed').length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shape]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -92,9 +101,9 @@ export const DownloadQueueModal = ({ visible, onClose }: DownloadQueueModalProps
           </View>
 
           <FlatList
-            data={queue}
+            data={ids}
             renderItem={renderItem}
-            keyExtractor={item => item.id}
+            keyExtractor={id => id}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>

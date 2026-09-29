@@ -38,7 +38,8 @@ import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { TrackRow } from '../components/stream/StreamItems';
 import { useSongsStore } from '../store/songsStore';
 import { usePlayerStore } from '../store/playerStore';
-import { QueueItem, useDownloadQueueStore } from '../store/downloadQueueStore';
+import { useDownloadQueueStore } from '../store/downloadQueueStore';
+import { useDownloadItem, useQueueShape } from '../store/downloadQueueSelectors';
 import { useBottomClearance } from '../hooks/useBottomClearance';
 import { Song } from '../types/song';
 import { shuffled } from '../utils/shuffle';
@@ -61,6 +62,26 @@ const sorters: Record<SortMode, (a: Song, b: Song) => number> = {
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Song>);
 
+/** A song still arriving. It reads its own queue item, so its progress ticks re-render this row alone. */
+const ActiveDownloadRow: React.FC<{ id: string; onRetry: (id: string) => void }> = ({ id, onRetry }) => {
+  const item = useDownloadItem(id);
+  if (!item) return null;
+  const failed = item.status === 'failed';
+  return (
+    <TrackRow
+      title={item.song.title}
+      artist={item.song.artist}
+      artwork={item.song.highResArt}
+      meta={failed ? 'Failed' : item.stageStatus || item.status}
+      progress={failed ? undefined : item.progress}
+      onPress={() => {}}
+      trailingIcon={failed ? 'refresh' : undefined}
+      trailingLabel="Retry download"
+      onTrailingPress={failed ? () => onRetry(item.id) : undefined}
+    />
+  );
+};
+
 const LibraryScreen: React.FC = () => {
   const { width: screenW, height: screenH } = useWindowDimensions();
   // The middle glass card's width; its neighbours peek out either side.
@@ -72,7 +93,10 @@ const LibraryScreen: React.FC = () => {
   const actions = useSongActions();
   const [queueOpen, setQueueOpen] = useState(false);
   const songs = useSongsStore(s => s.songs);
-  const queue = useDownloadQueueStore(s => s.queue);
+  // The queue's shape, not the queue: this page stays mounted, and progress ticks
+  // (four a second per download) must not re-render its lists. Each downloading
+  // row reads its own item.
+  const queueShape = useQueueShape();
   const retryItem = useDownloadQueueStore(s => s.retryItem);
   const clearCompleted = useDownloadQueueStore(s => s.clearCompleted);
   const currentSongId = usePlayerStore(s => s.currentSongId);
@@ -110,8 +134,12 @@ const LibraryScreen: React.FC = () => {
 
   // The room takes the colour of what's playing, else of the front of the deck.
   const palette = useArtworkPalette(currentCover ?? deck[0]?.coverImageUri);
-  const active = useMemo(() => queue.filter(q => q.status !== 'completed'), [queue]);
-  const doneCount = queue.length - active.length;
+  const { activeIds, doneCount } = useMemo(() => {
+    const queue = useDownloadQueueStore.getState().queue;
+    const inFlight = queue.filter(q => q.status !== 'completed');
+    return { activeIds: inFlight.map(q => q.id), doneCount: queue.length - inFlight.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueShape]);
 
   // Songs can change elsewhere (a download lands, lyrics arrive): refresh on focus.
   useEffect(() => navigation.addListener('focus', () => { fetchSongs(); }), [navigation, fetchSongs]);
@@ -159,26 +187,11 @@ const LibraryScreen: React.FC = () => {
     listRef.current?.scrollToIndex({ index, animated: false, viewOffset: insets.top + 72 });
   }, [insets.top]);
 
-  const renderActive = (item: QueueItem) => (
-    <TrackRow
-      key={item.id}
-      title={item.song.title}
-      artist={item.song.artist}
-      artwork={item.song.highResArt}
-      meta={item.status === 'failed' ? 'Failed' : item.stageStatus || item.status}
-      progress={item.status === 'failed' ? undefined : item.progress}
-      onPress={() => {}}
-      trailingIcon={item.status === 'failed' ? 'refresh' : undefined}
-      trailingLabel="Retry download"
-      onTrailingPress={item.status === 'failed' ? () => retryItem(item.id) : undefined}
-    />
-  );
-
   const headerButtons = (
     <View style={styles.topActions}>
       <Tactile onPress={() => setQueueOpen(true)} hitSlop={8} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Download queue" style={styles.iconButton}>
         <Ionicons name="arrow-down" size={20} color={Signal.ink} />
-        {active.length > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{active.length}</Text></View> : null}
+        {activeIds.length > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{activeIds.length}</Text></View> : null}
       </Tactile>
       <Tactile onPress={() => navigation.navigate('Playlists')} hitSlop={8} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Playlists" style={styles.iconButton}>
         <Ionicons name="albums-outline" size={20} color={Signal.ink} />
@@ -222,15 +235,15 @@ const LibraryScreen: React.FC = () => {
         </>
       ) : null}
 
-      {active.length > 0 ? (
+      {activeIds.length > 0 ? (
         <>
           <SectionHeading
             title="Downloading"
-            subtitle={`${active.length} in progress`}
+            subtitle={`${activeIds.length} in progress`}
             action={doneCount > 0 ? 'Clear done' : undefined}
             onAction={doneCount > 0 ? clearCompleted : undefined}
           />
-          {active.map(renderActive)}
+          {activeIds.map(id => <ActiveDownloadRow key={id} id={id} onRetry={retryItem} />)}
         </>
       ) : null}
 
