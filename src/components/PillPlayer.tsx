@@ -32,7 +32,8 @@ import Animated, {
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from '../utils/haptics';
 import Artwork from './allegra/Artwork';
-import { MorphIcon, NudgeIcon, SwapText, Tactile } from './allegra/motion';
+import { MorphIcon, NudgeIcon, Tactile } from './allegra/motion';
+import { SwapMarquee } from './allegra/Marquee';
 import { useArtworkPalette } from './allegra/useArtworkPalette';
 import { pillTint } from './allegra/palette';
 import { Motion } from '../constants/allegraTheme';
@@ -213,6 +214,12 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
       // Let go: it springs home from where it shows and settles with a small bounce.
       dragX.value = withSpring(0, PILL_BOUNCE);
       dragY.value = withSpring(0, PILL_BOUNCE);
+    })
+    // Opening the player mid-swipe can cancel this gesture before onEnd runs
+    // (the player route mounts over the pill), so it always goes home here too.
+    .onFinalize(() => {
+      dragX.value = withSpring(0, PILL_BOUNCE);
+      dragY.value = withSpring(0, PILL_BOUNCE);
     });
 
   return (
@@ -256,8 +263,8 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
           </View>
 
           <View style={styles.meta}>
-            <SwapText style={styles.title} numberOfLines={1} direction={songDirection}>{title}</SwapText>
-            {artist ? <SwapText style={styles.artist} numberOfLines={1} direction={songDirection}>{artist}</SwapText> : null}
+            <SwapMarquee style={styles.title} direction={songDirection} active={!sheetUp}>{title}</SwapMarquee>
+            {artist ? <SwapMarquee style={styles.artist} direction={songDirection} active={!sheetUp}>{artist}</SwapMarquee> : null}
           </View>
 
           <Tactile onPress={previous} hitSlop={8} pressScale={0.85} accessibilityRole="button" accessibilityLabel="Previous" style={styles.skip}>

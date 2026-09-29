@@ -21,6 +21,12 @@
 #   transition-*.png     frames taken during page changes (no white flashes)
 #   library.png, settings.png, search.png, playlists.png, luvs.png
 #   luvs-across.png, luvs-deeper.png  the taste map after a swipe across, then up
+#   look-settings-glass.png, look-settings-black.png  Settings with the liquid glass, then the pure black pill
+#                        (and the frame rate readout); the pickers must not wrap
+#   look-app-glow.png, look-app-glow-library.png  the glow app background on Stream and Library
+#   look-player-aura(-2).png  the shader wash player, then 6s later
+#   look-player-vinyl(-2).png  the cover as a record, then 5s later (it has turned)
+#   gesture-*.png        double tap, swipe to next / previous, the queue sheet and the layered swipe down
 #   playback.txt         media session state before/after 45s in the background
 #   diag.txt             the app's [diag:*] lines (canvas, Apple token, player)
 set -u

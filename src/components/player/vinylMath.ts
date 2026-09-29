@@ -20,19 +20,47 @@ export const unit = (i: number): number => {
 export interface Stop { at: number; color: string }
 
 /**
- * The two lobes of reflected light around the record, as sweep-gradient stops:
- * a strong one and a softer one opposite it, each with a warm and a cool fringe.
+ * The reflections on a record, as sweep-gradient stops: a strong lobe of light
+ * and a softer one opposite it, each with a thin bright glint at its heart —
+ * the way a lamp shows in grooves, wide and soft with a sharp core. The edges
+ * of a lobe carry a whisper of the cover's colours (warm one side, cool the
+ * other), like a record catching a coloured lamp.
+ *
+ * The profile is periodic, so the sweep's seam at the top is invisible.
  */
+interface Lobe { centre: number; width: number; peak: number }
+const LOBES: readonly Lobe[] = [
+  { centre: 0.375, width: 0.075, peak: 0.36 },
+  { centre: 0.375, width: 0.014, peak: 0.42 },
+  { centre: 0.875, width: 0.06, peak: 0.24 },
+  { centre: 0.875, width: 0.011, peak: 0.3 },
+];
+const SAMPLES = 96;
+
 export const lobeStops = (palette: AuraPalette): Stop[] => {
-  const clear = 'rgba(255,255,255,0)';
-  const lobe = (centre: number, half: number, peak: number): Stop[] => [
-    { at: centre - half, color: clear },
-    { at: centre - half * 0.55, color: rgba(palette.secondary, peak * 0.55) },
-    { at: centre, color: `rgba(255,255,255,${peak})` },
-    { at: centre + half * 0.55, color: rgba(palette.tertiary, peak * 0.55) },
-    { at: centre + half, color: clear },
-  ];
-  return [{ at: 0, color: clear }, ...lobe(0.375, 0.085, 0.34), ...lobe(0.875, 0.07, 0.24), { at: 1, color: clear }];
+  const warm = hexToRgb(palette.secondary).map(c => c * 255);
+  const cool = hexToRgb(palette.tertiary).map(c => c * 255);
+  const stops: Stop[] = [];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const p = i / SAMPLES;
+    let alpha = 0;
+    let lead = { weight: 0, offset: 0 };
+    for (const lobe of LOBES) {
+      // Distance round the circle, so p = 0 and p = 1 are the same point.
+      let d = p - lobe.centre;
+      d -= Math.round(d);
+      const g = lobe.peak * Math.exp(-Math.pow(d / lobe.width, 2));
+      alpha += g;
+      if (g > lead.weight) lead = { weight: g, offset: d / lobe.width };
+    }
+    alpha = Math.min(0.62, alpha);
+    // Away from a lobe's heart the light takes on the cover's warm or cool colour.
+    const tint = lead.offset < 0 ? warm : cool;
+    const mix = Math.min(0.7, Math.abs(lead.offset) * 0.5);
+    const [r, g, b] = [0, 1, 2].map(k => Math.round(255 + (tint[k] - 255) * mix));
+    stops.push({ at: p, color: `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})` });
+  }
+  return stops;
 };
 
 /** Arm angles in degrees about the pivot: resting beside the record, and on the outer groove. */

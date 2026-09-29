@@ -41,8 +41,8 @@ import type { Song } from '../../types/song';
 const SETTLE = { stiffness: 220, damping: 26, mass: 1 } as const;
 /** Cards within this distance of the centre are drawn; the rest wait out of sight. */
 const REACH = 2.4;
-const TILT_DEG = 34;
-const PERSPECTIVE = 900;
+const TILT_DEG = 26;
+const PERSPECTIVE = 1300;
 
 interface GlassDeckProps {
   songs: Song[];
@@ -54,6 +54,8 @@ interface GlassDeckProps {
   onPlay: (song: Song) => void;
   onTogglePlay: () => void;
   onShuffle: () => void;
+  /** The card in the middle to start with (0 = the first). */
+  initialIndex?: number;
 }
 
 const Plate: React.FC<{
@@ -75,9 +77,10 @@ const Plate: React.FC<{
       transform: [
         { perspective: PERSPECTIVE },
         { translateX: flowOffset(d, step) },
-        // A card on the left turns its face towards the middle, and the other way round.
-        { rotateY: `${turn * TILT_DEG}deg` },
-        { scale: interpolate(a, [0, 1, 2], [1, 0.84, 0.72], Extrapolation.CLAMP) },
+        // A card on the left turns its face towards the middle (its inner edge
+        // recedes), and the other way round.
+        { rotateY: `${-turn * TILT_DEG}deg` },
+        { scale: interpolate(a, [0, 1, 2], [1, 0.8, 0.66], Extrapolation.CLAMP) },
       ] as const,
     };
   });
@@ -110,19 +113,25 @@ const Plate: React.FC<{
   );
 });
 
-export const GlassDeck: React.FC<GlassDeckProps> = ({ songs, size, currentId, isPlaying, onPlay, onTogglePlay, onShuffle }) => {
+export const GlassDeck: React.FC<GlassDeckProps> = ({ songs, size, currentId, isPlaying, onPlay, onTogglePlay, onShuffle, initialIndex = 0 }) => {
   const n = songs.length;
   const reduce = useReducedMotion();
-  const position = useSharedValue(0);
-  const start = useSharedValue(0);
-  const [focus, setFocus] = useState(0);
+  const first = Math.min(Math.max(0, initialIndex), Math.max(0, n - 1));
+  const position = useSharedValue(first);
+  const start = useSharedValue(first);
+  const [focus, setFocus] = useState(first);
   const height = Math.round(size * 1.2);
   const step = Math.round(size * 0.66);
   const stageWidth = size + step * 2;
 
   // A different set of songs starts from the first card.
   const signature = songs.map(s => s.id).join('|');
+  const firstRun = React.useRef(true);
   useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
     position.value = 0;
     setFocus(0);
   }, [signature, position]);

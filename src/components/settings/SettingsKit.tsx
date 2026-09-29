@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, interpolateColor } from 'react-native-reanimated';
 import { Glass, Motion, Radius, Signal } from '../../constants/allegraTheme';
 import * as Haptics from '../../utils/haptics';
+import { choiceColumns } from './choiceLayout';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -82,12 +83,9 @@ export const Switch: React.FC<{ label: string; hint?: string; value: boolean; on
 };
 
 /**
- * Never wraps: up to three short options share one row, four or more sit in a
- * two-column grid, and every cell is the same width, so a label can't drop to
- * a row of its own.
+ * Never wraps or cuts a label: see choiceLayout. Every cell is the same width,
+ * so a label can't drop to a row of its own.
  */
-const choiceColumns = (count: number): number => (count <= 3 ? Math.max(1, count) : 2);
-
 export function Choice<T extends string>({ label, hint, value, options, onChange }: {
   label: string;
   hint?: string;
@@ -95,14 +93,18 @@ export function Choice<T extends string>({ label, hint, value, options, onChange
   options: readonly { value: T; label: string }[];
   onChange: (next: T) => void;
 }) {
-  const columns = choiceColumns(options.length);
+  const columns = choiceColumns(options.map(o => o.label));
+  // One row is a segmented pill: the box and the selected pill share a curve
+  // (the box's radius is the pill's plus the padding around it). Several rows
+  // are separate pills with no box around them, so no two curves ever disagree.
+  const segmented = columns === options.length;
   const rows: { value: T; label: string }[][] = [];
   for (let i = 0; i < options.length; i += columns) rows.push(options.slice(i, i + columns));
   return (
     <Row label={label} hint={hint} stack>
-      <View style={styles.choice} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <View style={segmented ? styles.choice : styles.choiceGrid} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {rows.map((row, r) => (
-          <View key={r} style={styles.choiceRow}>
+          <View key={r} style={segmented ? styles.choiceRow : styles.choiceGridRow}>
             {row.map(o => {
               const selected = o.value === value;
               return (
@@ -111,7 +113,7 @@ export function Choice<T extends string>({ label, hint, value, options, onChange
                   onPress={() => { if (!selected) { Haptics.selectionAsync().catch(() => {}); onChange(o.value); } }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  style={[styles.choiceOption, selected && styles.choiceOptionOn]}
+                  style={[styles.choiceOption, !segmented && styles.choiceChip, selected && styles.choiceOptionOn]}
                 >
                   <Text style={[styles.choiceText, selected && styles.choiceTextOn]} numberOfLines={1}>{o.label}</Text>
                 </Pressable>
@@ -190,10 +192,15 @@ const styles = StyleSheet.create({
   destructive: { color: Signal.accent },
   track: { width: TRACK_W, height: 28, borderRadius: 14, padding: 4, justifyContent: 'center' },
   thumb: { width: THUMB, height: THUMB, borderRadius: THUMB / 2 },
-  choice: { gap: 4, padding: 4, borderRadius: 22, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  // Segmented: 38pt pills 4pt inside the box, so the box's radius is 19 + 4 = 23.
+  choice: { padding: 4, borderRadius: 23, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
   choiceRow: { flexDirection: 'row', gap: 4 },
-  choiceOption: { flex: 1, minHeight: 38, paddingHorizontal: 10, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  choicePad: { flex: 1 },
+  // Grid: each option is its own pill.
+  choiceGrid: { gap: 8 },
+  choiceGridRow: { flexDirection: 'row', gap: 8 },
+  choiceOption: { flex: 1, flexBasis: 0, minHeight: 38, paddingHorizontal: 10, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  choiceChip: { minHeight: 42, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong },
+  choicePad: { flex: 1, flexBasis: 0 },
   choiceOptionOn: { backgroundColor: Signal.wave },
   choiceText: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600' },
   choiceTextOn: { color: Signal.waveInk },
