@@ -13,14 +13,23 @@
  * step it at 30fps (performanceTier), and it stops when `active` is false.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, PixelRatio, StyleSheet, View } from 'react-native';
 import { Canvas, Fill, RadialGradient, Rect, vec } from '@shopify/react-native-skia';
 import { Easing, useDerivedValue, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
 import { isLowEndDevice } from '../../utils/performanceTier';
 
 import { Blob, BASE, CYCLE_S, FADE_MS, MINI_BLOBS, oscillate, PLAYER_BLOBS, rgba, rotatedColorAt, toRgb } from './glowMath';
 
-const FRAME_S = isLowEndDevice() ? 1 / 30 : 0;
+const LOW_END = isLowEndDevice();
+const FRAME_S = LOW_END ? 1 / 30 : 0;
+/** Surfaces bigger than this (points squared) are drawn at a reduced size. */
+const LARGE_AREA = 90_000;
+/** About one device pixel per point (0.6 on low-end phones), never more than half size. */
+const RENDER_SCALE = Math.min(0.5, (LOW_END ? 0.6 : 1) / PixelRatio.get());
+
+const styles = StyleSheet.create({
+  clip: { overflow: 'hidden' },
+});
 
 const GlowBlob: React.FC<{
   blob: Blob;
@@ -92,15 +101,24 @@ const GlowBackground: React.FC<GlowBackgroundProps> = ({ colors, variant = 'play
 
   const blobs = variant === 'mini' ? MINI_BLOBS : PLAYER_BLOBS;
   const { width, height } = size;
+  // The glows are soft gradients, so a big surface is drawn small and scaled up
+  // (about one device pixel per point): six full-screen radial gradients redrawn
+  // every frame under the lyrics were the heaviest thing on the GPU there.
+  const scale = width * height > LARGE_AREA ? RENDER_SCALE : 1;
+  const cw = Math.max(1, Math.round(width * scale));
+  const ch = Math.max(1, Math.round(height * scale));
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
+    <View style={[StyleSheet.absoluteFill, styles.clip]} pointerEvents="none" onLayout={onLayout}>
       {width > 0 && height > 0 ? (
-        <Canvas style={StyleSheet.absoluteFill}>
-          <Fill color={BASE} />
-          {blobs.map((blob, i) => (
-            <GlowBlob key={i} blob={blob} index={i} width={width} height={height} progress={progress} from={from} to={to} mix={mix} />
-          ))}
-        </Canvas>
+        // The transform lives on a wrapper: Skia's Canvas doesn't forward it on every platform.
+        <View style={{ width: cw, height: ch, transform: [{ translateX: (width - cw) / 2 }, { translateY: (height - ch) / 2 }, { scale: 1 / scale }] }}>
+          <Canvas style={{ width: cw, height: ch }}>
+            <Fill color={BASE} />
+            {blobs.map((blob, i) => (
+              <GlowBlob key={i} blob={blob} index={i} width={cw} height={ch} progress={progress} from={from} to={to} mix={mix} />
+            ))}
+          </Canvas>
+        </View>
       ) : null}
     </View>
   );
