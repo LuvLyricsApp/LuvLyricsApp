@@ -7,6 +7,11 @@ Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   enabled: !__DEV__,
   tracesSampleRate: 0.2,
+  // Both of these run all the time a trace is open: stall tracking keeps a
+  // timer ticking on the JS thread, native frames tracking hooks every frame.
+  // Traces stay on; the always-on watchers do not.
+  enableStallTracking: false,
+  enableNativeFramesTracking: false,
 });
 
 import App from './App';

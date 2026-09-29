@@ -21,6 +21,8 @@ import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { getPreloadedData } from './services/NativeStartup';
 import { ensureSearchIndex } from './services/NativeSearch';
+import { runWhenIdle } from './services/bootPhases';
+import { isBatterySaverOn } from './utils/batterySaver';
 import { SF_FONT_MAP } from './constants/fonts';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
@@ -114,16 +116,6 @@ const App: React.FC = () => {
           // Open the write connection (fast — Kotlin already opened read-only above)
           await initDatabase();
 
-          // Restore any downloads that were in-flight when the app was last killed
-          import('./store/downloadQueueStore')
-            .then(m => m.useDownloadQueueStore.getState().hydrateFromDb())
-            .catch(() => {});
-
-          // Restore any lyrics scan jobs that were pending when the app was last killed
-          import('./store/lyricsScanQueueStore')
-            .then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb())
-            .catch(() => {});
-
           const { usePlaylistStore } = await import('./store/playlistStore');
 
           if (preloaded && preloaded.songs.length > 0) {
@@ -151,25 +143,39 @@ const App: React.FC = () => {
             if (lastPlayed) usePlayerStore.getState().setInitialSong(lastPlayed);
           }
 
-          // Start desktop bridge if previously enabled
-          import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()).catch(console.error);
+          // Everything below waits for the first frame (see services/bootPhases).
+          // Each job runs once touches have settled, staggered so they don't
+          // land in a burst on the JS thread.
 
-          // Pre-fetch Luvs for instant playback
-          import('./services/luvsEngine').then(m => m.luvsEngine.prefetch()).catch(console.error);
+          // Restore downloads and lyrics scans that were in flight when the app was killed.
+          runWhenIdle('download queue', () =>
+            import('./store/downloadQueueStore').then(m => m.useDownloadQueueStore.getState().hydrateFromDb()));
+          runWhenIdle('lyrics scan queue', () =>
+            import('./store/lyricsScanQueueStore').then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb()), 150);
 
-          // Build/verify FTS5 search index in background (Android only; no-op on iOS)
-          ensureSearchIndex().catch(() => {});
+          // Start the desktop bridge if it was on. It still starts by itself, just after the first frame.
+          runWhenIdle('desktop bridge', () =>
+            import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()), 300);
+
+          // Build or verify the FTS5 search index (Android only; no-op on iOS).
+          runWhenIdle('search index', () => ensureSearchIndex(), 600);
+
+          // Warm Luvs so the first open is instant. It syncs the library, asks
+          // for taste picks over the network and fetches a feed, so it goes
+          // last and is skipped under Battery Saver (opening Luvs loads it then).
+          runWhenIdle('luvs warm-up', () => {
+            if (isBatterySaverOn()) return;
+            return import('./services/luvsEngine').then(m => m.luvsEngine.prefetch());
+          }, 4000);
+
+          // Playlist migration, likewise after the UI has rendered.
+          runWhenIdle('playlist migration', async () => {
+            const { migratePlaylistData } = await import('./database/db_migration');
+            await migratePlaylistData();
+          }, 900);
 
           if (__DEV__) console.log('[APP] Initialization successful');
           setIsReady(true);
-          
-          // Run playlist migration AFTER UI renders (prevents startup freeze)
-          import('react-native').then(({ InteractionManager }) => {
-            InteractionManager.runAfterInteractions(async () => {
-              const { migratePlaylistData } = await import('./database/db_migration');
-              await migratePlaylistData();
-            });
-          });
 
           return; // Success - exit retry loop
         } catch (err) {
