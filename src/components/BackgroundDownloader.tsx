@@ -7,6 +7,8 @@ import { lyricaService } from '../services/LyricaService';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { processLyricsScanQueue } from '../services/lyricsScanWorker';
 import { usePlaylistStore } from '../store/playlistStore';
+import { useStreamLikesStore } from '../store/streamLikesStore';
+import { matchKey } from '../utils/downloadState';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as playlistQueries from '../database/playlistQueries';
 import { downloadManager } from '../services/DownloadManager';
@@ -196,6 +198,13 @@ export const BackgroundDownloader = () => {
                 if (__DEV__) console.log(`[BackgroundDownloader] Calling addSong...`);
                 await addSong(newSong);
 
+                // A streamed song the listener liked while it downloaded: the like
+                // goes on the row it just got, which puts it in Liked songs.
+                if (useStreamLikesStore.getState().take(matchKey(newSong.title, newSong.artist))) {
+                    const playlists = usePlaylistStore.getState();
+                    if (!playlists.likedSongIds.has(newSong.id)) playlists.toggleLiked(newSong.id).catch(() => {});
+                }
+
                 // Beta: silently fetch YouTube videoId after song saved
                 const apiKey = useSettingsStore.getState().youtubeApiKey;
                 if (apiKey) {
@@ -246,6 +255,7 @@ export const BackgroundDownloader = () => {
                 // Also remove from active set on error before updating status
                 activeDownloads.current.delete(item.id);
                 
+                useStreamLikesStore.getState().remove(matchKey(item.song.title, item.song.artist));
                 updateItem(item.id, { status: 'failed', error: errorMessage, stageStatus: 'Failed' });
             } finally {
                 // Double check cleanup just in case

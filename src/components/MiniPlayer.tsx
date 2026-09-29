@@ -243,7 +243,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const navBarStyle = useSettingsStore(state => state.navBarStyle);
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
-  const isLiked = useIsSongLiked(currentSong?.id);
+  const isLiked = useIsSongLiked(currentSong?.id, currentSong);
 
   // The pill stays mounted under the player sheet so it can hand over to it
   // (PillPlayer reads the sheet's progress); anything else hides it outright.

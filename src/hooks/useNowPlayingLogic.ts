@@ -12,12 +12,12 @@ import * as queries from '../database/queries';
 import { getGradientColors } from '../constants/gradients';
 import { extractAlbumColors } from '../services/NativePalette';
 import { SynchronizedLyricsRef } from '../components/SynchronizedLyrics';
-import { useIsSongLiked } from '../hooks/useIsSongLiked';
+import { useSongLikeState } from '../hooks/useIsSongLiked';
 
 export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   const player = usePlayer();
   const currentSong = usePlayerStore(state => state.currentSong);
-  const isCurrentSongLiked = useIsSongLiked(currentSong?.id);
+  const { liked: isCurrentSongLiked, saving: isCurrentSongSaving } = useSongLikeState(currentSong);
   const showTransliteration = usePlayerStore(state => state.showTransliteration);
   const updateCurrentSong = usePlayerStore(state => state.updateCurrentSong);
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
@@ -263,6 +263,7 @@ export function useNowPlayingLogic(songId: string, initialLyrics = false) {
   return {
     currentSong,
     isCurrentSongLiked,
+    isCurrentSongSaving,
     showCoverSearch,
     setShowCoverSearch,
     controlsVisible,

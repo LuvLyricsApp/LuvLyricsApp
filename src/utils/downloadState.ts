@@ -77,3 +77,15 @@ export const downloadStateOf = (
       return inLibrary ? { phase: 'saved', progress: 1 } : { phase: 'idle', progress: 0 };
   }
 };
+
+const lookupCache = new WeakMap<object, Map<string, { id: string }>>();
+
+/** The library song for each key, for finding the row a catalog song already has. Cached per songs array. */
+export const libraryLookup = <T extends { id: string; title: string; artist?: string; audioUri?: string }>(songs: readonly T[]): Map<string, T> => {
+  const cached = lookupCache.get(songs);
+  if (cached) return cached as Map<string, T>;
+  const map = new Map<string, T>();
+  for (const s of songs) if (s.audioUri) map.set(matchKey(s.title, s.artist), s);
+  lookupCache.set(songs, map);
+  return map;
+};

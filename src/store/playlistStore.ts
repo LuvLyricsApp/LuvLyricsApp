@@ -215,10 +215,14 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
 
   // Toggle Liked Status (The Heart Icon Action)
   toggleLiked: async (songId) => {
+    // The playlists may not have loaded yet (or the Liked songs one was never
+    // created): load them once before giving up, so a tap is never silently lost.
+    if (!get().defaultPlaylistId) await get().fetchPlaylists();
     const { defaultPlaylistId, likedSongIds } = get();
-    
+
     if (!defaultPlaylistId) {
       console.error('[PLAYLIST_STORE] No default playlist found!');
+      set({ error: 'Liked songs is not available' });
       return;
     }
 

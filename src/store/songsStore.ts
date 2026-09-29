@@ -8,6 +8,8 @@ import { Song, SortOption } from '../types/song';
 import * as queries from '../database/queries';
 import { useDailyStatsStore } from './dailyStatsStore';
 import { nativeSearch } from '../services/NativeSearch';
+import { libraryLookup, matchKey } from '../utils/downloadState';
+import { useStreamLikesStore } from './streamLikesStore';
 
 // Deliberately no static import of './playerStore' here: playerStore imports this
 // module, and a back-edge evaluated at init left playerStore half-initialised
@@ -34,9 +36,15 @@ interface SongsState {
   setCurrentSong: (song: Song | null) => void;
   setSortBy: (sort: SortOption) => void;
   searchSongs: (query: string) => Promise<Song[]>;
-  toggleLike: (songId: string) => Promise<void>;
+  toggleLike: (songId: string) => Promise<LikeResult>;
   clearError: () => void;
 }
+
+/**
+ * What a tap on a heart did: `saving` is a streamed song being downloaded into
+ * the library, where the like will land when it arrives.
+ */
+export type LikeResult = 'liked' | 'unliked' | 'saving' | 'error';
 
 export const useSongsStore = create<SongsState>()((set, get) => ({
       // Initial state
@@ -240,17 +248,34 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
       // We still patch songsStore and playerStore in-memory so legacy
       // consumers that read song.isLiked directly (list rows,
       // SongCard) stay reactive without a full refetch.
-      toggleLike: async (songId: string) => {
+      toggleLike: async (songId: string): Promise<LikeResult> => {
          // A streamed song has no library row to like — saving it downloads it
-         // into the library instead (the row it then gets can be liked).
+         // into the library, and the like is applied to the row it gets (see
+         // streamLikesStore). A copy already in the library is liked directly.
          if (songId.startsWith('stream:')) {
              const { StreamService } = await import('../services/stream/StreamService');
-             StreamService.save(songId);
-             return;
+             const meta = StreamService.catalogFor(songId);
+             if (!meta) return 'error';
+             const key = matchKey(meta.title, meta.artist);
+             const saved = libraryLookup(get().songs).get(key);
+             if (saved) return get().toggleLike(saved.id);
+             const likes = useStreamLikesStore.getState();
+             if (likes.pending.includes(key)) {
+                 likes.remove(key);
+                 return 'unliked';
+             }
+             likes.add(key);
+             if (!StreamService.save(meta)) {
+                 likes.remove(key);
+                 return 'error';
+             }
+             return 'saving';
          }
          try {
              const { usePlaylistStore } = await import('./playlistStore');
+             const wasLiked = usePlaylistStore.getState().likedSongIds.has(songId);
              await usePlaylistStore.getState().toggleLiked(songId);
+             if (usePlaylistStore.getState().likedSongIds.has(songId) === wasLiked) return 'error';
 
              // Optimistic patch for in-memory consumers
              set((state) => {
@@ -265,8 +290,10 @@ export const useSongsStore = create<SongsState>()((set, get) => ({
              if (playerState.currentSong?.id === songId) {
                 playerState.updateCurrentSong({ isLiked: !playerState.currentSong.isLiked });
              }
+             return wasLiked ? 'unliked' : 'liked';
          } catch (error) {
              set({ error: error instanceof Error ? error.message : 'Failed to toggle like' });
+             return 'error';
          }
       },
       
