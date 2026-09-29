@@ -91,7 +91,8 @@ const handle = async (url: string | null) => {
       case 'settings': openMainTab({ screen: 'Settings' }); break;
       default: break;
     }
-    setTimeout(() => diag('link', `open/${target} -> ${navigationRef.getCurrentRoute()?.name ?? 'nothing'}`), 800);
+    // Late enough for the player's close animation to have finished.
+    setTimeout(() => diag('link', `open/${target} -> ${navigationRef.getCurrentRoute()?.name ?? 'nothing'}`), 1500);
   }
 };
 

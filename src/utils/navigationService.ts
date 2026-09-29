@@ -1,4 +1,4 @@
-import { createNavigationContainerRef, StackActions } from '@react-navigation/native';
+import { CommonActions, createNavigationContainerRef } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -30,20 +30,24 @@ export function safeGoBack(navigation?: BackCapable | null): void {
 }
 
 /**
- * Opens a tab from anywhere, including over the full-screen player. Pops back
- * to the tab shell first: a plain navigate makes React Navigation 7 push a
- * second Main over an open player, which stays mounted underneath and keeps
- * the mini pill faded out, and navigate with `pop` goes back but drops the
- * nested tab.
+ * Opens a tab from anywhere, including over the full-screen player.
+ *
+ * Over the player, the tab changes underneath it and the player is asked to
+ * close. The player blocks its own removal (`usePreventRemove`) to animate
+ * out, so popping to Main and then navigating left the old tab showing once it
+ * had gone; a plain navigate pushed a second Main over it instead, keeping the
+ * mini pill faded out.
  */
 export function openMainTab(params: NonNullable<RootStackParamList['Main']>): void {
   const root = navigationRef.getRootState();
-  if (!root || root.routes[root.index]?.name === 'Main') {
+  const main = root?.routes.find(r => r.name === 'Main');
+  const tabsKey = main?.state?.key;
+  if (!root || root.routes[root.index]?.name === 'Main' || !tabsKey || !('screen' in params)) {
     navigationRef.navigate('Main', params);
     return;
   }
-  navigationRef.dispatch(StackActions.popTo('Main'));
-  // Into the tab on the next tick: navigating in the same tick as the pop
-  // left the tab navigator on its previous tab (open/library showed Stream).
-  setTimeout(() => navigationRef.navigate('Main', params), 0);
+  navigationRef.dispatch({ ...CommonActions.navigate(params.screen, params.params), target: tabsKey });
+  // Like the back button: a sheet or Up next open over the player closes
+  // first and the player stays, already over the right tab.
+  navigationRef.goBack();
 }
