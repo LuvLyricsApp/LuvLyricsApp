@@ -106,9 +106,20 @@ tap_desc() {
   adb shell input tap "$x" "$y"
   echo "tap '$label' at $x,$y" >> "$OUT/taps.txt"
 }
-# Is the app still running? Logs "crashed after <what>" to taps.txt if not.
+# Did the app crash? Logs "crashed after <what>" to taps.txt if so. pidof
+# alone misses it: the sticky playback service brings the process back within
+# seconds, so a new entry in the crash buffer is the signal that counts.
+CRASHES=0
 alive_after() {
-  adb shell pidof "$PKG" > /dev/null || echo "crashed after $1" >> "$OUT/taps.txt"
+  local n
+  n=$(adb logcat -d -b crash 2>/dev/null | grep -c "Process: $PKG")
+  if [ "${n:-0}" -gt "$CRASHES" ]; then
+    CRASHES=$n
+    echo "crashed after $1" >> "$OUT/taps.txt"
+    adb logcat -d -b crash 2>/dev/null | grep -A 8 "Process: $PKG" | tail -n 9 >> "$OUT/taps.txt"
+  elif ! adb shell pidof "$PKG" > /dev/null; then
+    echo "not running after $1" >> "$OUT/taps.txt"
+  fi
 }
 
 # A burst of frames while a page changes, to catch a white flash.
