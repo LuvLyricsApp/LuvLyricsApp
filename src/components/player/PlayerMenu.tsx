@@ -5,8 +5,8 @@
  * for this song or on this platform are left out rather than shown dead.
  */
 import React from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSheetScroll } from './PlayerSheet';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SheetScrollView } from './PlayerSheet';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from '../../utils/haptics';
 import { Song } from '../../types/song';
@@ -49,7 +49,6 @@ const Row: React.FC<{ icon: IconName; title: string; hint?: string; on?: boolean
 );
 
 export const PlayerMenu: React.FC<PlayerMenuProps> = ({ song, liked, showLyrics, onAction }) => {
-  const scroll = useSheetScroll();
   const repeatOne = usePlaybackModesStore(s => s.repeatOne);
   const tempo = usePlaybackModesStore(s => s.tempo);
   const pitch = usePlaybackModesStore(s => s.pitch);
@@ -70,7 +69,7 @@ export const PlayerMenu: React.FC<PlayerMenuProps> = ({ song, liked, showLyrics,
   const advanced = tempo !== 1 || pitch !== 1 ? `Tempo ${tempo}× · pitch ${pitch}×` : 'Change the song’s tempo and pitch';
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} {...scroll}>
+    <SheetScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.topRow}>
         <Top icon="radio" label="Radio" onPress={act('radio')} />
         <Top icon="playlist-plus" label="Add" onPress={act('add')} />
@@ -109,7 +108,7 @@ export const PlayerMenu: React.FC<PlayerMenuProps> = ({ song, liked, showLyrics,
         {android ? <Row icon="equalizer" title="Equalizer" hint="Adjust the sound" onPress={act('equalizer')} /> : null}
         {android ? <Row icon="tune-variant" title="Advanced" hint={advanced} onPress={act('advanced')} /> : null}
       </View>
-    </ScrollView>
+    </SheetScrollView>
   );
 };
 

@@ -3,8 +3,8 @@
  * sleep timer. Frosted glass, springs up from the bottom, tap outside or
  * pick something to close.
  */
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { FlatList, NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { FlatList, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, ScrollViewProps, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as GestureHandler from 'react-native-gesture-handler';
 import Animated, { runOnJS, SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -25,14 +25,40 @@ const { Gesture, GestureDetector } = GestureHandler;
  * while that is 0 — otherwise the drag scrolls the list back up. Lists that
  * live in a sheet report through `useSheetScroll`; ones that don't leave it at 0.
  */
-const SheetScrollContext = createContext<SharedValue<number> | null>(null);
+interface SheetScrollState {
+  offset: SharedValue<number>;
+  /** The list's native scroll, recognised alongside the sheet's pan. */
+  list: GestureHandler.NativeGesture;
+}
+
+const SheetScrollContext = createContext<SheetScrollState | null>(null);
 
 export const useSheetScroll = () => {
-  const offset = useContext(SheetScrollContext);
+  const sheet = useContext(SheetScrollContext);
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (offset) offset.value = e.nativeEvent.contentOffset.y;
-  }, [offset]);
+    if (sheet) sheet.offset.value = e.nativeEvent.contentOffset.y;
+  }, [sheet]);
   return { onScroll, scrollEventThrottle: 16 } as const;
+};
+
+/**
+ * Wraps a sheet's scroll view. On Android a native scroll view that starts
+ * dragging cancels every gesture-handler gesture, so without this a swipe
+ * down that begins on the list never reaches the sheet's pan.
+ */
+export const SheetScrollable: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const sheet = useContext(SheetScrollContext);
+  return sheet ? <GestureDetector gesture={sheet.list}>{children}</GestureDetector> : children;
+};
+
+/** A ScrollView that lives in a sheet: reports its offset and lets a drag down at the top close the sheet. */
+export const SheetScrollView: React.FC<ScrollViewProps> = props => {
+  const scroll = useSheetScroll();
+  return (
+    <SheetScrollable>
+      <ScrollView {...scroll} {...props} />
+    </SheetScrollable>
+  );
 };
 
 interface PlayerSheetProps {
@@ -51,6 +77,8 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
   const shown = useSharedValue(0);
   const drag = useSharedValue(0);
   const scrolled = useSharedValue(0);
+  const list = useMemo(() => Gesture.Native(), []);
+  const scrollState = useMemo(() => ({ offset: scrolled, list }), [scrolled, list]);
 
   useEffect(() => {
     if (visible) {
@@ -75,6 +103,7 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
     .activeOffsetY(10)
     .failOffsetY(-8)
     .failOffsetX([-22, 22])
+    .simultaneousWithExternalGesture(list)
     .onTouchesDown((_e, state) => {
       'worklet';
       if (scrolled.value > 2) state.fail();
@@ -100,7 +129,7 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
           <Frosted radius={28} intensity={70} tint={0.5} />
           <View style={styles.grabber} />
           {title ? <Text style={styles.title}>{title}</Text> : <View style={styles.untitled} />}
-          <SheetScrollContext.Provider value={scrolled}>{children}</SheetScrollContext.Provider>
+          <SheetScrollContext.Provider value={scrollState}>{children}</SheetScrollContext.Provider>
         </Animated.View>
       </GestureDetector>
     </View>
@@ -119,28 +148,30 @@ export const QueueList: React.FC<{ onPicked: () => void }> = ({ onPicked }) => {
     return <Text style={styles.empty}>Nothing queued after this song.</Text>;
   }
   return (
-    <FlatList
-      data={upcoming}
-      keyExtractor={x => `${x.song.id}-${x.i}`}
-      style={styles.list}
-      {...scroll}
-      renderItem={({ item }) => (
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            if (queue) usePlayerStore.getState().setPlaylistQueue(playlistId ?? 'queue', queue, item.i);
-            onPicked();
-          }}
-        >
-          <Artwork uri={item.song.coverImageUri} title={item.song.title} artist={item.song.artist} size={44} style={styles.art} />
-          <View style={styles.rowText}>
-            <Text style={styles.rowTitle} numberOfLines={1}>{item.song.title}</Text>
-            <Text style={styles.rowSub} numberOfLines={1}>{item.song.artist}</Text>
-          </View>
-        </Pressable>
-      )}
-    />
+    <SheetScrollable>
+      <FlatList
+        data={upcoming}
+        keyExtractor={x => `${x.song.id}-${x.i}`}
+        style={styles.list}
+        {...scroll}
+        renderItem={({ item }) => (
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              if (queue) usePlayerStore.getState().setPlaylistQueue(playlistId ?? 'queue', queue, item.i);
+              onPicked();
+            }}
+          >
+            <Artwork uri={item.song.coverImageUri} title={item.song.title} artist={item.song.artist} size={44} style={styles.art} />
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle} numberOfLines={1}>{item.song.title}</Text>
+              <Text style={styles.rowSub} numberOfLines={1}>{item.song.artist}</Text>
+            </View>
+          </Pressable>
+        )}
+      />
+    </SheetScrollable>
   );
 };
 

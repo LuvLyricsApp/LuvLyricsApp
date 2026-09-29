@@ -4,8 +4,8 @@
  * listening, join requests, suggestions and the host's controls.
  */
 import React, { useState } from 'react';
-import { useSheetScroll } from '../player/PlayerSheet';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SheetScrollView } from '../player/PlayerSheet';
+import { KeyboardAvoidingView, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from '../../utils/haptics';
@@ -124,7 +124,6 @@ const Lobby: React.FC = () => {
 };
 
 const Room: React.FC = () => {
-  const scroll = useSheetScroll();
   const room = useListenTogetherStore(s => s.room)!;
   const role = useListenTogetherStore(s => s.role);
   const me = useListenTogetherStore(s => s.userId);
@@ -152,7 +151,7 @@ const Room: React.FC = () => {
     : 'Offline — tap Resync to try again';
 
   return (
-    <ScrollView style={styles.roomScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} {...scroll}>
+    <SheetScrollView style={styles.roomScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <View style={styles.codeCard}>
         <View style={styles.flex}>
           <Text style={styles.codeLabel}>Room code</Text>
@@ -236,7 +235,7 @@ const Room: React.FC = () => {
         {!isHost ? <Button label="Resync" icon="sync" onPress={() => { if (connection !== 'connected') connect(); else requestSync(); }} /> : null}
         <Button label={isHost ? 'End room' : 'Leave room'} danger onPress={leaveRoom} />
       </View>
-    </ScrollView>
+    </SheetScrollView>
   );
 };
 
