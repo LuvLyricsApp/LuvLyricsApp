@@ -7,8 +7,7 @@
  *   playerBackground=apple|blend|youtube|aura
  *   miniPlayerBackground=glow|tint|glass|black
  *   appBackground=shader|glass|glow
- *   vinyl=1|0            the cover as a spinning record
- *   fps=1|0              the frame rate readout
+ *   fps=1|0             the frame rate readout
  */
 import type { AppBackground, MiniPlayerBackground, PlayerBackground } from '../store/settingsStore';
 
@@ -16,7 +15,6 @@ export interface StyleUpdates {
   playerBackground?: PlayerBackground;
   miniPlayerBackground?: MiniPlayerBackground;
   appBackground?: AppBackground;
-  playerVinyl?: boolean;
   showPerformanceHUD?: boolean;
 }
 
@@ -34,12 +32,10 @@ export const styleUpdates = (params: Record<string, string>): StyleUpdates => {
   const player = pick(PLAYER, params.playerBackground);
   const mini = pick(MINI, params.miniPlayerBackground);
   const app = pick(APP, params.appBackground);
-  const vinyl = flag(params.vinyl);
   const fps = flag(params.fps);
   if (player !== undefined) out.playerBackground = player;
   if (mini !== undefined) out.miniPlayerBackground = mini;
   if (app !== undefined) out.appBackground = app;
-  if (vinyl !== undefined) out.playerVinyl = vinyl;
   if (fps !== undefined) out.showPerformanceHUD = fps;
   return out;
 };

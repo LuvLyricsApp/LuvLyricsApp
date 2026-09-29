@@ -141,10 +141,7 @@ interface SettingsState {
   setAppleMusicInspired: (v: boolean) => void;
   setHidePlayerVolume: (v: boolean) => void;
   setPlayerBackground: (v: PlayerBackground) => void;
-  /** The artwork as a spinning record (Settings → Player → Record). */
-  playerVinyl: boolean;
-  setPlayerVinyl: (v: boolean) => void;
-  /** YouTube Music / Shader wash players: the cover runs full-bleed instead of a card (tap the cover). */
+  /** YouTube Music / Shader wash players: the cover runs full-bleed (the default) or is a card (tap the cover). */
   playerCoverFull: boolean;
   setPlayerCoverFull: (v: boolean) => void;
   setCanvasEnabled: (enabled: boolean) => void;
@@ -199,8 +196,7 @@ const DEFAULT_SETTINGS = {
   appleMusicInspired: true,
   hidePlayerVolume: false,
   playerBackground: 'blend' as PlayerBackground,
-  playerVinyl: false,
-  playerCoverFull: false,
+  playerCoverFull: true,
   appleMusicToken: '',
   tidalToken: '',
   luvsStartAtHook: true,
@@ -283,9 +279,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHidePlayerVolume: (hidePlayerVolume) => set({ hidePlayerVolume }),
       playerBackground: 'blend',
       setPlayerBackground: (playerBackground) => set({ playerBackground }),
-      playerVinyl: false,
-      setPlayerVinyl: (playerVinyl) => set({ playerVinyl }),
-      playerCoverFull: false,
+      playerCoverFull: true,
       setPlayerCoverFull: (playerCoverFull) => set({ playerCoverFull }),
       appleMusicToken: '',
       setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
@@ -297,7 +291,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'lyricflow-settings',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<SettingsState> & { lyricsFontSize?: string };
         const { lyricsFontSize, ...rest } = state;
@@ -313,6 +307,10 @@ export const useSettingsStore = create<SettingsState>()(
           // v2: hold-to-talk became the default. The old default was 'tap',
           // which kept listening after the finger lifted.
           voiceMode: version < 2 ? 'hold' : state.voiceMode ?? 'hold',
+          // v4: every player background opens on the full cover; a tap on it
+          // gives the square card.
+          playerCoverFull: version < 4 ? true : state.playerCoverFull ?? true,
+          appleMusicInspired: version < 4 ? true : state.appleMusicInspired ?? true,
         } as SettingsState;
       },
     }

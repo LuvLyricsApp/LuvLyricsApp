@@ -23,7 +23,7 @@ import { CoverArtSearchScreen } from './CoverArtSearchScreen';
 import { useNowPlayingLogic } from '../hooks/useNowPlayingLogic';
 import NowPlayingBackground from '../components/NowPlayingBackground';
 import NowPlayingHeader from '../components/NowPlayingHeader';
-import NowPlayingLyricsArea, { CONTROLS_CLEARANCE, HEADER_CLEARANCE } from '../components/NowPlayingLyricsArea';
+import NowPlayingLyricsArea, { CONTROLS_CLEARANCE, HEADER_CLEARANCE, LYRICS_MORPH_MS } from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { navigationRef, safeGoBack } from '../utils/navigationService';
 import { DISMISS_DISTANCE, DISMISS_VELOCITY, takeOpenVelocity } from '../navigation/playerSheet';
@@ -55,20 +55,18 @@ import { useListenTogetherStore } from '../store/listenTogetherStore';
 
 const { Gesture, GestureDetector } = GestureHandler;
 
-// Springs throughout (Apple's fluid-interface rules): critically damped, no
-// bounce, and every one starts from where the sheet is with the finger's
-// speed, so a flick carries straight into the motion and a grab mid-flight
-// just takes over.
-const OPEN_SPRING = { stiffness: 240, damping: 32, mass: 1, overshootClamping: true } as const;
+// Echo Music's sheet springs (Compose's defaults), critically damped — no
+// bounce: a tap opens or closes on the softer one (StiffnessMediumLow, 400), a
+// flick hands its speed to the firmer one (StiffnessMedium, 1500) so it lands
+// fast. Every one starts from where the sheet is with the finger's speed, so a
+// grab mid-flight just takes over.
+const criticallyDamped = (stiffness: number) => ({ stiffness, damping: 2 * Math.sqrt(stiffness), mass: 1, overshootClamping: true }) as const;
+const SOFT_SPRING = criticallyDamped(400);
+const FLING_SPRING = criticallyDamped(1500);
 const SETTLE_SPRING = { stiffness: 320, damping: 34, mass: 1, overshootClamping: true } as const;
-const CLOSE_SPRING = {
-  stiffness: 260,
-  damping: 32,
-  mass: 1,
-  overshootClamping: true,
-  restDisplacementThreshold: 0.5,
-  restSpeedThreshold: 8,
-} as const;
+const CLOSE_REST = { restDisplacementThreshold: 0.5, restSpeedThreshold: 8 } as const;
+/** A release this fast (px/s) counts as a flick and takes the firmer spring. */
+const FLICK = 800;
 /** Momentum projection: where a flick would come to rest (deceleration 0.99/ms). */
 const projectMomentum = (velocity: number): number => {
   'worklet';
@@ -84,6 +82,8 @@ const rubberBand = (overshoot: number, dimension: number): number => {
 // on Android re-renders the page under it on every frame of the drag and made
 // opening and closing the player stutter; a dim costs nothing.
 const PAGE_DIM = 0.5;
+/** The sheet's top corners while it moves; square once open. */
+const SHEET_CORNER = 22;
 
 type Props = RootStackScreenProps<'NowPlaying'>;
 
@@ -102,7 +102,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // translateY 0 = open; restY = resting on the pill (its top edge), where the
   // sheet is scaled to the pill's width. It starts there, so the first frame
   // never flashes the player at rest.
-  const { y: restY, scale: restScale } = playerSheetRest(windowW, screenH, insets.bottom, pillNav);
+  const { y: restY } = playerSheetRest(windowW, screenH, insets.bottom, pillNav);
   const sheetY = useSharedValue(restY);
   const progress = useDerivedValue(() => Math.min(1, Math.max(0, 1 - sheetY.value / restY)));
   useAnimatedReaction(() => progress.value, p => { playerSheetProgress.value = p; });
@@ -117,7 +117,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     const velocity = takeOpenVelocity();
     sheetY.value = reduceMotion
       ? withTiming(0, { duration: 200 })
-      : withSpring(0, { ...OPEN_SPRING, velocity: -velocity });
+      : withSpring(0, { ...(velocity > FLICK ? FLING_SPRING : SOFT_SPRING), velocity: -velocity });
   // Mount only: the sheet opens once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -151,7 +151,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     };
     sheetY.value = reduceMotion
       ? withTiming(restY, { duration: 200, easing: Easing.out(Easing.quad) }, done)
-      : withSpring(restY, { ...CLOSE_SPRING, velocity: Math.max(0, velocity) }, done);
+      : withSpring(restY, { ...(velocity > FLICK ? FLING_SPRING : SOFT_SPRING), ...CLOSE_REST, velocity: Math.max(0, velocity) }, done);
   }, [restY, reduceMotion, finishClose, revealPill, closing, sheetY]);
 
   // Ambient mode (player menu): back leaves ambient first, then the player.
@@ -236,7 +236,9 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         if (y > upNextTop) state.fail();
         return;
       }
-      if (lyricsOffset.value > 2) {
+      // Only while the lyrics are showing: the hidden (pre-mounted) list keeps
+      // scrolling with the song, and must not block the swipe on the cover.
+      if (showLyricsSV.value && lyricsOffset.value > 2) {
         if (y > lyricsTop && y < frameH.value - CONTROLS_CLEARANCE) state.fail();
       }
     })
@@ -269,7 +271,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       if ((past && e.velocityY > -200) || flung) {
         animateClose(e.velocityY);
       } else {
-        sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
+        sheetY.value = withSpring(0, { ...(Math.abs(e.velocityY) > FLICK ? FLING_SPRING : SOFT_SPRING), velocity: e.velocityY });
       }
     });
 
@@ -309,22 +311,27 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   const playerGesture = Gesture.Race(dismissGesture, upNextGesture);
 
-  // The sheet is the pill, grown: pinned at its top edge, as wide as the pill
-  // at rest, full width open. It is solid within the first eighth of the
-  // travel, so the pill's fade and the sheet's overlap without a gap.
+  // Echo Music's sheet: one full-width sheet that slides with the finger from
+  // the mini player's top edge. It is solid from the first point of travel;
+  // the pill fades off its top over the first quarter (PillPlayer), and the
+  // player itself fades in between 15% and 40%, so the two never overlap. Its
+  // top corners round off while it moves and square up once it is open.
   const sheetStyle = useAnimatedStyle(() => {
     const p = progress.value;
+    const corner = SHEET_CORNER * (1 - interpolate(p, [0.9, 1], [0, 1], Extrapolation.CLAMP));
     return {
-      opacity: reduceMotion ? p : interpolate(p, [0, 0.12], [0, 1], Extrapolation.CLAMP),
-      transform: [
-        { translateY: sheetY.value },
-        { scale: restScale + (1 - restScale) * p },
-      ] as const,
+      opacity: reduceMotion ? p : 1,
+      borderTopLeftRadius: corner,
+      borderTopRightRadius: corner,
+      transform: [{ translateY: sheetY.value }] as const,
     };
   });
-  // The page underneath: a little dimmed while the sheet is up, clearing as it lowers.
+  const playerFadeStyle = useAnimatedStyle(() => ({
+    opacity: reduceMotion ? 1 : interpolate(progress.value, [0.15, 0.4], [0, 1], Extrapolation.CLAMP),
+  }));
+  // The page underneath dims on Echo's curve: nothing for the first tenth, then fast, then easing off.
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * PAGE_DIM,
+    opacity: PAGE_DIM * Math.min(1, 1.4 * Math.sqrt(Math.max(0, progress.value - 0.1))),
   }));
 
   // Settings → Playback → Keep screen on: only while this screen is open.
@@ -378,6 +385,16 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!showLyrics) lyricsOffset.value = 0;
   }, [showLyrics, lyricsOffset, showLyricsSV]);
 
+  // Cover <-> lyrics as one motion: the cover (or record) flies down into the
+  // thumbnail at the start of the title while the lines rise in, and back.
+  // `dock` is the thumbnail's centre in the player, measured by the controls.
+  const lyricsP = useSharedValue(showLyrics ? 1 : 0);
+  const dockX = useSharedValue(0);
+  const dockY = useSharedValue(0);
+  useEffect(() => {
+    lyricsP.value = reduceMotion ? (showLyrics ? 1 : 0) : withTiming(showLyrics ? 1 : 0, { duration: LYRICS_MORPH_MS, easing: Easing.bezier(0.32, 0.72, 0, 1) });
+  }, [showLyrics, reduceMotion, lyricsP]);
+
   const canvas = useCanvasArtwork(currentSong);
 
   // ── The cover stage ──────────────────────────────────────────────────────
@@ -386,7 +403,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // it sideways for the previous or next song (it follows the finger, then the
   // new cover arrives from the other side). Off under lyrics, ambient mode,
   // sheets and Up next (where a tap on the cover just lowers the panel).
-  const vinylOn = useSettingsStore(s => s.playerVinyl);
   const stageX = useSharedValue(0);
   const stageEnabled = !showLyrics && !ambient && sheet === null && !upNextOpen;
 
@@ -397,12 +413,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     }
     Haptics.selectionAsync().catch(() => {});
     const s = useSettingsStore.getState();
-    // A record turns back into the cover first.
-    if (s.playerVinyl) {
-      diag('player', 'tap: record -> cover');
-      s.setPlayerVinyl(false);
-      return;
-    }
     const full = isCoverFull(s.playerBackground, s.appleMusicInspired, s.playerCoverFull);
     diag('player', `tap: cover ${full ? 'full -> card' : 'card -> full'}`);
     if (isCardPlayerBackground(s.playerBackground)) s.setPlayerCoverFull(!full);
@@ -450,7 +460,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       if (!done) return;
       // The next cover comes in from the side the finger did not go to.
       stageX.value = -dir * windowW * 0.5;
-      stageX.value = withSpring(0, OPEN_SPRING);
+      stageX.value = withSpring(0, SOFT_SPRING);
     });
   }, [skipForward, stageX, windowW]);
 
@@ -657,13 +667,13 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           if (h > 0) setFrameHeight(h);
         }}
       >
+        <Animated.View style={[styles.playerLayer, playerFadeStyle]}>
         <NowPlayingBackground
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
           showLyrics={showLyrics}
           canvas={ambient ? null : canvas}
           playing={storePlaying}
-          vinyl={vinylOn}
           shift={stageX}
         />
 
@@ -695,9 +705,10 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             coverImageUri={currentSong?.coverImageUri}
             songArtist={currentSong?.artist}
             scrollOffset={lyricsOffset}
-            vinyl={vinylOn}
-            playing={storePlaying}
             stageX={stageX}
+            lyricsP={lyricsP}
+            dockX={dockX}
+            dockY={dockY}
           />
         </Animated.View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, upNextShadeStyle]}>
@@ -733,6 +744,10 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           onSeek={handleScrub}
           showLyrics={showLyrics}
           compact={showLyrics}
+          coverImageUri={currentSong?.coverImageUri}
+          lyricsP={lyricsP}
+          dockX={dockX}
+          dockY={dockY}
           onMorePress={() => setSheet('menu')}
           onOpenQueue={() => openUpNext(0)}
           onOpenTimer={() => setSheet('timer')}
@@ -776,6 +791,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         ) : null}
 
         <Toast visible={notice !== null} message={notice ?? ''} type="info" onDismiss={() => setNotice(null)} duration={2600} />
+        </Animated.View>
       </Animated.View>
       </GestureDetector>
     </View>
@@ -793,10 +809,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b0b0f',
     overflow: 'hidden',
-    // Rounded like the pill it grows out of; pinned at the top so scaling
-    // keeps its top edge on the finger.
-    borderRadius: 28,
-    transformOrigin: 'top',
+  },
+  playerLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   contentArea: {
     flex: 1,

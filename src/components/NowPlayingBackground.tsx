@@ -28,6 +28,8 @@ import { useArtworkPalette } from './allegra/useArtworkPalette';
 import CanvasVideoLayer from './CanvasVideoLayer';
 import { CanvasArtwork } from '../services/canvas/types';
 import { isCardPlayerBackground, useSettingsStore } from '../store/settingsStore';
+import { isCoverFull } from './player/coverStage';
+import { fullCoverHeight } from './NowPlayingLyricsArea';
 import { diag } from '../utils/diag';
 
 interface NowPlayingBackgroundProps {
@@ -38,8 +40,6 @@ interface NowPlayingBackgroundProps {
   canvas?: CanvasArtwork | null;
   playing?: boolean;
   onCanvasVisibleChange?: (visible: boolean) => void;
-  /** The artwork is a record: the full-bleed cover (and its canvas) step aside. */
-  vinyl?: boolean;
   /** A sideways swipe on the cover moves the hero with the finger. */
   shift?: SharedValue<number>;
 }
@@ -53,7 +53,6 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   canvas = null,
   playing = false,
   onCanvasVisibleChange,
-  vinyl = false,
   shift,
 }) => {
   const { frame, onLayout } = usePlayerFrame();
@@ -76,7 +75,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
 
   // Echo shows the sharp cover (and the canvas inside it) only on the cover
   // view of the Apple Music player.
-  const heroOn = appleInspired && !isCardPlayerBackground(style) && !showLyrics && !glowOn && !vinyl;
+  const heroOn = appleInspired && !isCardPlayerBackground(style) && !showLyrics && !glowOn;
   const canvasAllowed = heroOn;
 
   const [canvasShown, setCanvasShown] = useState(false);
@@ -89,6 +88,10 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   }, [canvasAllowed, onCanvasVisibleChange]);
 
   const heroH = heroHeight(width, height);
+  // Shader wash with the full cover up: its light leaks out from under the
+  // cover's reeded edge (NowPlayingLyricsArea's FullCover) rather than from the top.
+  const coverFull = useSettingsStore(s => isCoverFull(s.playerBackground, s.appleMusicInspired, s.playerCoverFull));
+  const auraLift = style === 'aura' && coverFull && !showLyrics ? Math.round(fullCoverHeight(width, height) * 0.5) : 0;
   const heroFollow = useAnimatedStyle(() => {
     const x = shift ? shift.value : 0;
     return { opacity: 1 - 0.6 * Math.min(1, Math.abs(x) / Math.max(1, width)), transform: [{ translateX: x }] as const };
@@ -109,7 +112,7 @@ const NowPlayingBackground: React.FC<NowPlayingBackgroundProps> = ({
   if (style === 'aura') {
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
-        <AuraBackdrop palette={palette} width={width} height={height} playing={playing} active={focused} quiet={showLyrics} />
+        <AuraBackdrop palette={palette} width={width} height={height} playing={playing} active={focused} quiet={showLyrics} lift={auraLift} />
       </View>
     );
   }

@@ -19,6 +19,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   DerivedValue,
   Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
   runOnJS,
   SharedValue,
   cancelAnimation,
@@ -36,6 +39,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppleSlider from './player/AppleSlider';
 import { MorphIcon, NudgeIcon, Tactile } from './allegra/motion';
 import { SwapMarquee } from './allegra/Marquee';
+import Artwork from './allegra/Artwork';
+import { DOCK_GAP, DOCK_THUMB, LYRICS_MORPH_MS } from './player/lyricsMorph';
 import { PlayerType } from '../constants/allegraTheme';
 import { formatTimeSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
@@ -74,7 +79,20 @@ interface NowPlayingControlsProps {
   /** The Up next panel's top edge when open, in the player's frame. */
   upNextTop?: number;
   upNextOpen?: boolean;
+  /** The cover, shown as a thumbnail at the start of the title while lyrics are up. */
+  coverImageUri?: string;
+  /** Cover (0) .. lyrics (1): the thumbnail's slot opens and the title moves over. */
+  lyricsP?: SharedValue<number>;
+  /** Written here: the thumbnail's centre in the player, so the cover knows where to fly. */
+  dockX?: SharedValue<number>;
+  dockY?: SharedValue<number>;
 }
+
+/** Lyrics open or close: the controls glide to their new place instead of jumping when the volume row goes. */
+const ROWS_MOVE = LinearTransition.duration(460).easing(Easing.bezier(0.32, 0.72, 0, 1));
+
+const CONTENT_PAD = 28;
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const INK = '#ffffff';
 const INK_SOFT = 'rgba(255,255,255,0.62)';
@@ -182,11 +200,44 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   upNext,
   upNextTop = 0,
   upNextOpen = false,
+  coverImageUri,
+  lyricsP,
+  dockX,
+  dockY,
 }) => {
   const insets = useSafeAreaInsets();
   // Where the transport's bottom edge sits in the player, so Up next can lift
   // it to just above the panel whatever the screen size.
   const boxY = useSharedValue(0);
+  // The title row's place in the box, for the thumbnail's centre.
+  const metaY = useSharedValue(0);
+  const metaH = useSharedValue(0);
+  const syncDock = () => {
+    if (dockX) dockX.value = CONTENT_PAD + DOCK_THUMB / 2;
+    if (dockY) dockY.value = boxY.value + CONTAINER_PAD_TOP + metaY.value + metaH.value / 2;
+  };
+  // The thumbnail's slot is laid out once, as lyrics open (and removed once
+  // they have closed); the title glides over by transform alone, so the flight
+  // costs no layout pass per frame. The thumbnail fades in as the cover lands.
+  const [docked, setDocked] = useState(showLyrics);
+  useEffect(() => {
+    if (showLyrics) {
+      setDocked(true);
+      return undefined;
+    }
+    const t = setTimeout(() => setDocked(false), LYRICS_MORPH_MS + 40);
+    return () => clearTimeout(t);
+  }, [showLyrics]);
+  const titleShift = DOCK_THUMB + DOCK_GAP;
+  const titleStyle = useAnimatedStyle(() => {
+    const p = lyricsP ? lyricsP.value : 0;
+    return { transform: [{ translateX: docked ? -titleShift * (1 - p) : 0 }] };
+  }, [docked]);
+  const thumbStyle = useAnimatedStyle(() => {
+    const p = lyricsP ? lyricsP.value : 0;
+    const t = Math.min(1, Math.max(0, (p - 0.78) / 0.22));
+    return { opacity: t };
+  });
   const transportEnd = useSharedValue(0);
   const liftStyle = useAnimatedStyle(() => {
     const p = upNext ? upNext.value : 0;
@@ -223,9 +274,11 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
 
   return (
     <Animated.View
+      // Pinned to the bottom: when the volume row goes, the box shrinks from its top edge.
+      layout={ROWS_MOVE}
       style={[styles.container, animatedStyle]}
       pointerEvents={controlsVisible ? 'box-none' : 'none'}
-      onLayout={e => { boxY.value = e.nativeEvent.layout.y; }}
+      onLayout={e => { boxY.value = e.nativeEvent.layout.y; syncDock(); }}
     >
       {/* Only a whisper of shade — enough for white text over a bright canvas video. */}
       <Animated.View style={[StyleSheet.absoluteFill, shadeStyle]} pointerEvents="none">
@@ -234,15 +287,27 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
 
       {/* Echo keeps the bottom row a clear step above the system bar. */}
       <Animated.View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 14 }, liftStyle]} pointerEvents="box-none">
-        <View style={styles.metaRow}>
-          <Pressable style={styles.metaText} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
+        <Animated.View
+          style={styles.metaRow}
+          onLayout={e => { metaY.value = e.nativeEvent.layout.y; metaH.value = e.nativeEvent.layout.height; syncDock(); }}
+        >
+          {docked ? (
+            <View style={styles.dockSlot}>
+              <Animated.View style={[styles.dockThumb, thumbStyle]} pointerEvents={showLyrics ? 'auto' : 'none'}>
+                <Pressable onPress={() => { tick('light'); onToggleLyrics(); }} accessibilityRole="button" accessibilityLabel="Show the cover">
+                  <Artwork uri={coverImageUri} title={currentSongTitle ?? ''} artist={currentSongArtist} size={DOCK_THUMB} style={styles.dockArt} />
+                </Pressable>
+              </Animated.View>
+            </View>
+          ) : null}
+          <AnimatedPressable style={[styles.metaText, titleStyle]} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
             <View style={styles.swapLine}>
               <SwapMarquee style={styles.title} direction={songDirection} active={focused}>{currentSongTitle || 'Not playing'}</SwapMarquee>
             </View>
             <View style={styles.swapLineSmall}>
               <SwapMarquee style={styles.artist} direction={songDirection} active={focused}>{currentSongArtist || 'Unknown artist'}</SwapMarquee>
             </View>
-          </Pressable>
+          </AnimatedPressable>
 
           <Tactile
             onPress={e => { tick('light'); (onMorePress ?? onToggleLyrics)(e); }}
@@ -266,18 +331,19 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
               <MorphIcon on={isCurrentSongLiked} onIcon="heart" offIcon="heart-outline" size={20} color={INK} />
             </SavingPulse>
           </Tactile>
-        </View>
+        </Animated.View>
 
-        <AppleSlider
-          progress={progress}
-          onCommit={seek}
-          height={10}
-          accessibilityLabel="Song position"
-          style={styles.scrubber}
-          renderBelow={display => <TimeLabels display={display} durationSV={durationSV} />}
-        />
+        <Animated.View style={styles.scrubber}>
+          <AppleSlider
+            progress={progress}
+            onCommit={seek}
+            height={10}
+            accessibilityLabel="Song position"
+            renderBelow={display => <TimeLabels display={display} durationSV={durationSV} />}
+          />
+        </Animated.View>
 
-        <View style={styles.transport} onLayout={e => { transportEnd.value = e.nativeEvent.layout.y + e.nativeEvent.layout.height; }}>
+        <Animated.View style={styles.transport} onLayout={e => { transportEnd.value = e.nativeEvent.layout.y + e.nativeEvent.layout.height; }}>
           <Tactile
             onPress={() => { tick('light'); setBackNudge(n => n + 1); onSkipBackward(); }}
             hitSlop={12}
@@ -308,10 +374,14 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           >
             <NudgeIcon name="play-forward" size={42} color={INK} direction={1} trigger={forwardNudge} />
           </Tactile>
-        </View>
+        </Animated.View>
 
         <Animated.View style={lowerStyle} pointerEvents={upNextOpen ? 'none' : 'box-none'}>
-        {compact || hideVolume ? null : <VolumeRow />}
+        {compact || hideVolume ? null : (
+          <Animated.View entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)}>
+            <VolumeRow />
+          </Animated.View>
+        )}
 
         <View style={styles.footer}>
           <Pressable onPress={() => { tick('light'); onOpenQueue(); }} hitSlop={10} style={styles.footerBtn} accessibilityRole="button" accessibilityLabel="Up next">
@@ -349,8 +419,12 @@ const CONTAINER_PAD_TOP = 40;
 
 const styles = StyleSheet.create({
   container: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15, paddingTop: CONTAINER_PAD_TOP },
-  content: { paddingHorizontal: 28 },
+  content: { paddingHorizontal: CONTENT_PAD },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // The row's gap (10) plus this makes DOCK_GAP between the thumbnail and the title.
+  dockSlot: { width: DOCK_THUMB, height: DOCK_THUMB, marginRight: DOCK_GAP - 10 },
+  dockThumb: { position: 'absolute', left: 0, top: 0, width: DOCK_THUMB, height: DOCK_THUMB },
+  dockArt: { width: DOCK_THUMB, height: DOCK_THUMB, borderRadius: 8, overflow: 'hidden' },
   metaText: { flex: 1 },
   swapLine: { height: 30, overflow: 'hidden' },
   swapLineSmall: { height: 24, overflow: 'hidden' },

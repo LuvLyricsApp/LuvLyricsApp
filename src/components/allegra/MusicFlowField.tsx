@@ -12,7 +12,7 @@
  */
 import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
+import { Canvas, Fill, Group, LinearGradient, Rect, Shader, Skia, vec } from '@shopify/react-native-skia';
 import {
   useDerivedValue,
   useFrameCallback,
@@ -152,7 +152,30 @@ interface MusicFlowFieldProps {
   height?: number;
   /** Light pours down from the top edge instead of rising from the bottom one. */
   inverted?: boolean;
+  /**
+   * The field's own alpha falls from 1 to 0 between these two heights (0 top
+   * .. 1 bottom, as seen on screen), so it melts into whatever is behind it
+   * without having to match that colour.
+   */
+  fadeOut?: readonly [number, number];
 }
+
+/**
+ * An alpha mask that holds at 1 until `from`, then eases to 0 at `to` along a
+ * smoothstep, so the fade has no visible start or end line.
+ */
+export const meltStops = (from: number, to: number): { colors: string[]; positions: number[] } => {
+  const colors = ['#000000ff'];
+  const positions = [0];
+  const STEPS = 8;
+  for (let i = 0; i <= STEPS; i++) {
+    const t = i / STEPS;
+    const alpha = 1 - t * t * (3 - 2 * t);
+    colors.push(`#000000${Math.round(alpha * 255).toString(16).padStart(2, '0')}`);
+    positions.push(from + (to - from) * t);
+  }
+  return { colors, positions };
+};
 
 export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   palette,
@@ -162,6 +185,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   width: widthProp,
   height: heightProp,
   inverted = false,
+  fadeOut,
 }) => {
   const window = useWindowDimensions();
   const width = widthProp ?? window.width;
@@ -228,6 +252,8 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
     if (!running) colors.value = targetColors.value;
   }, [running, frame, colors, targetColors]);
 
+  const melt = useMemo(() => (fadeOut ? meltStops(fadeOut[0], fadeOut[1]) : null), [fadeOut]);
+
   const renderScale = budget.renderScale;
   const renderW = Math.max(1, Math.round(width * renderScale));
   const renderH = Math.max(1, Math.round(height * renderScale));
@@ -267,9 +293,26 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
         }}
       >
         <Canvas style={{ width: renderW, height: renderH }}>
-          <Fill>
-            <Shader source={effect} uniforms={uniforms} />
-          </Fill>
+          {melt ? (
+            <Group layer>
+              <Fill>
+                <Shader source={effect} uniforms={uniforms} />
+              </Fill>
+              {/* Keeps the field only where the mask is opaque. The canvas is flipped when inverted. */}
+              <Rect x={0} y={0} width={renderW} height={renderH} blendMode="dstIn">
+                <LinearGradient
+                  start={vec(0, inverted ? renderH : 0)}
+                  end={vec(0, inverted ? 0 : renderH)}
+                  colors={melt.colors}
+                  positions={melt.positions}
+                />
+              </Rect>
+            </Group>
+          ) : (
+            <Fill>
+              <Shader source={effect} uniforms={uniforms} />
+            </Fill>
+          )}
         </Canvas>
       </View>
     </View>

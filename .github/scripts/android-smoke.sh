@@ -25,8 +25,7 @@
 #                        (and the frame rate readout); the pickers must not wrap
 #   look-app-glow.png, look-app-glow-library.png  the glow app background on Stream and Library
 #   look-player-aura(-2).png  the shader wash player, then 6s later
-#   look-player-vinyl(-2).png  the cover as a record, then 5s later (it has turned)
-#   gesture-*.png        tap the record / cover (card <-> full size), double tap to seek (seek-forward/-back),
+#   gesture-*.png        tap the cover (card <-> full size), double tap to seek (seek-forward/-back),
 #                        swipe to next / previous, swipe up for Up next and down again, the layered
 #                        swipe down, and the Apple player's card / full cover / Up next (gesture-apple-*, -upnext-apple)
 #   playback.txt         media session state before/after 45s in the background
@@ -358,29 +357,19 @@ sleep 5
 shot look-app-glow-library
 link "lyricflow://style?appBackground=shader"
 
-# The shader wash player background, then the record on a double tap.
+# The shader wash player background.
 step "look: shader wash player"
-link "lyricflow://style?playerBackground=aura&vinyl=0"
+link "lyricflow://style?playerBackground=aura"
 link "lyricflow://player"
 sleep 8
 shot look-player-aura
 sleep 6
 shot look-player-aura-2
-step "look: vinyl"
-link "lyricflow://style?vinyl=1"
-sleep 6
-shot look-player-vinyl
-sleep 5
-shot look-player-vinyl-2
-# The gestures themselves (YouTube Music's): a tap turns the record back into
-# the cover and then flips the cover between card and full size; a double tap
-# on either half seeks 5s; a swipe across the cover skips; a swipe up brings
-# up Up next. Each logs a [diag:player] line (diag.txt) so a missed tap is visible.
+# The gestures themselves (YouTube Music's): a tap flips the cover between card
+# and full size; a double tap on either half seeks 5s; a swipe across the cover
+# skips; a swipe up brings up Up next. Each logs a [diag:player] line (diag.txt)
+# so a missed tap is visible.
 if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
-  step "gesture: tap the record"
-  adb shell input tap $((W / 2)) $((H * 28 / 100))
-  sleep 3
-  shot gesture-double-tap
   step "gesture: tap the cover to full size"
   adb shell input tap $((W / 2)) $((H * 28 / 100))
   sleep 3
@@ -427,7 +416,7 @@ if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
   shot gesture-player-closed
   alive_after "the layered swipes down"
 fi
-link "lyricflow://style?playerBackground=blend&vinyl=0"
+link "lyricflow://style?playerBackground=blend"
 # The Apple player: a tap draws the full-bleed cover back into a card and
 # out again; Up next rises with the cover behind the lifted transport.
 if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then

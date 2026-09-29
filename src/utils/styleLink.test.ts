@@ -6,13 +6,11 @@ describe('styleUpdates', () => {
       playerBackground: 'aura',
       miniPlayerBackground: 'glass',
       appBackground: 'glow',
-      vinyl: '1',
       fps: '0',
     })).toEqual({
       playerBackground: 'aura',
       miniPlayerBackground: 'glass',
       appBackground: 'glow',
-      playerVinyl: true,
       showPerformanceHUD: false,
     });
   });
