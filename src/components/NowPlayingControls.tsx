@@ -314,7 +314,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         {compact || hideVolume ? null : <VolumeRow />}
 
         <View style={styles.footer}>
-          <Pressable onPress={() => { tick('light'); onOpenQueue(); }} hitSlop={10} style={styles.footerBtn} accessibilityRole="button" accessibilityLabel="Playing next">
+          <Pressable onPress={() => { tick('light'); onOpenQueue(); }} hitSlop={10} style={styles.footerBtn} accessibilityRole="button" accessibilityLabel="Up next">
             <Ionicons name="list" size={26} color={INK_SOFT} />
           </Pressable>
 
