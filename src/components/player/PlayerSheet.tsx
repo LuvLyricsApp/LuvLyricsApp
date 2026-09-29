@@ -26,7 +26,7 @@ const { Gesture, GestureDetector } = GestureHandler;
  */
 interface SheetScrollState {
   offset: SharedValue<number>;
-  /** The list's native scroll, recognised alongside the sheet's pan. */
+  /** The list's native scroll, as a gesture the sheet's pan can cancel. */
   list: GestureHandler.NativeGesture;
 }
 
@@ -43,7 +43,9 @@ export const useSheetScroll = () => {
 /**
  * Wraps a sheet's scroll view. On Android a native scroll view that starts
  * dragging cancels every gesture-handler gesture, so without this a swipe
- * down that begins on the list never reaches the sheet's pan.
+ * down that begins on the list never reaches the sheet's pan. As a Native
+ * gesture the list takes part in gesture handling: the pan can win and
+ * cancel it, and it wins over a pan that has not activated yet.
  */
 export const SheetScrollable: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const sheet = useContext(SheetScrollContext);
@@ -80,6 +82,10 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
     .onStart(() => {
       'worklet';
       runOnJS(diag)('sheet', 'list scroll start');
+    })
+    .onFinalize((_e, success) => {
+      'worklet';
+      runOnJS(diag)('sheet', `list scroll ${success ? 'end' : 'cancelled'}`);
     }), []);
   const scrollState = useMemo(() => ({ offset: scrolled, list }), [scrolled, list]);
 
@@ -102,11 +108,14 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
 
   // Swiping down closes this sheet and nothing else: the player's own
   // swipe-down is off while a sheet is open, so the next swipe closes the player.
+  // It activates at 6pt, inside Android's 8dp touch slop, so on a list at the
+  // top it wins before the list starts scrolling and the list's touch is
+  // cancelled. Run together, the list drifted and flung under the moving
+  // sheet, and the next swipe down read as a scroll.
   const pan = Gesture.Pan()
-    .activeOffsetY(10)
+    .activeOffsetY(6)
     .failOffsetY(-8)
     .failOffsetX([-22, 22])
-    .simultaneousWithExternalGesture(list)
     .onTouchesDown((_e, state) => {
       'worklet';
       if (scrolled.value > 2) state.fail();
