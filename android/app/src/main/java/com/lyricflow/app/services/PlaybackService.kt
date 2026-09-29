@@ -48,14 +48,21 @@ class PlaybackService : MediaSessionService() {
     // Stall watchdog: a connection that stops delivering bytes without erroring
     // leaves the player buffering forever. If it wants to play, is buffering and
     // the position hasn't moved for STALL_TICKS checks, reload from where it is.
+    //
+    // It only has anything to check while the player wants to play and is
+    // buffering, so it is armed by those state changes and disarms itself the
+    // moment they no longer hold. An idle or paused service posts nothing.
     private var lastPosition = -1L
     private var stalledTicks = 0
     private var stallReloads = 0
+    private var watchdogArmed = false
     private val watchdog = object : Runnable {
         override fun run() {
+            watchdogArmed = false
             val p = exoPlayer
             val position = p.currentPosition
-            if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING && position == lastPosition) {
+            val waiting = p.playWhenReady && p.playbackState == Player.STATE_BUFFERING
+            if (waiting && position == lastPosition) {
                 stalledTicks++
                 if (stalledTicks >= STALL_TICKS) {
                     stalledTicks = 0
@@ -78,8 +85,15 @@ class PlaybackService : MediaSessionService() {
                 if (p.isPlaying) stallReloads = 0
             }
             lastPosition = position
-            retryHandler.postDelayed(this, WATCHDOG_MS)
+            // Keep watching only while there is something to watch.
+            if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING) armWatchdog()
         }
+    }
+
+    private fun armWatchdog() {
+        if (watchdogArmed) return
+        watchdogArmed = true
+        retryHandler.postDelayed(watchdog, WATCHDOG_MS)
     }
 
     /**
@@ -119,13 +133,41 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) retries = 0
+            if (playbackState == Player.STATE_BUFFERING && exoPlayer.playWhenReady) {
+                lastPosition = exoPlayer.currentPosition
+                armWatchdog()
+            }
+        }
+
+        // Healthy playback ends a stall episode (the old always-on watchdog reset
+        // this on its next tick).
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                stallReloads = 0
+                stalledTicks = 0
+            }
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady && exoPlayer.playbackState == Player.STATE_BUFFERING) {
+                lastPosition = exoPlayer.currentPosition
+                armWatchdog()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             retries = 0
             stallReloads = 0
             retryHandler.removeCallbacksAndMessages(RETRY_TOKEN)
+            // Downloaded songs need only the CPU lock; the Wi-Fi lock that
+            // WAKE_MODE_NETWORK adds is for streams that would freeze without it.
+            exoPlayer.setWakeMode(wakeModeFor(mediaItem))
         }
+    }
+
+    private fun wakeModeFor(mediaItem: MediaItem?): Int {
+        val scheme = mediaItem?.localConfiguration?.uri?.scheme?.lowercase()
+        return if (scheme == "http" || scheme == "https") C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL
     }
 
     override fun onCreate() {
@@ -168,7 +210,6 @@ class PlaybackService : MediaSessionService() {
             .build()
         exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
         exoPlayer.addListener(recovery)
-        retryHandler.postDelayed(watchdog, WATCHDOG_MS)
 
         val sessionActivity = packageManager
             .getLaunchIntentForPackage(packageName)

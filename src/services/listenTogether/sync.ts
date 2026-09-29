@@ -362,8 +362,10 @@ const handleEvent = (event: ListenTogetherEvent) => {
       lastSyncedPlaying = player().isPlaying;
       announceCurrent();
       startHeartbeat();
+      startSeekWatch();
       return;
     case 'join_approved': {
+      startSeekWatch();
       const s = event.payload.state;
       applyHostVolume(s.volume);
       if (s.current_track) {
@@ -373,6 +375,7 @@ const handleEvent = (event: ListenTogetherEvent) => {
       return;
     }
     case 'reconnected': {
+      startSeekWatch();
       if (event.payload.is_host) {
         startHeartbeat();
         const local = player().currentSongId;
@@ -424,6 +427,7 @@ const handleEvent = (event: ListenTogetherEvent) => {
       return;
     case 'left':
       stopHeartbeat();
+      stopSeekWatch();
       pending = null;
       bufferingTrackId = null;
       generation++;
@@ -445,6 +449,24 @@ function startHeartbeat() {
 function stopHeartbeat() {
   if (heartbeat) clearInterval(heartbeat);
   heartbeat = null;
+}
+
+// ── Seek watch ─────────────────────────────────────────────────────────────
+// A 1s tick that notices our own seeks. It only exists while a room is open:
+// started by the events that put us in one, ended by leaving (or by the tick
+// itself finding the room gone), so an app that never joins a room never
+// wakes the JS thread for it.
+let seekWatch: ReturnType<typeof setInterval> | null = null;
+function startSeekWatch() {
+  if (seekWatch) return;
+  seekWatch = setInterval(() => {
+    if (!inRoom()) { stopSeekWatch(); return; }
+    watchForSeeks();
+  }, 1000);
+}
+function stopSeekWatch() {
+  if (seekWatch) clearInterval(seekWatch);
+  seekWatch = null;
 }
 
 /** Mounted once (RootNavigator). Returns a teardown. */
@@ -469,7 +491,8 @@ export const startListenTogetherSync = (): (() => void) => {
     }
   });
 
-  const seekWatch = setInterval(() => { if (inRoom()) watchForSeeks(); }, 1000);
+  // The room may already be open (session resume, hot reload).
+  if (inRoom()) startSeekWatch();
   const volumeSub = NativeAudioPlayer.addListener('onVolumeChanged', (e: { volume?: number }) => {
     if (typeof e?.volume === 'number') onHostVolume(e.volume);
   });
@@ -478,7 +501,7 @@ export const startListenTogetherSync = (): (() => void) => {
     offEvents();
     offStore();
     volumeSub.remove();
-    clearInterval(seekWatch);
+    stopSeekWatch();
     stopHeartbeat();
   };
 };

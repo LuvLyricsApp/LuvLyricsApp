@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import java.lang.ref.WeakReference
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 
 object PlayerBridge {
     private var activePlayerRef = WeakReference<ExoPlayer>(null)
@@ -38,6 +39,8 @@ object PlayerBridge {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             emitStatus()
+            // The poller sleeps while nothing plays; this is what wakes it.
+            if (isPlaying) playingSignal.trySend(Unit)
         }
 
         // Fires the moment play()/pause() is applied, before buffering resolves.
@@ -68,11 +71,17 @@ object PlayerBridge {
     private val pollerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var pollerJob: Job? = null
 
+    /** Conflated, so a "started playing" that lands mid-iteration is never lost. */
+    private val playingSignal = Channel<Unit>(Channel.CONFLATED)
+
     fun setPlayer(player: ExoPlayer, context: Context) {
         activePlayerRef = WeakReference(player)
         activeServiceRef = WeakReference(context)
         player.addListener(playerListener)
         startProgressPoller()
+        // A player that is already playing (service restarted mid-song) has no
+        // "started" event coming.
+        playingSignal.trySend(Unit)
     }
 
     fun clearPlayer() {
@@ -123,15 +132,30 @@ object PlayerBridge {
         onPlaybackError?.invoke("released", position)
     }
 
+    /**
+     * Position ticks, four a second, but only while the player is playing.
+     * Paused, buffering, ended or backgrounded-and-idle, the loop is suspended
+     * on the channel and costs no wake-ups; every state change JS needs still
+     * arrives through the listener events above.
+     */
     private fun startProgressPoller() {
         pollerJob?.cancel()
         pollerJob = pollerScope.launch {
             while (isActive) {
-                withContext(Dispatchers.Main) {
-                    val player = activePlayerRef.get() ?: return@withContext
-                    if (player.isPlaying) emitStatus()
+                playingSignal.receive()
+                while (isActive) {
+                    val stillPlaying = withContext(Dispatchers.Main) {
+                        val player = activePlayerRef.get()
+                        if (player != null && player.isPlaying) {
+                            emitStatus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    if (!stillPlaying) break
+                    delay(250)
                 }
-                delay(250)
             }
         }
     }

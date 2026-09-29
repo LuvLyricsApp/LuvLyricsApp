@@ -253,6 +253,8 @@ class DesktopBridgeService {
   private heartbeatCheckTimer: NodeJS.Timeout | null = null;
   private pendingHandoffTimer: NodeJS.Timeout | null = null;
   private readonly HEARTBEAT_TIMEOUT_MS = 3000;
+  private readonly IP_WATCH_FOREGROUND_MS = 5000;
+  private readonly IP_WATCH_BACKGROUND_MS = 60_000;
   private readonly HANDOFF_GRACE_MS = 1800;
   private latestDesktopPosition: number | null = null;
   private desktopWasPlaying = false;
@@ -305,12 +307,14 @@ class DesktopBridgeService {
     this.desktopConnected = true;
     this.lastDesktopHeartbeatAt = Date.now();
     this.clearPendingHandoff();
+    this.startHeartbeatWatchdog();
     // this.logDesktopEvent('desktop_connected');
   }
 
   private markDesktopHeartbeat(): void {
     this.desktopConnected = true;
     this.lastDesktopHeartbeatAt = Date.now();
+    this.startHeartbeatWatchdog();
     if (Date.now() - this.lastHeartbeatLogAt > 1500) {
       this.lastHeartbeatLogAt = Date.now();
       this.logDesktopEvent('desktop_heartbeat');
@@ -331,10 +335,17 @@ class DesktopBridgeService {
     this.scheduleHandoffToPhone(reason);
   }
 
+  // The 1s staleness check has nothing to do until a desktop is connected, so it
+  // starts on the first connect/heartbeat (idempotent) and ends itself once the
+  // desktop is gone. A bridge nobody is talking to no longer ticks.
   private startHeartbeatWatchdog(): void {
-    this.stopHeartbeatWatchdog();
+    if (this.heartbeatCheckTimer) return;
     this.heartbeatCheckTimer = setInterval(() => {
-      if (!this.running || this.bridgeSource !== 'desktop' || !this.desktopConnected) return;
+      if (!this.running || !this.desktopConnected) {
+        this.stopHeartbeatWatchdog();
+        return;
+      }
+      if (this.bridgeSource !== 'desktop') return;
       const staleFor = Date.now() - this.lastDesktopHeartbeatAt;
       if (staleFor > this.HEARTBEAT_TIMEOUT_MS) {
         this.desktopConnected = false;
@@ -351,7 +362,10 @@ class DesktopBridgeService {
     }
   }
 
-  private startIpWatchdog(): void {
+  // Looking at the address every 5s only matters while someone can see the app.
+  // In the background it slows to once a minute, and coming back to the
+  // foreground refreshes the advertisement and the fast cadence at once.
+  private startIpWatchdog(intervalMs: number = this.IP_WATCH_FOREGROUND_MS): void {
     this.stopIpWatchdog();
     this.ipWatchTimer = setInterval(async () => {
       if (!this.running) return;
@@ -360,7 +374,7 @@ class DesktopBridgeService {
         this.lastKnownIp = ip;
         this.refreshMdnsAdvertisement('ip_change');
       }
-    }, 5000);
+    }, intervalMs);
   }
 
   private stopIpWatchdog(): void {
@@ -384,7 +398,12 @@ class DesktopBridgeService {
   }
 
   private handleAppStateChange = (state: AppStateStatus): void => {
-    if (state !== 'active') return;
+    if (!this.running) return;
+    if (state !== 'active') {
+      this.startIpWatchdog(this.IP_WATCH_BACKGROUND_MS);
+      return;
+    }
+    this.startIpWatchdog(this.IP_WATCH_FOREGROUND_MS);
     this.refreshMdnsAdvertisement('foreground');
     if (this.bridgeSource === 'desktop' && !this.desktopConnected) {
       this.scheduleHandoffToPhone('network_loss');
@@ -500,8 +519,10 @@ class DesktopBridgeService {
       return;
     }
     this.running = true;
-    this.startHeartbeatWatchdog();
-    this.startIpWatchdog();
+    // The heartbeat watchdog starts with the first desktop (markDesktopConnected).
+    this.startIpWatchdog(
+      AppState.currentState === 'active' ? this.IP_WATCH_FOREGROUND_MS : this.IP_WATCH_BACKGROUND_MS,
+    );
     this.appStateSub = AppState.addEventListener('change', this.handleAppStateChange);
     await this.startMdns('restart');
     this.subscribeToStores();
@@ -995,9 +1016,14 @@ class DesktopBridgeService {
     });
 
     // Subscribe to download queue changes
+    // Only items whose report changed go out: one download's tick used to send
+    // a message for every item in the queue.
+    const lastSent = new Map<string, string>();
     this.downloadUnsubscribe = useDownloadQueueStore.subscribe((state) => {
       if (!this.running || this.clients.size === 0) return;
+      const present = new Set<string>();
       for (const item of state.queue) {
+        present.add(item.id);
         const msg = JSON.stringify({
           type: 'DOWNLOAD_PROGRESS',
           id: item.id,
@@ -1006,8 +1032,11 @@ class DesktopBridgeService {
           stageStatus: item.stageStatus,
           error: item.error,
         });
+        if (lastSent.get(item.id) === msg) continue;
+        lastSent.set(item.id, msg);
         this.broadcast(msg);
       }
+      for (const id of lastSent.keys()) if (!present.has(id)) lastSent.delete(id);
     });
   }
 
