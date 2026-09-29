@@ -6,7 +6,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
 
 export interface SeekPulse {
@@ -22,18 +22,24 @@ const HOLD_MS = 650;
 const Half: React.FC<{ side: -1 | 1; pulse: SeekPulse | null; width: number; height: number }> = ({ side, pulse, width, height }) => {
   const shown = useSharedValue(0);
   const nudge = useSharedValue(0);
+  const reduce = useReducedMotion();
   const mine = pulse && pulse.side === side ? pulse : null;
   useEffect(() => {
+    // The fade is the feedback itself, so it runs even with Remove animations
+    // on (Reanimated would otherwise jump it straight to hidden and the tap
+    // would show nothing); only the sideways nudge is motion to drop.
+    const keep = ReduceMotion.Never;
     if (!mine) {
-      shown.value = withTiming(0, { duration: Motion.duration.fast });
+      shown.value = withTiming(0, { duration: Motion.duration.fast, reduceMotion: keep });
       return;
     }
     shown.value = withSequence(
-      withTiming(1, { duration: Motion.duration.instant }),
-      withDelay(HOLD_MS, withTiming(0, { duration: Motion.duration.slow, easing: Motion.ease.standard })),
+      keep,
+      withTiming(1, { duration: Motion.duration.instant, reduceMotion: keep }),
+      withDelay(HOLD_MS, withTiming(0, { duration: Motion.duration.slow, easing: Motion.ease.standard, reduceMotion: keep }), keep),
     );
-    nudge.value = withSequence(withTiming(side * 6, { duration: 90 }), withTiming(0, { duration: 180, easing: Motion.ease.decelerate }));
-  }, [mine, side, shown, nudge]);
+    if (!reduce) nudge.value = withSequence(withTiming(side * 6, { duration: 90 }), withTiming(0, { duration: 180, easing: Motion.ease.decelerate }));
+  }, [mine, side, shown, nudge, reduce]);
   const wash = useAnimatedStyle(() => ({ opacity: shown.value }));
   const mark = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ translateX: nudge.value }] }));
   // A circle much taller than the stage, so only its curved inner edge shows.
