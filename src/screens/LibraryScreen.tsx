@@ -1,10 +1,10 @@
 /**
  * Library — the songs on this phone, in the room lit by what's playing.
  *
- *   Deck       your recent songs as a fanned deck of sleeves: tap the front
- *              one to play it, flick to leaf through (components/library/CoverDeck)
- *   Play       play everything or shuffle, right under the deck — and again in
- *              a frosted bar that stays at the top once you scroll
+ *   Deck       your recent songs as a coverflow of glass cards: drag along the
+ *              row, tap the middle one to play it (components/library/GlassDeck),
+ *              with a glass pill under it to shuffle, step and play / pause —
+ *              and a frosted play bar that stays at the top once you scroll
  *   Artists    round covers sized by how many of their songs you keep; tap to
  *              see only theirs (ArtistOrbit)
  *   Downloads  songs still arriving
@@ -26,14 +26,14 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
 import { DownloadQueueModal } from '../components/DownloadQueueModal';
 import { useSongActions } from '../components/library/useSongActions';
-import CoverDeck from '../components/library/CoverDeck';
+import GlassDeck from '../components/library/GlassDeck';
 import ArtistOrbit from '../components/library/ArtistOrbit';
 import AlphabetRail from '../components/library/AlphabetRail';
 import { groupArtists, leadArtist, letterIndex } from '../components/library/libraryShape';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import { RiseIn, Tactile } from '../components/allegra/motion';
-import { GlassButton, PrimaryButton, SectionHeading } from '../components/allegra/home';
+import { PrimaryButton, SectionHeading } from '../components/allegra/home';
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { TrackRow } from '../components/stream/StreamItems';
 import { useSongsStore } from '../store/songsStore';
@@ -41,6 +41,8 @@ import { usePlayerStore } from '../store/playerStore';
 import { QueueItem, useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useBottomClearance } from '../hooks/useBottomClearance';
 import { Song } from '../types/song';
+import { shuffled } from '../utils/shuffle';
+import { countOf } from '../utils/formatters';
 
 const LIBRARY_QUEUE_ID = 'library';
 /** TrackRow's fixed height, so the A–Z rail can jump straight to a row. */
@@ -57,20 +59,12 @@ const sorters: Record<SortMode, (a: Song, b: Song) => number> = {
   artist: (a, b) => (a.artist ?? '').localeCompare(b.artist ?? ''),
 };
 
-const shuffled = <T,>(list: T[]): T[] => {
-  const out = [...list];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-};
-
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Song>);
 
 const LibraryScreen: React.FC = () => {
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const deckSize = Math.round(Math.min(screenW * 0.54, 250));
+  // The middle glass card's width; its neighbours peek out either side.
+  const deckSize = Math.round(Math.min(screenW * 0.5, 232));
   const insets = useSafeAreaInsets();
   const bottomClearance = useBottomClearance(32);
   const navigation = useNavigation<Nav>();
@@ -128,6 +122,9 @@ const LibraryScreen: React.FC = () => {
     usePlayerStore.getState().setPlaylistQueue(LIBRARY_QUEUE_ID, shuffle ? shuffled(items) : items, shuffle ? 0 : index);
   }, []);
   const playAll = useCallback((shuffle = false) => playList(list, 0, shuffle), [list, playList]);
+  const togglePlayback = useCallback(() => {
+    usePlayerStore.getState().requestPlayback(!usePlayerStore.getState().isPlaying);
+  }, []);
   const playFromDeck = useCallback((song: Song) => {
     const index = deck.findIndex(s => s.id === song.id);
     playList(deck, Math.max(0, index));
@@ -202,13 +199,17 @@ const LibraryScreen: React.FC = () => {
       {visible.length > 0 ? (
         <RiseIn style={styles.hero}>
           <View onLayout={(e: LayoutChangeEvent) => setHeroBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
-            <CoverDeck songs={deck} size={deckSize} currentId={currentSongId} onPlay={playFromDeck} />
-            <View style={styles.actions}>
-              <PrimaryButton icon="play" label="Play all" onPress={() => playAll(false)} />
-              <GlassButton icon="shuffle" label="Shuffle" onPress={() => playAll(true)} />
-            </View>
+            <GlassDeck
+              songs={deck}
+              size={deckSize}
+              currentId={currentSongId}
+              isPlaying={isPlaying}
+              onPlay={playFromDeck}
+              onTogglePlay={togglePlayback}
+              onShuffle={() => playAll(true)}
+            />
             <Text style={styles.meta}>
-              {visible.length} {visible.length === 1 ? 'song' : 'songs'} · plays offline, lyrics included
+              {countOf(visible.length, 'song')} · plays offline, lyrics included
             </Text>
           </View>
         </RiseIn>

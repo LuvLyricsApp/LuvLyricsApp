@@ -67,12 +67,3 @@ export const railPick = (y: number, railHeight: number, count: number): number =
   return Math.max(0, Math.min(count - 1, Math.floor((y / railHeight) * count)));
 };
 
-/**
- * Where a card sits in the deck: 0 = front, then behind it. `front` is the
- * index of the song at the front; `n` the deck size.
- */
-export const deckSlot = (cardIndex: number, front: number, n: number): number => {
-  'worklet';
-  if (n <= 0) return 0;
-  return (((cardIndex - front) % n) + n) % n;
-};

@@ -1,4 +1,4 @@
-import { deckSlot, groupArtists, leadArtist, letterIndex, letterOf, railPick } from './libraryShape';
+import { groupArtists, leadArtist, letterIndex, letterOf, railPick } from './libraryShape';
 import type { Song } from '../../types/song';
 
 const song = (id: string, title: string, artist: string, day: number, cover?: string): Song => ({
@@ -56,14 +56,5 @@ describe('letters', () => {
     expect(railPick(259, 260, 26)).toBe(25);
     expect(railPick(-40, 260, 26)).toBe(0);
     expect(railPick(900, 260, 26)).toBe(25);
-  });
-});
-
-describe('deckSlot', () => {
-  it('counts cards back from the front and wraps', () => {
-    expect(deckSlot(3, 3, 5)).toBe(0);
-    expect(deckSlot(4, 3, 5)).toBe(1);
-    expect(deckSlot(0, 3, 5)).toBe(2);
-    expect(deckSlot(2, 3, 5)).toBe(4);
   });
 });
