@@ -415,7 +415,9 @@ if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
   link "lyricflow://player?sheet=queue"
   sleep 4
   shot gesture-queue-open
-  adb shell input swipe $((W / 2)) $((H * 80 / 100)) $((W / 2)) $((H * 97 / 100)) 300
+  # Starts on the list, and travels past the sheet's 96pt close distance:
+  # `input swipe` stops before it lifts, so there is no flick to close on.
+  adb shell input swipe $((W / 2)) $((H * 70 / 100)) $((W / 2)) $((H * 97 / 100)) 300
   sleep 3
   shot gesture-queue-closed
   adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 88 / 100)) 220
