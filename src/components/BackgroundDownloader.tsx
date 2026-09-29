@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useSongsStore } from '../store/songsStore';

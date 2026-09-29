@@ -82,13 +82,17 @@ const handle = async (url: string | null) => {
   }
   if (link.action.startsWith('open/')) {
     const target = link.action.slice(5);
+    // `pop` goes back to the tab shell. Without it React Navigation 7 pushes a
+    // second Main over an open player, which stays mounted underneath and keeps
+    // the mini pill faded out as if the sheet were still up.
+    const pop = { pop: true };
     switch (target) {
-      case 'stream': navigationRef.navigate('Main', { screen: 'Stream' }); break;
-      case 'luvs': navigationRef.navigate('Main', { screen: 'Luvs' }); break;
-      case 'library': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'LibraryHome' } }); break;
-      case 'playlists': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'Playlists' } }); break;
-      case 'search': navigationRef.navigate('Main', { screen: 'Search' }); break;
-      case 'settings': navigationRef.navigate('Main', { screen: 'Settings' }); break;
+      case 'stream': navigationRef.navigate('Main', { screen: 'Stream' }, pop); break;
+      case 'luvs': navigationRef.navigate('Main', { screen: 'Luvs' }, pop); break;
+      case 'library': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'LibraryHome' } }, pop); break;
+      case 'playlists': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'Playlists' } }, pop); break;
+      case 'search': navigationRef.navigate('Main', { screen: 'Search' }, pop); break;
+      case 'settings': navigationRef.navigate('Main', { screen: 'Settings' }, pop); break;
       default: break;
     }
   }
