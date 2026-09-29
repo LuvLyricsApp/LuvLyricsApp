@@ -25,7 +25,10 @@ import DynamicAura from '../components/allegra/DynamicAura';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import * as Kit from '../components/settings/SettingsKit';
 import { Action, Choice, JumpChips, Row, Section } from '../components/settings/SettingsKit';
-import { Signal } from '../constants/allegraTheme';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Motion, Radius, Signal } from '../constants/allegraTheme';
+import { Tactile } from '../components/allegra/motion';
+import * as Haptics from '../utils/haptics';
 import appConfig from '../../app.json';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
@@ -204,6 +207,18 @@ const SettingsScreen: React.FC<Props> = () => {
     blend: 'The Apple Music room, blending into a soft glow when lyrics are open.',
     apple: 'The cover melting into its own blur, like Apple Music.',
     youtube: 'The cover\u2019s colour washing down into black, with the artwork as a card, like YouTube Music.',
+    aura: 'That wash with the live shader drifting through the top half, in the cover\u2019s colours.',
+  };
+  const appBgHint: Record<AppBackground, string> = {
+    shader: 'The live shader, moving with the music.',
+    glass: 'Dark frosted glass tinted by the song. Lighter on the battery.',
+    glow: 'The mini player’s animated glow across the top, fading into plain black.',
+  };
+  const miniHint: Record<MiniPlayerBackground, string> = {
+    glow: 'Two glows drifting in the cover\u2019s colours.',
+    tint: 'A calm tone of the cover.',
+    glass: 'Clear liquid glass that bends and lights whatever is behind it.',
+    black: 'Plain black, nothing behind the text.',
   };
 
   return (
@@ -218,7 +233,6 @@ const SettingsScreen: React.FC<Props> = () => {
       >
         <View style={styles.hero}>
           <Text style={styles.heroTitle} accessibilityRole="header">Settings</Text>
-          <Text style={styles.heroLead}>Make it feel like yours. Everything here is saved on this phone and applies straight away.</Text>
         </View>
 
         <View>
@@ -254,23 +268,21 @@ const SettingsScreen: React.FC<Props> = () => {
             label="Player background"
             hint={bgHint[settings.playerBackground]}
             value={settings.playerBackground}
-            options={[{ value: 'apple', label: 'Apple Music' }, { value: 'blend', label: 'Apple + glow' }, { value: 'youtube', label: 'YouTube Music' }]}
+            options={[{ value: 'apple', label: 'Apple Music' }, { value: 'blend', label: 'Apple + glow' }, { value: 'youtube', label: 'YouTube Music' }, { value: 'aura', label: 'Shader wash' }]}
             onChange={settings.setPlayerBackground}
           />
           <Choice<AppBackground>
             label="App background"
-            hint={settings.appBackground === 'glass'
-              ? 'Dark frosted glass tinted by the song. Lighter on the battery.'
-              : 'The live shader, moving with the music.'}
+            hint={appBgHint[settings.appBackground]}
             value={settings.appBackground}
-            options={[{ value: 'shader', label: 'Live shader' }, { value: 'glass', label: 'Frosted glass' }]}
+            options={[{ value: 'shader', label: 'Live shader' }, { value: 'glass', label: 'Frosted glass' }, { value: 'glow', label: 'Glow' }]}
             onChange={settings.setAppBackground}
           />
           <Choice<MiniPlayerBackground>
             label="Mini player background"
-            hint={settings.miniPlayerBackground === 'glow' ? 'Two glows drifting in the cover\u2019s colours.' : 'A calm tone of the cover.'}
+            hint={miniHint[settings.miniPlayerBackground]}
             value={settings.miniPlayerBackground}
-            options={[{ value: 'glow', label: 'Glow animated' }, { value: 'tint', label: 'Cover tint' }]}
+            options={[{ value: 'glow', label: 'Glow animated' }, { value: 'tint', label: 'Cover tint' }, { value: 'glass', label: 'Liquid glass' }, { value: 'black', label: 'Pure black' }]}
             onChange={settings.setMiniPlayerBackground}
           />
           <Kit.Switch
@@ -600,12 +612,17 @@ const LyricsSizeRow: React.FC<{ size: number; align: LyricsAlign; onChange: (siz
   );
 };
 
-/** Lyrics timing: the readout follows the thumb; the setting saves on release. */
+/**
+ * Lyrics timing: the readout follows the thumb; the setting saves on release.
+ * "Reset to sync" appears only while the offset is off zero, and puts it back
+ * to exactly in sync in one tap.
+ */
 const TimingRow: React.FC<{ value: number; onChange: (seconds: number) => void }> = ({ value, onChange }) => {
   const [live, setLive] = React.useState(value);
   React.useEffect(() => { setLive(value); }, [value]);
   const shown = Math.round(live * 10) / 10;
   const label = shown === 0 ? 'In sync' : `${shown > 0 ? '+' : ''}${shown.toFixed(1)}s`;
+  const off = Math.abs(shown) > 0.04;
   return (
     <Row label={`Timing  ${label}`} hint="Lyrics running late? Slide right. Early? Slide left." stack>
       <Slider
@@ -620,6 +637,19 @@ const TimingRow: React.FC<{ value: number; onChange: (seconds: number) => void }
         maximumTrackTintColor="rgba(244,241,234,0.18)"
         thumbTintColor={Signal.wave}
       />
+      {off ? (
+        <Animated.View entering={FadeIn.duration(Motion.duration.base)} exiting={FadeOut.duration(Motion.duration.fast)} style={styles.resetWrap}>
+          <Tactile
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); setLive(0); onChange(0); }}
+            accessibilityRole="button"
+            accessibilityLabel="Reset lyrics timing to in sync"
+            style={styles.resetPill}
+          >
+            <Ionicons name="refresh" size={14} color={Signal.waveInk} />
+            <Text style={styles.resetText}>Reset to sync</Text>
+          </Tactile>
+        </Animated.View>
+      ) : null}
     </Row>
   );
 };
@@ -628,8 +658,10 @@ const styles = StyleSheet.create({
   lyricsSample: { color: Signal.ink, fontWeight: '700', marginTop: 10, marginBottom: 4 },
   hero: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 },
   heroTitle: { color: Signal.ink, fontSize: 34, fontWeight: '700' },
-  heroLead: { color: Signal.inkMuted, fontSize: 15, lineHeight: 21, marginTop: 6 },
   slider: { width: '100%', height: 36 },
+  resetWrap: { alignItems: 'flex-start', marginTop: 4 },
+  resetPill: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: Signal.wave },
+  resetText: { color: Signal.waveInk, fontSize: 13, fontWeight: '600' },
   tokenField: { marginBottom: 12 },
   tokenLabel: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600', marginBottom: 6 },
   tokenInput: {

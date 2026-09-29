@@ -316,6 +316,73 @@ step "playlists"
 link "lyricflow://open/playlists"
 sleep 5
 shot playlists
+
+# ── Looks: each style, set with lyricflow://style (utils/styleLink) ───────────
+# Settings with the liquid glass pill and the frame rate readout: the picker
+# grid must not wrap, the pill must be clear glass, the readout must show.
+step "look: settings, liquid glass pill, fps"
+link "lyricflow://style?miniPlayerBackground=glass&fps=1&appBackground=shader"
+link "lyricflow://open/settings"
+sleep 6
+shot look-settings-glass
+step "look: pure black pill"
+link "lyricflow://style?miniPlayerBackground=black"
+sleep 3
+shot look-settings-black
+step "look: glow app background"
+link "lyricflow://style?miniPlayerBackground=glow&appBackground=glow&fps=0"
+link "lyricflow://open/stream"
+sleep 6
+shot look-app-glow
+link "lyricflow://open/library"
+sleep 5
+shot look-app-glow-library
+link "lyricflow://style?appBackground=shader"
+
+# The shader wash player background, then the record on a double tap.
+step "look: shader wash player"
+link "lyricflow://style?playerBackground=aura&vinyl=0"
+link "lyricflow://player"
+sleep 8
+shot look-player-aura
+sleep 6
+shot look-player-aura-2
+step "look: vinyl"
+link "lyricflow://style?vinyl=1"
+sleep 6
+shot look-player-vinyl
+sleep 5
+shot look-player-vinyl-2
+# The gestures themselves: double-tap turns the record back into the cover,
+# and again into a record; a swipe across the cover skips. Each logs a
+# [diag:player] line (diag.txt) so a missed tap is visible.
+if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
+  step "gesture: double tap the record"
+  adb shell "input tap $((W / 2)) $((H * 28 / 100)); input tap $((W / 2)) $((H * 28 / 100))"
+  sleep 3
+  shot gesture-double-tap
+  step "gesture: swipe the cover to the next song"
+  adb shell input swipe $((W * 80 / 100)) $((H * 28 / 100)) $((W * 15 / 100)) $((H * 28 / 100)) 260
+  sleep 6
+  shot gesture-swipe-next
+  adb shell input swipe $((W * 15 / 100)) $((H * 28 / 100)) $((W * 80 / 100)) $((H * 28 / 100)) 260
+  sleep 6
+  shot gesture-swipe-previous
+  alive_after "swiping the cover"
+  # Up next: a swipe down closes the sheet only; a second one closes the player.
+  step "gesture: layered swipe down"
+  link "lyricflow://player?sheet=queue"
+  sleep 4
+  shot gesture-queue-open
+  adb shell input swipe $((W / 2)) $((H * 80 / 100)) $((W / 2)) $((H * 97 / 100)) 300
+  sleep 3
+  shot gesture-queue-closed
+  adb shell input swipe $((W / 2)) $((H * 30 / 100)) $((W / 2)) $((H * 88 / 100)) 220
+  sleep 3
+  shot gesture-player-closed
+  alive_after "the layered swipes down"
+fi
+link "lyricflow://style?playerBackground=blend&vinyl=0"
 luvs_steps
 
 finish

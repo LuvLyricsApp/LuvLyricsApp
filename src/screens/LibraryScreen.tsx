@@ -25,7 +25,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import { LibraryStackParamList, RootStackParamList } from '../types/navigation';
 import { DownloadQueueModal } from '../components/DownloadQueueModal';
-import { PerformanceHUD } from '../components/PerformanceHUD';
 import { useSongActions } from '../components/library/useSongActions';
 import CoverDeck from '../components/library/CoverDeck';
 import ArtistOrbit from '../components/library/ArtistOrbit';
@@ -362,7 +361,6 @@ const LibraryScreen: React.FC = () => {
 
       {actions.element}
       <DownloadQueueModal visible={queueOpen} onClose={() => setQueueOpen(false)} />
-      <PerformanceHUD />
     </View>
   );
 };

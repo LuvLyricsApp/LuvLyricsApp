@@ -22,6 +22,7 @@ import { isLowEndDevice } from '../../utils/performanceTier';
 import { useSettingsStore } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import GlassRoom from './GlassRoom';
+import GlowRoom from './GlowRoom';
 
 const LOW_END = isLowEndDevice();
 /** Paused, the field rests but still carries the cover's colour. */
@@ -44,13 +45,16 @@ const withAlpha = (hex: string, alpha: number): string => {
 };
 
 /**
- * Settings → App background picks the room: the live shader, or the lite
- * frosted glass (no frame loop at all).
+ * Settings → App background picks the room: the live shader, the lite frosted
+ * glass (no frame loop at all), or the glow (the mini player's animated glow
+ * across the top of the screen, black below).
  */
 export const DynamicAura: React.FC<DynamicAuraProps> = props => {
-  const lite = useSettingsStore(s => s.appBackground === 'glass');
+  const background = useSettingsStore(s => s.appBackground);
   const hasSong = usePlayerStore(s => !!s.currentSongId);
-  if (lite) return <GlassRoom palette={hasSong ? props.palette : null} dim={props.dim} />;
+  const cover = usePlayerStore(s => s.currentSong?.coverImageUri);
+  if (background === 'glass') return <GlassRoom palette={hasSong ? props.palette : null} dim={props.dim} />;
+  if (background === 'glow') return <GlowRoom coverUri={cover} active={props.active} dim={props.dim} />;
   return <ShaderRoom {...props} />;
 };
 

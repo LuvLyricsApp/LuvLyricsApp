@@ -81,6 +81,13 @@ export const Switch: React.FC<{ label: string; hint?: string; value: boolean; on
   );
 };
 
+/**
+ * Never wraps: up to three short options share one row, four or more sit in a
+ * two-column grid, and every cell is the same width, so a label can't drop to
+ * a row of its own.
+ */
+const choiceColumns = (count: number): number => (count <= 3 ? Math.max(1, count) : 2);
+
 export function Choice<T extends string>({ label, hint, value, options, onChange }: {
   label: string;
   hint?: string;
@@ -88,23 +95,32 @@ export function Choice<T extends string>({ label, hint, value, options, onChange
   options: readonly { value: T; label: string }[];
   onChange: (next: T) => void;
 }) {
+  const columns = choiceColumns(options.length);
+  const rows: { value: T; label: string }[][] = [];
+  for (let i = 0; i < options.length; i += columns) rows.push(options.slice(i, i + columns));
   return (
     <Row label={label} hint={hint} stack>
       <View style={styles.choice} accessibilityRole="radiogroup" accessibilityLabel={label}>
-        {options.map(o => {
-          const selected = o.value === value;
-          return (
-            <Pressable
-              key={o.value}
-              onPress={() => { if (!selected) { Haptics.selectionAsync().catch(() => {}); onChange(o.value); } }}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              style={[styles.choiceOption, selected && styles.choiceOptionOn]}
-            >
-              <Text style={[styles.choiceText, selected && styles.choiceTextOn]} numberOfLines={1}>{o.label}</Text>
-            </Pressable>
-          );
-        })}
+        {rows.map((row, r) => (
+          <View key={r} style={styles.choiceRow}>
+            {row.map(o => {
+              const selected = o.value === value;
+              return (
+                <Pressable
+                  key={o.value}
+                  onPress={() => { if (!selected) { Haptics.selectionAsync().catch(() => {}); onChange(o.value); } }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  style={[styles.choiceOption, selected && styles.choiceOptionOn]}
+                >
+                  <Text style={[styles.choiceText, selected && styles.choiceTextOn]} numberOfLines={1}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
+            {/* A short last row keeps its cells the same width as the rows above. */}
+            {Array.from({ length: columns - row.length }, (_, i) => <View key={`pad${i}`} style={styles.choicePad} />)}
+          </View>
+        ))}
       </View>
     </Row>
   );
@@ -174,8 +190,10 @@ const styles = StyleSheet.create({
   destructive: { color: Signal.accent },
   track: { width: TRACK_W, height: 28, borderRadius: 14, padding: 4, justifyContent: 'center' },
   thumb: { width: THUMB, height: THUMB, borderRadius: THUMB / 2 },
-  choice: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: 4, borderRadius: Radius.pill, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline, alignSelf: 'flex-start' },
-  choiceOption: { minHeight: 36, paddingHorizontal: 14, borderRadius: Radius.pill, justifyContent: 'center' },
+  choice: { gap: 4, padding: 4, borderRadius: 22, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  choiceRow: { flexDirection: 'row', gap: 4 },
+  choiceOption: { flex: 1, minHeight: 38, paddingHorizontal: 10, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  choicePad: { flex: 1 },
   choiceOptionOn: { backgroundColor: Signal.wave },
   choiceText: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600' },
   choiceTextOn: { color: Signal.waveInk },

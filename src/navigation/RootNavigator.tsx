@@ -21,6 +21,7 @@ import { MoreMenuHost } from '../components/MoreMenu';
 import { ListenTogetherHost } from '../components/listenTogether/ListenTogetherHost';
 import { BackgroundDownloader } from '../components/BackgroundDownloader';
 import { VoiceSearchCard } from '../components/VoiceSearchCard';
+import { PerformanceHUD } from '../components/PerformanceHUD';
 import { CreatePlaylistModal } from '../components/CreatePlaylistModal';
 import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 import { useStreamSession } from '../hooks/useStreamSession';
@@ -117,6 +118,8 @@ export const RootNavigator: React.FC = () => {
         <BackgroundDownloader />
         {/* Hold the mic, say a song: the answer appears here, over everything. */}
         <VoiceSearchCard />
+        {/* Settings → About → Show frame rate: over every screen, last so nothing covers it. */}
+        <PerformanceHUD />
       </View>
     </NavigationContainer>
   );

@@ -9,6 +9,8 @@
  *       open Now Playing on the current song (optionally with a sheet up)
  *   lyricflow://together?code=<room>
  *       a Listen together invite: opens the room sheet with the code filled in
+ *   lyricflow://style?playerBackground=aura&miniPlayerBackground=glass&appBackground=glow&vinyl=1&fps=1
+ *       set how the app looks (utils/styleLink: only known values are read)
  *   lyricflow://diagnose
  *       turn on diagnostics (utils/diag) for this run
  *
@@ -23,6 +25,8 @@ import { StreamService } from '../services/stream/StreamService';
 import { usePlayerStore } from '../store/playerStore';
 import { diag, enableDiagnostics } from '../utils/diag';
 import { useListenTogetherStore } from '../store/listenTogetherStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { styleUpdates } from '../utils/styleLink';
 import type { PlayerSheetName } from '../types/navigation';
 
 const SHEETS: PlayerSheetName[] = ['menu', 'together', 'queue', 'timer'];
@@ -49,6 +53,11 @@ const handle = async (url: string | null) => {
   if (link.action === 'diagnose') {
     enableDiagnostics();
     diag('link', 'diagnostics on');
+    return;
+  }
+  if (link.action === 'style') {
+    useSettingsStore.setState(styleUpdates(link.params));
+    diag('link', `style ${JSON.stringify(styleUpdates(link.params))}`);
     return;
   }
   await waitForNavigation();

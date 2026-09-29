@@ -13,18 +13,32 @@ export type LyricsAlign = 'left' | 'center' | 'right';
 type LineSpacing = 'compact' | 'normal' | 'relaxed';
 type ScrollSpeed = 'slow' | 'medium' | 'fast';
 
-export type MiniPlayerBackground = 'glow' | 'tint';
-/** 'blend' is Apple + glow: the Apple Music room, gliding into the glow when lyrics open. */
-export type PlayerBackground = 'blend' | 'apple' | 'youtube';
-/** Behind every screen: the live shader, or the lite frosted glass tinted by the song. */
-export type AppBackground = 'shader' | 'glass';
+/** The pill's own material: Echo's two, plus Apple-style liquid glass and plain black. */
+export type MiniPlayerBackground = 'glow' | 'tint' | 'glass' | 'black';
+/**
+ * 'blend' is Apple + glow: the Apple Music room, gliding into the glow when lyrics open.
+ * 'aura' is our own: YouTube Music's wash and artwork card, with the live shader
+ * drifting through the top half in the cover's colours.
+ */
+export type PlayerBackground = 'blend' | 'apple' | 'youtube' | 'aura';
+
+/** The two styles that show the artwork as a card instead of a full-bleed cover. */
+export const isCardPlayerBackground = (value: PlayerBackground): boolean => value === 'youtube' || value === 'aura';
+/**
+ * Behind every screen: the live shader, the lite frosted glass tinted by the
+ * song, or the glow (the mini player's animated glow across the top, black below).
+ */
+export type AppBackground = 'shader' | 'glass' | 'glow';
 
 /**
  * Stored settings from before "Glow animated" was retired still say 'glow';
  * the closest look left is Apple + glow. Anything unknown gets the default.
  */
 export const normalizePlayerBackground = (value: unknown): PlayerBackground =>
-  (value === 'apple' || value === 'youtube' ? value : 'blend');
+  (value === 'apple' || value === 'youtube' || value === 'aura' ? value : 'blend');
+
+export const normalizeMiniPlayerBackground = (value: unknown): MiniPlayerBackground =>
+  (value === 'tint' || value === 'glass' || value === 'black' ? value : 'glow');
 
 interface SettingsState {
   // Appearance
@@ -121,12 +135,15 @@ interface SettingsState {
   appleMusicInspired: boolean;
   /** Echo's "Hide volume slider" (Apple Music player only). */
   hidePlayerVolume: boolean;
-  /** 'blend' = Apple Music for the cover, Glow animated once lyrics open; 'youtube' = YouTube Music's colour wash with an artwork card. */
+  /** 'blend' = Apple Music for the cover, Glow animated once lyrics open; 'youtube' = YouTube Music's colour wash with an artwork card; 'aura' = that wash with the live shader across the top half. */
   playerBackground: PlayerBackground;
   setMiniPlayerBackground: (v: MiniPlayerBackground) => void;
   setAppleMusicInspired: (v: boolean) => void;
   setHidePlayerVolume: (v: boolean) => void;
   setPlayerBackground: (v: PlayerBackground) => void;
+  /** Double-tap the cover: the artwork turns into a spinning record (and back). */
+  playerVinyl: boolean;
+  setPlayerVinyl: (v: boolean) => void;
   setCanvasEnabled: (enabled: boolean) => void;
   /** Your own Apple MusicKit developer token — unlocks Apple motion artwork. */
   appleMusicToken: string;
@@ -179,6 +196,7 @@ const DEFAULT_SETTINGS = {
   appleMusicInspired: true,
   hidePlayerVolume: false,
   playerBackground: 'blend' as PlayerBackground,
+  playerVinyl: false,
   appleMusicToken: '',
   tidalToken: '',
   luvsStartAtHook: true,
@@ -256,11 +274,13 @@ export const useSettingsStore = create<SettingsState>()(
       setMiniPlayerBackground: (miniPlayerBackground) => set({ miniPlayerBackground }),
       appleMusicInspired: true,
       // As in Echo: turning the Apple Music player on also picks its background.
-      setAppleMusicInspired: (appleMusicInspired) => set(s => (appleMusicInspired && s.playerBackground === 'youtube' ? { appleMusicInspired, playerBackground: 'blend' } : { appleMusicInspired })),
+      setAppleMusicInspired: (appleMusicInspired) => set(s => (appleMusicInspired && isCardPlayerBackground(s.playerBackground) ? { appleMusicInspired, playerBackground: 'blend' } : { appleMusicInspired })),
       hidePlayerVolume: false,
       setHidePlayerVolume: (hidePlayerVolume) => set({ hidePlayerVolume }),
       playerBackground: 'blend',
       setPlayerBackground: (playerBackground) => set({ playerBackground }),
+      playerVinyl: false,
+      setPlayerVinyl: (playerVinyl) => set({ playerVinyl }),
       appleMusicToken: '',
       setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
       tidalToken: '',
@@ -283,6 +303,7 @@ export const useSettingsStore = create<SettingsState>()(
             : clampLyricsSize(state.lyricsSize ?? 28),
           lyricsAlign: state.lyricsAlign ?? 'left',
           playerBackground: normalizePlayerBackground(state.playerBackground),
+          miniPlayerBackground: normalizeMiniPlayerBackground(state.miniPlayerBackground),
           // v2: hold-to-talk became the default. The old default was 'tap',
           // which kept listening after the finger lifted.
           voiceMode: version < 2 ? 'hold' : state.voiceMode ?? 'hold',

@@ -1,9 +1,14 @@
-import { lyricsTextStyle, normalizePlayerBackground } from './settingsStore';
+import { isCardPlayerBackground, lyricsTextStyle, normalizeMiniPlayerBackground, normalizePlayerBackground } from './settingsStore';
 
 describe('normalizePlayerBackground', () => {
   it('keeps the two backgrounds that still exist', () => {
     expect(normalizePlayerBackground('apple')).toBe('apple');
     expect(normalizePlayerBackground('blend')).toBe('blend');
+  });
+
+  it('keeps the shader wash and YouTube Music', () => {
+    expect(normalizePlayerBackground('aura')).toBe('aura');
+    expect(normalizePlayerBackground('youtube')).toBe('youtube');
   });
 
   it('moves the retired glow background to Apple + glow', () => {
@@ -33,5 +38,25 @@ describe('lyricsTextStyle', () => {
     expect(lyricsTextStyle(90, 'normal').fontSize).toBe(44);
     expect(lyricsTextStyle(4, 'normal').fontSize).toBe(20);
     expect(lyricsTextStyle(Number.NaN, 'normal').fontSize).toBe(28);
+  });
+});
+
+describe('isCardPlayerBackground', () => {
+  it('is the two styles that show the artwork as a card', () => {
+    expect(isCardPlayerBackground('youtube')).toBe(true);
+    expect(isCardPlayerBackground('aura')).toBe(true);
+    expect(isCardPlayerBackground('apple')).toBe(false);
+    expect(isCardPlayerBackground('blend')).toBe(false);
+  });
+});
+
+describe('normalizeMiniPlayerBackground', () => {
+  it('keeps every style the pill has', () => {
+    for (const v of ['glow', 'tint', 'glass', 'black'] as const) expect(normalizeMiniPlayerBackground(v)).toBe(v);
+  });
+
+  it('falls back to the glow for anything unknown', () => {
+    expect(normalizeMiniPlayerBackground(undefined)).toBe('glow');
+    expect(normalizeMiniPlayerBackground('neon')).toBe('glow');
   });
 });

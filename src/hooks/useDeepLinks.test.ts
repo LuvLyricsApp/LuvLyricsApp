@@ -3,6 +3,7 @@ jest.mock('../services/stream/StreamService', () => ({ StreamService: { play: je
 jest.mock('../store/playerStore', () => ({ usePlayerStore: { getState: () => ({ currentSongId: null }) } }));
 jest.mock('../utils/navigationService', () => ({ navigationRef: { isReady: () => true, navigate: jest.fn() } }));
 jest.mock('react-native', () => ({ Linking: { getInitialURL: jest.fn(), addEventListener: jest.fn() } }));
+jest.mock('../store/settingsStore', () => ({ useSettingsStore: { setState: jest.fn() } }));
 
 import { parseDeepLink } from './useDeepLinks';
 

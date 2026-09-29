@@ -39,6 +39,7 @@ import { Motion } from '../constants/allegraTheme';
 import { positionSV, durationSV } from '../playback/positionBus';
 import { isLowEndDevice } from '../utils/performanceTier';
 import GlowBackground from './player/GlowBackground';
+import LiquidGlass from './allegra/LiquidGlass';
 import { useGlowColors } from './player/useGlowColors';
 import { useSettingsStore } from '../store/settingsStore';
 import { PILL_PLAYER_HEIGHT, pillPlayerInset } from '../navigation/tabs';
@@ -124,14 +125,19 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
     mix.value = 0;
     mix.value = withTiming(1, { duration: Motion.duration.cinematic, easing: Motion.ease.standard });
   }, [tint, fromColor, toColor, mix]);
-  const shellColor = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(mix.value, [0, 1], [fromColor.value, toColor.value]),
-  }));
-
   // Settings → Appearance → Mini player background: Echo's "Glow animated"
-  // (two drifting glows of the cover's palette) or the calm cover tint.
-  const glow = useSettingsStore(s => s.miniPlayerBackground) !== 'tint';
+  // (two drifting glows of the cover's palette), the calm cover tint, Apple-style
+  // liquid glass, or plain black.
+  const background = useSettingsStore(s => s.miniPlayerBackground);
+  const glow = background === 'glow';
   const glowColors = useGlowColors(glow ? coverImageUri : null);
+  const shellColor = useAnimatedStyle(() => ({
+    backgroundColor: background === 'glass'
+      ? 'rgba(0,0,0,0)'
+      : background === 'black'
+        ? '#000000'
+        : interpolateColor(mix.value, [0, 1], [fromColor.value, toColor.value]),
+  }), [background]);
 
   // ── Disc: turns slowly while playing, holds its angle when paused ─────────
   const spin = useSharedValue(0);
@@ -181,18 +187,29 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   const next = useCallback(() => { tick(); setNextNudge(n => n + 1); onNext(); }, [onNext]);
   const previous = useCallback(() => { tick(); setBackNudge(n => n + 1); onPrevious(); }, [onPrevious]);
 
+  // A swipe up opens the player as soon as it is clearly upward, not when the
+  // finger lifts: the sheet is already growing out of the pill while the finger
+  // is still moving, which is what makes it feel immediate.
+  const opened = useSharedValue(false);
   const pan = Gesture.Pan()
     .activeOffsetX([-14, 14])
     .activeOffsetY([-14, 14])
+    .onStart(() => {
+      opened.value = false;
+    })
     .onUpdate(e => {
       dragX.value = pillGive(e.translationX, PILL_GIVE_SIDE);
       dragY.value = pillGive(e.translationY, e.translationY < 0 ? PILL_GIVE_UP : PILL_GIVE_DOWN);
+      if (!opened.value && e.translationY < -28 && Math.abs(e.translationY) > Math.abs(e.translationX) * 1.2) {
+        opened.value = true;
+        runOnJS(onOpen)(Math.max(0, -e.velocityY));
+      }
     })
     .onEnd(e => {
       const horizontal = Math.abs(e.translationX) > Math.abs(e.translationY);
       if (horizontal && (e.translationX < -60 || e.velocityX < -600)) runOnJS(next)();
       else if (horizontal && (e.translationX > 60 || e.velocityX > 600)) runOnJS(previous)();
-      else if (!horizontal && (e.translationY < -36 || e.velocityY < -500)) runOnJS(onOpen)(Math.max(0, -e.velocityY));
+      else if (!opened.value && !horizontal && (e.translationY < -36 || e.velocityY < -500)) runOnJS(onOpen)(Math.max(0, -e.velocityY));
       // Let go: it springs home from where it shows and settles with a small bounce.
       dragX.value = withSpring(0, PILL_BOUNCE);
       dragY.value = withSpring(0, PILL_BOUNCE);
@@ -209,6 +226,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
             <GlowBackground colors={glowColors} variant="mini" />
           </View>
         ) : null}
+        {background === 'glass' ? <LiquidGlass radius={PILL_PLAYER_HEIGHT / 2} palette={palette} /> : null}
         <Pressable
           onPress={() => onOpen()}
           style={styles.row}
