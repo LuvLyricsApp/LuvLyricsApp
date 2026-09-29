@@ -3,10 +3,11 @@
  * sleep timer. Frosted glass, springs up from the bottom, tap outside or
  * pick something to close.
  */
-import React, { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { FlatList, NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import * as GestureHandler from 'react-native-gesture-handler';
+import Animated, { runOnJS, SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Frosted from '../allegra/Frosted';
 import Artwork from '../allegra/Artwork';
@@ -15,6 +16,24 @@ import { usePlayerStore } from '../../store/playerStore';
 import { SLEEP_CHOICES, SleepChoice, useSleepTimerStore } from '../../store/sleepTimerStore';
 import { durationSV, positionSV } from '../../playback/positionBus';
 import * as Haptics from '../../utils/haptics';
+import { shouldCloseSheet } from '../../navigation/sheetClose';
+
+const { Gesture, GestureDetector } = GestureHandler;
+
+/**
+ * How far the sheet's own list is scrolled. A drag down closes the sheet only
+ * while that is 0 — otherwise the drag scrolls the list back up. Lists that
+ * live in a sheet report through `useSheetScroll`; ones that don't leave it at 0.
+ */
+const SheetScrollContext = createContext<SharedValue<number> | null>(null);
+
+export const useSheetScroll = () => {
+  const offset = useContext(SheetScrollContext);
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (offset) offset.value = e.nativeEvent.contentOffset.y;
+  }, [offset]);
+  return { onScroll, scrollEventThrottle: 16 } as const;
+};
 
 interface PlayerSheetProps {
   visible: boolean;
@@ -30,21 +49,45 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
   const shown = useSharedValue(0);
+  const drag = useSharedValue(0);
+  const scrolled = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      drag.value = 0;
+      scrolled.value = 0;
       shown.value = withSpring(1, Motion.spring.sheet);
     } else if (mounted) {
       shown.value = withTiming(0, { duration: Motion.duration.base, easing: Motion.ease.accelerate }, done => {
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [visible, mounted, shown]);
+  }, [visible, mounted, shown, drag, scrolled]);
 
   const scrim = useAnimatedStyle(() => ({ opacity: shown.value }));
   const travel = tall ? 900 : 520;
-  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - shown.value) * travel }] }));
+  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - shown.value) * travel + drag.value }] }));
+
+  // Swiping down closes this sheet and nothing else: the player's own
+  // swipe-down is off while a sheet is open, so the next swipe closes the player.
+  const pan = Gesture.Pan()
+    .activeOffsetY(10)
+    .failOffsetY(-8)
+    .failOffsetX([-22, 22])
+    .onTouchesDown((_e, state) => {
+      'worklet';
+      if (scrolled.value > 2) state.fail();
+    })
+    .onUpdate(e => {
+      'worklet';
+      drag.value = Math.max(0, e.translationY);
+    })
+    .onEnd(e => {
+      'worklet';
+      if (shouldCloseSheet(e.translationY, e.velocityY)) runOnJS(onClose)();
+      else drag.value = withSpring(0, Motion.spring.sheet);
+    });
 
   if (!mounted) return null;
   return (
@@ -52,18 +95,21 @@ export const PlayerSheet: React.FC<PlayerSheetProps> = ({ visible, title, tall =
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrim]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       </Animated.View>
-      <Animated.View style={[styles.sheet, tall && styles.tall, { paddingBottom: insets.bottom + 12 }, sheet]}>
-        <Frosted radius={28} intensity={70} tint={0.5} />
-        <View style={styles.grabber} />
-        {title ? <Text style={styles.title}>{title}</Text> : <View style={styles.untitled} />}
-        {children}
-      </Animated.View>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.sheet, tall && styles.tall, { paddingBottom: insets.bottom + 12 }, sheet]}>
+          <Frosted radius={28} intensity={70} tint={0.5} />
+          <View style={styles.grabber} />
+          {title ? <Text style={styles.title}>{title}</Text> : <View style={styles.untitled} />}
+          <SheetScrollContext.Provider value={scrolled}>{children}</SheetScrollContext.Provider>
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 };
 
 /** "Playing next": the rest of the queue. Tap a song to jump to it. */
 export const QueueList: React.FC<{ onPicked: () => void }> = ({ onPicked }) => {
+  const scroll = useSheetScroll();
   const queue = usePlayerStore(s => s.playlistQueue);
   const index = usePlayerStore(s => s.currentQueueIndex);
   const playlistId = usePlayerStore(s => s.currentPlaylistId);
@@ -77,6 +123,7 @@ export const QueueList: React.FC<{ onPicked: () => void }> = ({ onPicked }) => {
       data={upcoming}
       keyExtractor={x => `${x.song.id}-${x.i}`}
       style={styles.list}
+      {...scroll}
       renderItem={({ item }) => (
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}

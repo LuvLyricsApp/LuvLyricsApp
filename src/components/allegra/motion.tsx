@@ -131,6 +131,16 @@ const sideExit = (direction: number) => (_v: ExitAnimationsValues) => {
   };
 };
 
+/** The enter and exit a changing line uses; `direction` is a song change (1 forward, -1 back, 0 in place). */
+export const useSwapAnimations = (direction = 0) => {
+  const reduce = useReducedMotion();
+  const sideways = direction === 1 || direction === -1;
+  return {
+    entering: reduce ? undefined : sideways ? sideEnter(direction) : swapEnter,
+    exiting: reduce ? undefined : sideways ? sideExit(direction) : swapExit,
+  };
+};
+
 /**
  * Text that changes in place (song title, artist): the old line lifts away,
  * the new one rises in — Allegra's swapVariants. Keyed by the text itself.
@@ -140,10 +150,7 @@ export const SwapText: React.FC<TextProps & {
   /** A song change: 1 = forward, -1 = back (moves sideways), 0 or unset = rises in place. */
   direction?: number;
 }> = ({ children, direction = 0, ...rest }) => {
-  const reduce = useReducedMotion();
-  const sideways = direction === 1 || direction === -1;
-  const entering = reduce ? undefined : sideways ? sideEnter(direction) : swapEnter;
-  const exiting = reduce ? undefined : sideways ? sideExit(direction) : swapExit;
+  const { entering, exiting } = useSwapAnimations(direction);
   return (
     <Animated.Text key={children} entering={entering} exiting={exiting} {...rest}>
       {children}

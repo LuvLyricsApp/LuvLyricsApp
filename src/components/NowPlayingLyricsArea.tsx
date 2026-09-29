@@ -1,17 +1,43 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Artwork from './allegra/Artwork';
-import { lyricsTextStyle, useSettingsStore } from '../store/settingsStore';
+import { isCardPlayerBackground, lyricsTextStyle, useSettingsStore } from '../store/settingsStore';
 import { usePlayerStore } from '../store/playerStore';
-import { SharedValue } from 'react-native-reanimated';
+import Animated, { EntryAnimationsValues, ExitAnimationsValues, SharedValue, useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
+import { Motion } from '../constants/allegraTheme';
+import VinylDisc from './player/VinylDisc';
+import { useArtworkPalette } from './allegra/useArtworkPalette';
 import SynchronizedLyrics, { SynchronizedLyricsRef } from './SynchronizedLyrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ProcessedLyric = { timestamp: number; text: string };
 
-const HEADER_CLEARANCE = 28;
+export const HEADER_CLEARANCE = 28;
 /** The compact controls (no volume row) stacked at the bottom. */
-const CONTROLS_CLEARANCE = 372;
+export const CONTROLS_CLEARANCE = 372;
+
+/** The record's diameter on a screen this wide: leaves room on the right for the tonearm. */
+export const vinylSize = (screenWidth: number): number => Math.round(Math.min(screenWidth * 0.7, 320));
+
+// The cover and the record swap places: the new one turns in from a little
+// smaller while the old one turns away.
+const stageIn = (_v: EntryAnimationsValues) => {
+  'worklet';
+  const t = { duration: 340, easing: Motion.ease.decelerate };
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.88 }, { rotate: '-10deg' }] as const },
+    animations: { opacity: withTiming(1, t), transform: [{ scale: withTiming(1, t) }, { rotate: withTiming('0deg', t) }] as const },
+  };
+};
+const stageOut = (_v: ExitAnimationsValues) => {
+  'worklet';
+  const t = { duration: 220, easing: Motion.ease.accelerate };
+  return {
+    initialValues: { opacity: 1, transform: [{ scale: 1 }, { rotate: '0deg' }] as const },
+    animations: { opacity: withTiming(0, t), transform: [{ scale: withTiming(0.92, t) }, { rotate: withTiming('10deg', t) }] as const },
+  };
+};
 
 interface NowPlayingLyricsAreaProps {
   showLyrics: boolean;
@@ -25,7 +51,53 @@ interface NowPlayingLyricsAreaProps {
   coverImageUri?: string;
   songArtist?: string;
   scrollOffset?: SharedValue<number>;
+  /** Show the artwork as a spinning record instead of a cover. */
+  vinyl?: boolean;
+  playing?: boolean;
+  /** The cover follows a sideways swipe by this much. */
+  stageX?: SharedValue<number>;
 }
+
+/** The cover (or the record it turns into), following a sideways swipe. */
+const Stage: React.FC<{
+  vinyl: boolean;
+  appleInspired: boolean;
+  width: number;
+  paddingTop: number;
+  uri?: string;
+  title: string;
+  artist?: string;
+  playing: boolean;
+  stageX?: SharedValue<number>;
+}> = ({ vinyl, appleInspired, width, paddingTop, uri, title, artist, playing, stageX }) => {
+  const reduce = useReducedMotion();
+  const focused = useIsFocused();
+  const palette = useArtworkPalette(uri);
+  const card = Math.min(width - 64, 380);
+  const disc = vinylSize(width);
+  const follow = useAnimatedStyle(() => {
+    const x = stageX ? stageX.value : 0;
+    const away = Math.min(1, Math.abs(x) / Math.max(1, width));
+    return { opacity: 1 - 0.55 * away, transform: [{ translateX: x }, { scale: 1 - 0.05 * away }] as const };
+  });
+  const enter = reduce ? undefined : stageIn;
+  const exit = reduce ? undefined : stageOut;
+  return (
+    <View style={[styles.cardArea, { paddingTop }]} pointerEvents="none">
+      <Animated.View style={[{ width: card, height: card, alignItems: 'center', justifyContent: 'center' }, follow]}>
+        {vinyl ? (
+          <Animated.View key="vinyl" entering={enter} exiting={exit} style={styles.stageLayer}>
+            <VinylDisc size={disc} uri={uri} title={title} artist={artist} palette={palette} playing={playing} active={focused} />
+          </Animated.View>
+        ) : appleInspired ? null : (
+          <Animated.View key="card" entering={enter} exiting={exit} style={styles.stageLayer}>
+            <Artwork uri={uri} title={title} artist={artist} size={card} priority="high" continuous style={[styles.card, { width: card, height: card }]} />
+          </Animated.View>
+        )}
+      </Animated.View>
+    </View>
+  );
+};
 
 const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   showLyrics,
@@ -39,6 +111,9 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   coverImageUri,
   songArtist,
   scrollOffset,
+  vinyl = false,
+  playing = false,
+  stageX,
 }) => {
   // Settings → Lyrics (text size, line spacing) and the song's own alignment (lyrics editor).
   const fontSize = useSettingsStore(st => st.lyricsSize);
@@ -51,17 +126,25 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   const textStyle = React.useMemo(() => lyricsTextStyle(fontSize, lineSpacing, align), [fontSize, lineSpacing, align]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  // YouTube Music's player always shows the artwork as a card.
-  const appleInspired = useSettingsStore(s => s.appleMusicInspired && s.playerBackground !== 'youtube');
+  // YouTube Music's player (and our shader wash) always show the artwork as a card.
+  const appleInspired = useSettingsStore(s => s.appleMusicInspired && !isCardPlayerBackground(s.playerBackground));
   if (!showLyrics) {
-    // Apple Music inspired: the cover is drawn full-bleed by the backdrop.
+    // Apple Music inspired: the cover is drawn full-bleed by the backdrop, so
+    // there is nothing to draw here unless it has become a record.
     // Off: a floating artwork card, as in Echo's other player design.
-    if (appleInspired) return null;
-    const size = Math.min(width - 64, 380);
+    if (appleInspired && !vinyl) return null;
     return (
-      <View style={[styles.cardArea, { paddingTop: insets.top + HEADER_CLEARANCE + 24 }]}>
-        <Artwork uri={coverImageUri} title={songTitle ?? ''} artist={songArtist} size={size} priority="high" continuous style={[styles.card, { width: size, height: size }]} />
-      </View>
+      <Stage
+        vinyl={vinyl}
+        appleInspired={appleInspired}
+        width={width}
+        paddingTop={insets.top + HEADER_CLEARANCE + 24}
+        uri={coverImageUri}
+        title={songTitle ?? ''}
+        artist={songArtist}
+        playing={playing}
+        stageX={stageX}
+      />
     );
   }
 
@@ -100,6 +183,7 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
 
 const styles = StyleSheet.create({
   cardArea: { alignItems: 'center' },
+  stageLayer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   card: { borderRadius: 14, overflow: 'hidden' },
   lyricsFrame: {
     flex: 1,

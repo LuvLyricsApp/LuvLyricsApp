@@ -24,7 +24,7 @@ import {
   useImage,
   vec,
 } from '@shopify/react-native-skia';
-import { DerivedValue, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
+import { DerivedValue, SharedValue, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
 import { AuraPalette } from '../allegra/palette';
 
@@ -43,6 +43,8 @@ interface AppleBackdropProps {
   palette: AuraPalette;
   /** The full-bleed cover at the top (hidden behind lyrics or a canvas video). */
   showHero: boolean;
+  /** A sideways swipe on the cover: the sharp hero slides with the finger and thins out. */
+  shift?: SharedValue<number>;
 }
 
 // Echo's APPLE_MUSIC background: the cover blurred (150dp on a 128px decode)
@@ -79,16 +81,17 @@ const Layer: React.FC<{
   height: number;
   heroH: number;
   hero: DerivedValue<number>;
+  heroShift: DerivedValue<{ translateX: number }[]>;
   /** Just the blurred room, no sharp hero (the veil). */
   roomOnly?: boolean;
-}> = ({ image, width, height, heroH, hero, roomOnly = false }) => (
+}> = ({ image, width, height, heroH, hero, heroShift, roomOnly = false }) => (
   <Group>
     <SkiaImage image={image} x={-BLEED} y={-BLEED} width={width + BLEED * 2} height={height + BLEED * 2} fit="cover">
       {/* clamp: a decal blur fades to transparent near the image's edges. */}
       <Blur blur={BLUR} mode="clamp" />
     </SkiaImage>
     {roomOnly ? null : (
-      <Group opacity={hero}>
+      <Group opacity={hero} transform={heroShift}>
         <Group layer>
           <SkiaImage image={image} x={0} y={0} width={width} height={heroH} fit="cover" />
           <DissolveRect width={width} heroH={heroH} alphas={HERO_MASK_ALPHAS} />
@@ -112,7 +115,7 @@ export const usePlayerFrame = () => {
   return { frame, onLayout };
 };
 
-const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, frame, veil = false }) => {
+const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, frame, veil = false, shift }) => {
   const win = useWindowDimensions();
   const width = frame?.width ?? win.width;
   const height = frame?.height ?? win.height;
@@ -133,7 +136,11 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
     // and settle) inside the canvas's cross-dissolve darkened and shifted the
     // dissolve band for a moment — the "black flash" going cover -> video. Its
     // first cover is simply there; song changes still arrive with the fade.
-    if (veil && first) {
+    // The same goes for the backdrop's own first cover as the player opens:
+    // fading it in redraws the full-screen blur on every frame of the open
+    // animation, which is what made opening the player stutter. Only a song
+    // change fades.
+    if (first) {
       fade.value = 1;
       return;
     }
@@ -145,7 +152,8 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
   useEffect(() => {
     hero.value = withTiming(showHero ? 1 : 0, { duration: 500, easing: Motion.ease.standard });
   }, [showHero, hero]);
-  const heroOpacity = useDerivedValue(() => hero.value);
+  const heroOpacity = useDerivedValue(() => hero.value * (shift ? 1 - 0.6 * Math.min(1, Math.abs(shift.value) / Math.max(1, width)) : 1));
+  const heroShift = useDerivedValue(() => [{ translateX: shift ? shift.value : 0 }]);
   const fadeOpacity = useDerivedValue(() => fade.value);
   // The new cover settles into place as it fades in (104% → 100%), so a song
   // change reads as the next cover arriving rather than a flat dissolve.
@@ -158,10 +166,10 @@ const AppleBackdrop: React.FC<AppleBackdropProps> = ({ uri, palette, showHero, f
         <LinearGradient start={vec(0, 0)} end={vec(width, height)} colors={[palette.primary, palette.secondary, palette.tertiary]} />
       </Rect>
       <Fill color="rgba(0,0,0,0.35)" />
-      {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} /> : null}
+      {layers.prev ? <Layer image={layers.prev} width={width} height={height} heroH={heroH} hero={heroOpacity} heroShift={heroShift} roomOnly={veil} /> : null}
       {layers.next ? (
         <Group opacity={fadeOpacity} transform={settle} origin={vec(width / 2, heroH / 2)}>
-          <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} roomOnly={veil} />
+          <Layer image={layers.next} width={width} height={height} heroH={heroH} hero={heroOpacity} heroShift={heroShift} roomOnly={veil} />
         </Group>
       ) : null}
     </>

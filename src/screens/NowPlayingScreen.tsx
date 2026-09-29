@@ -22,14 +22,15 @@ import { CoverArtSearchScreen } from './CoverArtSearchScreen';
 import { useNowPlayingLogic } from '../hooks/useNowPlayingLogic';
 import NowPlayingBackground from '../components/NowPlayingBackground';
 import NowPlayingHeader from '../components/NowPlayingHeader';
-import NowPlayingLyricsArea from '../components/NowPlayingLyricsArea';
+import NowPlayingLyricsArea, { CONTROLS_CLEARANCE, HEADER_CLEARANCE } from '../components/NowPlayingLyricsArea';
 import NowPlayingControls from '../components/NowPlayingControls';
 import { navigationRef, safeGoBack } from '../utils/navigationService';
 import { DISMISS_DISTANCE, DISMISS_VELOCITY, takeOpenVelocity } from '../navigation/playerSheet';
 import { playerSheetRest } from '../navigation/tabs';
 import { playerSheetProgress } from '../navigation/sheetProgress';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isLowEndDevice } from '../utils/performanceTier';
+import * as Haptics from '../utils/haptics';
+import { diag } from '../utils/diag';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSettingsStore } from '../store/settingsStore';
@@ -74,9 +75,10 @@ const rubberBand = (overshoot: number, dimension: number): number => {
   const a = Math.abs(overshoot);
   return Math.sign(overshoot) * ((a * dimension * 0.55) / (dimension + 0.55 * a));
 };
-// The page underneath blurs while the sheet moves (PlayerSheetBackdrop, in the
-// tab navigator); low-end phones get no blur, so this route dims deeper.
-const LIVE_BLUR = !isLowEndDevice();
+// The page underneath only dims while the sheet moves. It used to blur, which
+// on Android re-renders the page under it on every frame of the drag and made
+// opening and closing the player stutter; a dim costs nothing.
+const PAGE_DIM = 0.5;
 
 type Props = RootStackScreenProps<'NowPlaying'>;
 
@@ -151,8 +153,14 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const [ambient, setAmbient] = useState(false);
   const ambientRef = useRef(false);
   ambientRef.current = ambient;
+  // A sheet over the player (queue, timer, menu…). Swiping down or pressing back
+  // closes the sheet only; the next swipe or press closes the player.
+  const [sheet, setSheet] = useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(route.params.sheet ?? null);
+  const sheetRef = useRef(sheet);
+  sheetRef.current = sheet;
   usePreventRemove(holdRoute, () => {
-    if (ambientRef.current) setAmbient(false);
+    if (sheetRef.current) setSheet(null);
+    else if (ambientRef.current) setAmbient(false);
     else animateClose(0);
   });
 
@@ -160,17 +168,28 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // the list is scrolled to its top — otherwise the drag scrolls the lyrics.
   const lyricsOffset = useSharedValue(0);
   const grabY = useSharedValue(0);
+  // The lyrics list owns a drag that starts on it; anywhere else a drag down
+  // closes the player, even with the lyrics scrolled.
+  const frameH = useSharedValue(screenH);
+  const lyricsTop = insets.top + HEADER_CLEARANCE;
   // Activation is the handler's own (12pt down, native side): a manual
   // activate() from onTouchesMove could land after a quick flick had already
   // lifted, and the flick did nothing.
   const dismissGesture = Gesture.Pan()
-    .enabled(!ambient)
+    .enabled(!ambient && sheet === null)
     .activeOffsetY(12)
     .failOffsetY(-10)
     .failOffsetX([-24, 24])
-    .onTouchesDown((_e, state) => {
+    .onTouchesDown((e, state) => {
       'worklet';
-      if (closing.value || lyricsOffset.value > 2) state.fail();
+      if (closing.value) {
+        state.fail();
+        return;
+      }
+      if (lyricsOffset.value > 2) {
+        const y = e.allTouches[0] ? e.allTouches[0].y : 0;
+        if (y > lyricsTop && y < frameH.value - CONTROLS_CLEARANCE) state.fail();
+      }
     })
     .onStart(() => {
       'worklet';
@@ -211,7 +230,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   });
   // The page underneath: a little dimmed while the sheet is up, clearing as it lowers.
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * (LIVE_BLUR ? 0.3 : 0.6),
+    opacity: progress.value * PAGE_DIM,
   }));
 
   // Settings → Playback → Keep screen on: only while this screen is open.
@@ -236,6 +255,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const {
     currentSong,
     isCurrentSongLiked,
+    isCurrentSongSaving,
     showCoverSearch,
     setShowCoverSearch,
     controlsVisible,
@@ -265,6 +285,74 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const canvas = useCanvasArtwork(currentSong);
 
+  // ── The cover stage ──────────────────────────────────────────────────────
+  // Swipe the cover sideways for the next or previous song (it follows the
+  // finger, then the new cover arrives from the other side); double-tap it to
+  // turn it into a record and back. Off under lyrics, ambient mode and sheets.
+  const vinylOn = useSettingsStore(s => s.playerVinyl);
+  const setPlayerVinyl = useSettingsStore(s => s.setPlayerVinyl);
+  const stageX = useSharedValue(0);
+  const stageEnabled = !showLyrics && !ambient && sheet === null;
+
+  const toggleVinyl = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const next = !useSettingsStore.getState().playerVinyl;
+    diag('player', `double tap: ${next ? 'record' : 'cover'}`);
+    setPlayerVinyl(next);
+  }, [setPlayerVinyl]);
+
+  // dir: -1 = swiped left (next song), 1 = swiped right (previous).
+  const swipeSong = useCallback((dir: 1 | -1) => {
+    const player = usePlayerStore.getState();
+    const queued = player.playlistQueue?.length ?? 0;
+    const canSkip = dir < 0 ? queued > 1 || player.currentPlaylistId === 'library' : queued > 1;
+    diag('player', `cover swipe ${dir < 0 ? 'left (next)' : 'right (previous)'}: ${canSkip ? 'skipping' : 'nothing to skip to'}`);
+    if (!canSkip) {
+      // Nothing to go to: the cover springs back instead of leaving.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      stageX.value = withSpring(0, SETTLE_SPRING);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    if (dir < 0) skipForward().catch(() => {});
+    else player.previousInPlaylist();
+    stageX.value = withTiming(dir * windowW, { duration: 160, easing: Easing.in(Easing.quad) }, done => {
+      'worklet';
+      if (!done) return;
+      // The next cover comes in from the side the finger did not go to.
+      stageX.value = -dir * windowW * 0.5;
+      stageX.value = withSpring(0, OPEN_SPRING);
+    });
+  }, [skipForward, stageX, windowW]);
+
+  const stagePan = Gesture.Pan()
+    .enabled(stageEnabled)
+    .activeOffsetX([-14, 14])
+    .failOffsetY([-16, 16])
+    .onUpdate(e => {
+      'worklet';
+      stageX.value = e.translationX;
+    })
+    .onEnd(e => {
+      'worklet';
+      const projected = e.translationX + e.velocityX * 0.12;
+      if (Math.abs(projected) > windowW * 0.26) runOnJS(swipeSong)(projected < 0 ? -1 : 1);
+      else stageX.value = withSpring(0, SETTLE_SPRING);
+    })
+    .onFinalize((_e, success) => {
+      'worklet';
+      if (!success) stageX.value = withSpring(0, SETTLE_SPRING);
+    });
+  const stageTap = Gesture.Tap()
+    .enabled(stageEnabled)
+    .numberOfTaps(2)
+    .maxDelay(280)
+    .onEnd((_e, success) => {
+      'worklet';
+      if (success) runOnJS(toggleVinyl)();
+    });
+  const stageGesture = Gesture.Race(stagePan, stageTap);
+
   // Tap the artist line to open their page (YouTube Music, Echo style).
   const artistName = currentSong?.artist;
   const openArtist = React.useMemo(() => {
@@ -275,8 +363,6 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       animateClose(0);
     };
   }, [artistName, animateClose]);
-
-  const [sheet, setSheet] = React.useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(route.params.sheet ?? null);
 
   // A link can arrive while the player is already open (lyricflow://play?…&lyrics=1,
   // lyricflow://player?sheet=menu, an invite): apply it instead of ignoring it.
@@ -304,6 +390,19 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // What the ••• menu's actions report, as a toast.
   const [notice, setNotice] = useState<string | null>(null);
   const say = useCallback((text: string) => setNotice(text), []);
+
+  // The heart: fills at once, and says where the song went. A streamed song is
+  // saved into the library first (isCurrentSongSaving), then lands in Liked songs.
+  const onToggleLike = useCallback(async () => {
+    if (!currentSong) return;
+    const result = await toggleLike(currentSong.id);
+    say(
+      result === 'liked' ? 'Added to Liked songs'
+        : result === 'unliked' ? 'Removed from Liked songs'
+        : result === 'saving' ? 'Saving to Liked songs…'
+        : 'Couldn’t update Liked songs',
+    );
+  }, [currentSong, toggleLike, say]);
   const repeatOne = usePlaybackModesStore(s => s.repeatOne);
   const setRepeatOne = usePlaybackModesStore(s => s.setRepeatOne);
   const roomOpen = useListenTogetherStore(s => s.room !== null);
@@ -350,7 +449,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         say(StreamService.save(song.id) ? 'Downloading to your library' : 'Couldn’t download this song');
         return;
       case 'like':
-        toggleLike(song.id);
+        onToggleLike();
         return;
       case 'repeat':
         setRepeatOne(!repeatOne);
@@ -385,7 +484,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         setSheet('advanced');
         return;
     }
-  }, [currentSong, navigation, say, showLyrics, setShowLyrics, toggleLike, repeatOne, setRepeatOne, openArtist]);
+  }, [currentSong, navigation, say, showLyrics, setShowLyrics, onToggleLike, repeatOne, setRepeatOne, openArtist]);
 
   const handleCoverSelect = useCallback(async (uri: string) => {
     setShowCoverSearch(false);
@@ -406,13 +505,15 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     <View style={styles.root}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
       <GestureDetector gesture={dismissGesture}>
-      <Animated.View style={[styles.container, sheetStyle]}>
+      <Animated.View style={[styles.container, sheetStyle]} onLayout={e => { frameH.value = e.nativeEvent.layout.height; }}>
         <NowPlayingBackground
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
           showLyrics={showLyrics}
           canvas={ambient ? null : canvas}
           playing={storePlaying}
+          vinyl={vinylOn}
+          shift={stageX}
         />
 
         <NowPlayingHeader
@@ -443,8 +544,20 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             coverImageUri={currentSong?.coverImageUri}
             songArtist={currentSong?.artist}
             scrollOffset={lyricsOffset}
+            vinyl={vinylOn}
+            playing={storePlaying}
+            stageX={stageX}
           />
         </View>
+
+        {/* Above the cover, below the controls: swipe it sideways to skip, double-tap to turn it into a record. */}
+        <GestureDetector gesture={stageGesture}>
+          <View
+            style={[styles.stageZone, { height: Math.round(screenH * 0.56) }]}
+            pointerEvents={stageEnabled ? 'auto' : 'none'}
+            collapsable={false}
+          />
+        </GestureDetector>
 
         <NowPlayingControls
           animatedStyle={animatedStyle}
@@ -453,10 +566,11 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           currentSongTitle={currentSong?.title}
           currentSongArtist={currentSong?.artist}
           isCurrentSongLiked={isCurrentSongLiked}
+          isLikeSaving={isCurrentSongSaving}
           onTogglePlay={togglePlay}
           onSkipForward={skipForward}
           onSkipBackward={skipBackward}
-          onToggleLike={() => currentSong && toggleLike(currentSong.id)}
+          onToggleLike={onToggleLike}
           onToggleLyrics={() => setShowLyrics(!showLyrics)}
           positionSV={positionSV}
           durationSV={durationSV}
@@ -526,6 +640,13 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
+  },
+  // Catches swipes and double-taps on the cover; the transport sits above it.
+  stageZone: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
 });
 

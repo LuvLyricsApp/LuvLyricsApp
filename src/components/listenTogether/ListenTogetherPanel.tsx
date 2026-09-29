@@ -4,6 +4,7 @@
  * listening, join requests, suggestions and the host's controls.
  */
 import React, { useState } from 'react';
+import { useSheetScroll } from '../player/PlayerSheet';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -123,6 +124,7 @@ const Lobby: React.FC = () => {
 };
 
 const Room: React.FC = () => {
+  const scroll = useSheetScroll();
   const room = useListenTogetherStore(s => s.room)!;
   const role = useListenTogetherStore(s => s.role);
   const me = useListenTogetherStore(s => s.userId);
@@ -150,7 +152,7 @@ const Room: React.FC = () => {
     : 'Offline — tap Resync to try again';
 
   return (
-    <ScrollView style={styles.roomScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.roomScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} {...scroll}>
       <View style={styles.codeCard}>
         <View style={styles.flex}>
           <Text style={styles.codeLabel}>Room code</Text>

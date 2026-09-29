@@ -145,3 +145,21 @@ export const youtubeWash = (hex: string): [string, string, string] => {
   const middle = hslToHex(hue, s * 0.8, Math.min(0.16, Math.max(0.09, light * 0.28)));
   return [top, middle, '#0a0a0b'];
 };
+
+/** A colour a fraction `t` of the way from `a` to `b` (0 = a, 1 = b). */
+export const mixHex = (a: string, b: string, t: number): string => {
+  const ra = hexToRgb(a);
+  const rb = hexToRgb(b);
+  const k = Math.min(1, Math.max(0, t));
+  return toHex(...(ra.map((v, i) => (v + (rb[i] - v) * k) * 255) as [number, number, number]));
+};
+
+/** Where YouTubeBackdrop's gradient puts the three wash colours (top .. bottom). */
+export const WASH_STOPS = [0, 0.5, 0.9] as const;
+
+/** The wash colour at a height (0 top .. 1 bottom), so a layer can hand over to it seamlessly. */
+export const washAt = (colors: readonly [string, string, string], at: number): string => {
+  if (at <= WASH_STOPS[1]) return mixHex(colors[0], colors[1], (at - WASH_STOPS[0]) / (WASH_STOPS[1] - WASH_STOPS[0]));
+  if (at <= WASH_STOPS[2]) return mixHex(colors[1], colors[2], (at - WASH_STOPS[1]) / (WASH_STOPS[2] - WASH_STOPS[1]));
+  return colors[2];
+};

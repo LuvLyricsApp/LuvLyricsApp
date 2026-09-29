@@ -18,15 +18,24 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   DerivedValue,
+  Easing,
   runOnJS,
   SharedValue,
+  cancelAnimation,
   useAnimatedReaction,
+  useAnimatedStyle,
   useDerivedValue,
+  useReducedMotion,
   useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppleSlider from './player/AppleSlider';
-import { MorphIcon, NudgeIcon, SwapText, Tactile } from './allegra/motion';
+import { MorphIcon, NudgeIcon, Tactile } from './allegra/motion';
+import { SwapMarquee } from './allegra/Marquee';
 import { PlayerType } from '../constants/allegraTheme';
 import { formatTimeSV, isSeeking } from '../playback/positionBus';
 import { NativeAudioPlayer } from '../services/NativeAudioPlayer';
@@ -40,6 +49,8 @@ interface NowPlayingControlsProps {
   currentSongTitle?: string;
   currentSongArtist?: string;
   isCurrentSongLiked: boolean;
+  /** Liked, but a streamed song is still downloading into Liked songs. */
+  isLikeSaving?: boolean;
   onTogglePlay: () => void;
   onSkipForward: () => void;
   onSkipBackward: () => void;
@@ -123,6 +134,23 @@ const VolumeRow: React.FC = () => {
   );
 };
 
+/** The heart breathes while a streamed song saves into Liked songs. */
+const SavingPulse: React.FC<{ saving: boolean; children: React.ReactNode }> = ({ saving, children }) => {
+  const reduce = useReducedMotion();
+  const o = useSharedValue(1);
+  useEffect(() => {
+    cancelAnimation(o);
+    if (saving && !reduce) {
+      o.value = withRepeat(withSequence(withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.quad) }), withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) })), -1);
+    } else {
+      o.value = withTiming(1, { duration: 160 });
+    }
+    return () => cancelAnimation(o);
+  }, [saving, reduce, o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+};
+
 const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   animatedStyle,
   controlsVisible,
@@ -130,6 +158,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   currentSongTitle,
   currentSongArtist,
   isCurrentSongLiked,
+  isLikeSaving = false,
   onTogglePlay,
   onSkipForward,
   onSkipBackward,
@@ -147,6 +176,8 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   compact = false,
 }) => {
   const insets = useSafeAreaInsets();
+  // Long titles scroll only while this screen is the one in front.
+  const focused = useIsFocused();
   // Read at render: when the title changes this is the way the skip went.
   const songDirection = lastSongDirection();
   const hideVolume = useSettingsStore(s => s.appleMusicInspired && s.hidePlayerVolume);
@@ -180,10 +211,10 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         <View style={styles.metaRow}>
           <Pressable style={styles.metaText} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
             <View style={styles.swapLine}>
-              <SwapText style={styles.title} numberOfLines={1} direction={songDirection}>{currentSongTitle || 'Not playing'}</SwapText>
+              <SwapMarquee style={styles.title} direction={songDirection} active={focused}>{currentSongTitle || 'Not playing'}</SwapMarquee>
             </View>
             <View style={styles.swapLineSmall}>
-              <SwapText style={styles.artist} numberOfLines={1} direction={songDirection}>{currentSongArtist || 'Unknown artist'}</SwapText>
+              <SwapMarquee style={styles.artist} direction={songDirection} active={focused}>{currentSongArtist || 'Unknown artist'}</SwapMarquee>
             </View>
           </Pressable>
 
@@ -202,10 +233,12 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
             hitSlop={8}
             pressScale={0.88}
             accessibilityRole="button"
-            accessibilityLabel={isCurrentSongLiked ? 'Unlike' : 'Like'}
+            accessibilityLabel={isLikeSaving ? 'Saving to Liked songs, tap to cancel' : isCurrentSongLiked ? 'Unlike' : 'Like'}
             style={styles.roundGlass}
           >
-            <MorphIcon on={isCurrentSongLiked} onIcon="heart" offIcon="heart-outline" size={20} color={INK} />
+            <SavingPulse saving={isLikeSaving}>
+              <MorphIcon on={isCurrentSongLiked} onIcon="heart" offIcon="heart-outline" size={20} color={INK} />
+            </SavingPulse>
           </Tactile>
         </View>
 

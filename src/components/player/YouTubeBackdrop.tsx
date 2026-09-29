@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { AuraPalette, youtubeWash } from '../allegra/palette';
+import { AuraPalette, WASH_STOPS, youtubeWash } from '../allegra/palette';
 
 const FADE_MS = 700;
 
@@ -31,7 +31,7 @@ const YouTubeBackdrop: React.FC<{ palette: AuraPalette }> = ({ palette }) => {
     <View style={[StyleSheet.absoluteFill, styles.base]} pointerEvents="none">
       {layers.map((layer, i) => (
         <Animated.View key={layer.key} style={StyleSheet.absoluteFill} entering={i > 0 ? FadeIn.duration(FADE_MS) : undefined}>
-          <LinearGradient colors={layer.colors} locations={[0, 0.5, 0.9]} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={layer.colors} locations={[...WASH_STOPS]} style={StyleSheet.absoluteFill} />
         </Animated.View>
       ))}
     </View>

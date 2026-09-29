@@ -158,6 +158,8 @@ interface MusicFlowFieldProps {
   paused?: boolean;
   width?: number;
   height?: number;
+  /** Light pours down from the top edge instead of rising from the bottom one. */
+  inverted?: boolean;
 }
 
 export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
@@ -167,6 +169,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   paused = false,
   width: widthProp,
   height: heightProp,
+  inverted = false,
 }) => {
   const window = useWindowDimensions();
   const width = widthProp ?? window.width;
@@ -261,6 +264,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
             { translateX: (width - renderW) / 2 },
             { translateY: (height - renderH) / 2 },
             { scale: 1 / RENDER_SCALE },
+            ...(inverted ? [{ scaleY: -1 }] : []),
           ],
         }}
       >

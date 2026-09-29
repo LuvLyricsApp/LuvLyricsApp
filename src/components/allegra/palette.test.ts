@@ -1,4 +1,4 @@
-import { accentInk, DEFAULT_AURA, hexToHsl, hexToRgb, NEUTRAL_AURA, paletteFromColors, shadePalette, vivify, youtubeWash } from './palette';
+import { accentInk, DEFAULT_AURA, hexToHsl, hexToRgb, mixHex, NEUTRAL_AURA, paletteFromColors, shadePalette, vivify, washAt, youtubeWash } from './palette';
 
 describe('hexToRgb', () => {
   it('parses to 0..1 and never returns NaN', () => {
@@ -62,5 +62,28 @@ describe('youtubeWash', () => {
   it('clamps pale and dark covers into a readable band', () => {
     expect(hexToHsl(youtubeWash('#f7f2ea')[0]).light).toBeLessThanOrEqual(0.345);
     expect(hexToHsl(youtubeWash('#120a08')[0]).light).toBeGreaterThanOrEqual(0.195);
+  });
+});
+
+describe('mixHex', () => {
+  it('runs from the first colour to the second and clamps', () => {
+    expect(mixHex('#000000', '#ffffff', 0)).toBe('#000000');
+    expect(mixHex('#000000', '#ffffff', 1)).toBe('#ffffff');
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+    expect(mixHex('#102030', '#ffffff', -3)).toBe('#102030');
+  });
+});
+
+describe('washAt', () => {
+  const wash = youtubeWash('#3a7bd5');
+  it('lands on the wash stops exactly', () => {
+    expect(washAt(wash, 0)).toBe(wash[0]);
+    expect(washAt(wash, 0.5)).toBe(wash[1]);
+    expect(washAt(wash, 0.9)).toBe(wash[2]);
+    expect(washAt(wash, 1)).toBe(wash[2]);
+  });
+
+  it('gets darker as it goes down', () => {
+    expect(hexToHsl(washAt(wash, 0.7)).light).toBeLessThan(hexToHsl(washAt(wash, 0.3)).light);
   });
 });

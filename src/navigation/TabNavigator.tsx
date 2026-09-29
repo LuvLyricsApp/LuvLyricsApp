@@ -22,7 +22,6 @@ import { AudioDownloaderScreen } from '../screens/AudioDownloaderScreen';
 import ArtistScreen from '../screens/ArtistScreen';
 import CollectionScreen from '../screens/CollectionScreen';
 import { SCREEN_BG, stackContentStyle } from './theme';
-import { PlayerSheetBackdrop } from '../components/PlayerSheetBackdrop';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -124,8 +123,6 @@ export const TabNavigator: React.FC = () => {
         <Tab.Screen name="AudioDownloader" component={AudioDownloaderScreen} options={{ tabBarLabel: 'Downloader' }} />
         <Tab.Screen name="Browse" component={BrowseStackScreen} options={{ tabBarLabel: 'Browse' }} />
       </Tab.Navigator>
-      {/* Blurs the page and tab bar while the player sheet moves over them. */}
-      <PlayerSheetBackdrop />
     </View>
   );
 };
