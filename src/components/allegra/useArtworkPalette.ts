@@ -3,6 +3,7 @@ import { extractAlbumColors } from '../../services/NativePalette';
 import { AuraPalette, DEFAULT_AURA, paletteFromColors } from './palette';
 
 const cache = new Map<string, AuraPalette>();
+const RETRY_MS = 1500;
 
 /**
  * The artwork's Allegra palette. Android extracts swatches natively; elsewhere
@@ -27,10 +28,14 @@ export const useArtworkPalette = (uri: string | null | undefined, fallback?: str
       return;
     }
     let cancelled = false;
-    extractAlbumColors(uri).then(swatches => {
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const attempt = (triesLeft: number) => extractAlbumColors(uri).then(swatches => {
       if (cancelled) return;
       if (!swatches) {
-        setPalette(base);
+        // A cover still downloading or a flaky connection: try again shortly
+        // rather than leaving this song on the default colours for good.
+        if (triesLeft > 0) retry = setTimeout(() => attempt(triesLeft - 1), RETRY_MS);
+        else setPalette(base);
         return;
       }
       // Vivid first, then the muted ones — the order Allegra ranks bins in.
@@ -45,8 +50,10 @@ export const useArtworkPalette = (uri: string | null | undefined, fallback?: str
       cache.set(uri, next);
       setPalette(next);
     });
+    attempt(2);
     return () => {
       cancelled = true;
+      if (retry) clearTimeout(retry);
     };
   }, [uri, fallbackKey]);
 

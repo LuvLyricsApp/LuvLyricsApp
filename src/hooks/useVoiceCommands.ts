@@ -1,14 +1,36 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { NativeVoiceInput } from '../services/NativeVoiceInput';
 import { parseVoiceIntent, songQueryOf } from '../utils/voiceIntentParser';
 import { usePlayerStore } from '../store/playerStore';
 import { useSongsStore } from '../store/songsStore';
 import { useVoiceSearchStore } from '../store/voiceSearchStore';
-import { searchMusic } from '../services/MultiSourceSearchService';
+import { searchOfficial } from '../services/stream/officialSearch';
 import { UnifiedSong } from '../types/song';
+import { isQuietVoiceEnd, voiceErrorMessage } from '../utils/voiceErrors';
+import { voiceLevel } from '../playback/voiceLevel';
 
-const catalog = (query: string): Promise<UnifiedSong[]> => searchMusic(query);
+const catalog = (query: string): Promise<UnifiedSong[]> => searchOfficial(query, 10);
 const voice = () => useVoiceSearchStore.getState();
+
+/**
+ * The microphone is a runtime permission on Android 6+; without it the
+ * recognizer fails every time. True when it's already granted. When it had
+ * to be asked, the press that asked doesn't also start listening (the finger
+ * has usually lifted by the time the dialog closes).
+ */
+const micReady = async (): Promise<'granted' | 'asked' | 'denied'> => {
+  if (Platform.OS !== 'android') return 'granted';
+  const mic = PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
+  if (await PermissionsAndroid.check(mic).catch(() => false)) return 'granted';
+  const result = await PermissionsAndroid.request(mic, {
+    title: 'Search by voice',
+    message: 'LuvLyrics listens only while you hold the mic, to find the song you say.',
+    buttonPositive: 'Allow',
+    buttonNegative: 'Not now',
+  }).catch(() => PermissionsAndroid.RESULTS.DENIED);
+  return result === PermissionsAndroid.RESULTS.GRANTED ? 'asked' : 'denied';
+};
 
 export interface VoiceCommandsState {
   isListening: boolean;
@@ -43,9 +65,9 @@ export function useVoiceCommands() {
       voice().hear(transcript, catalog, songQueryOf);
     });
 
+    // Straight to the UI thread; no React render per report.
     const subLevel = NativeVoiceInput.onAudioLevel(({ level }) => {
-      setState(s => ({ ...s, audioLevel: level }));
-      voice().setLevel(level);
+      voiceLevel.value = level;
     });
 
     const subResult = NativeVoiceInput.onResult(({ transcript }) => {
@@ -55,18 +77,15 @@ export function useVoiceCommands() {
 
     const subEnd = NativeVoiceInput.onEnd(() => {
       isListeningRef.current = false;
+      voiceLevel.value = 0;
       setState(s => ({ ...s, isListening: false, audioLevel: 0, partialTranscript: '' }));
     });
 
     const subError = NativeVoiceInput.onError(({ code }) => {
       isListeningRef.current = false;
-      const msg = code === 'no_match' ? 'Didn\'t catch that' :
-                  code === 'timeout' ? 'No speech detected' :
-                  code === 'permission_denied' ? 'Microphone permission denied' :
-                  code === 'not_available' ? 'Voice not available on this device' :
-                  code === 'busy' ? 'Voice is busy — try again' :
-                  'Something went wrong';
-      setState(s => ({ ...s, isListening: false, audioLevel: 0, error: msg }));
+      const msg = voiceErrorMessage(code);
+      // Letting go before saying anything isn't a fault: no error shake.
+      setState(s => ({ ...s, isListening: false, audioLevel: 0, error: isQuietVoiceEnd(code) ? null : msg }));
       voice().notify(msg);
     });
 
@@ -157,9 +176,16 @@ export function useVoiceCommands() {
     isListeningRef.current = true;
     setState(s => ({ ...s, isListening: true, error: null, lastCommand: null }));
     if (!NativeVoiceInput.isAvailable()) {
-      setState(s => ({ ...s, isListening: false, error: 'Voice not available on this device' }));
+      setState(s => ({ ...s, isListening: false, error: null }));
       isListeningRef.current = false;
-      voice().notify("Voice search isn't available on this device yet");
+      voice().notify('Voice search works on Android for now');
+      return;
+    }
+    const mic = await micReady();
+    if (mic !== 'granted') {
+      isListeningRef.current = false;
+      setState(s => ({ ...s, isListening: false }));
+      voice().notify(mic === 'asked' ? 'Microphone on — hold the mic and say a song' : voiceErrorMessage('permission_denied'));
       return;
     }
     voice().listen();
@@ -169,7 +195,7 @@ export function useVoiceCommands() {
       isListeningRef.current = false;
       const msg = e instanceof Error ? e.message : 'Voice start failed';
       setState(s => ({ ...s, isListening: false, error: msg }));
-      voice().notify("Couldn't start the microphone");
+      voice().notify(voiceErrorMessage('audio_error'));
     }
   }, []);
 

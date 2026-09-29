@@ -7,7 +7,8 @@
  * - Dynamic Header (Syncs with playing song)
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { displayPlaylistName } from '../utils/sentenceCase';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,7 +19,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, {
@@ -46,20 +47,22 @@ import { AuroraHeader } from '../components/AuroraHeader';
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlayerStore, playerControls } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { usePositionStore } from '../store/positionStore';
 import * as playlistQueries from '../database/playlistQueries';
 import { PlaylistItem } from '../components/PlaylistItem';
 import { CustomMenu } from '../components/CustomMenu';
 import { CoverFlow } from '../components/CoverFlow';
-import { BouncePressable } from '../components/BouncePressable';
 import { safeGoBack } from '../utils/navigationService';
-import TimelineScrubber from '../components/TimelineScrubber';
+import Marquee from '../components/allegra/Marquee';
+import { GlassButton, PrimaryButton } from '../components/allegra/home';
+import { shuffled } from '../utils/shuffle';
+import { countOf } from '../utils/formatters';
 import { ModernDeleteModal } from '../components/ModernDeleteModal';
 import { Toast } from '../components/Toast';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { useSortedSongs } from '../hooks/useSortedSongs';
 import { songCanUpgradeToSyncedLyrics } from '../utils/lyricsState';
 import { bottomChromeHeight } from '../constants/layout';
+import { Glass, Signal } from '../constants/allegraTheme';
 
 type PlaylistDetailRouteProp = RouteProp<
   { PlaylistDetail: { playlistId: string } },
@@ -76,6 +79,7 @@ export const PlaylistDetailScreen: React.FC = () => {
   const route = useRoute<PlaylistDetailRouteProp>();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { playlistId } = route.params;
 
   const [songs, setSongs] = useState<Song[]>([]);
@@ -98,11 +102,6 @@ export const PlaylistDetailScreen: React.FC = () => {
   const setPlaylistQueue = usePlayerStore(state => state.setPlaylistQueue);
   const { play } = playerControls;
   const isPlaying = usePlayerStore(state => state.isPlaying);
-  const nextInPlaylist = usePlayerStore(state => state.nextInPlaylist);
-  const previousInPlaylist = usePlayerStore(state => state.previousInPlaylist);
-  const position = usePositionStore(state => state.position);
-  const duration = usePositionStore(state => state.duration);
-  
   const activeIsPlaying = currentPlaylistId === playlistId;
 
 
@@ -233,7 +232,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                  setSortDirection(direction);
              }
          } catch (e) {
-             console.log('Failed to load sort settings', e);
+             if (__DEV__) console.log('Failed to load sort settings', e);
          }
      };
      loadSort();
@@ -273,14 +272,12 @@ export const PlaylistDetailScreen: React.FC = () => {
       switch(sortOption) {
           case 'title': return `Alphabetical ${dirArrow}`;
           case 'artist': return `Artist ${dirArrow}`;
-          case 'date': return `Recently Uploaded ${dirArrow}`;
-          default: return 'Custom Order';
+          case 'date': return `Recently added ${dirArrow}`;
+          default: return 'Custom order';
       }
   };
 
    const player = usePlayer();
-   const isSeeking = useRef(false);
-   const seekTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Removed manual interval polling of player.currentTime (does not exist in expo-audio)
   // We rely on 'position' from usePlayerStore which is synced in PlayerContext.
@@ -297,7 +294,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         if (needsLoad) {
            if (currentSong.audioUri) {
                try {
-                   console.log(`[InlinePlayer] Loading audio for: ${currentSong.title}`);
+                   if (__DEV__) console.log(`[InlinePlayer] Loading audio for: ${currentSong.title}`);
                    await player.replace(currentSong.audioUri);
                    state.setLoadedAudioId(currentSong.id);
                    if (isPlaying) {
@@ -305,7 +302,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                        setTimeout(() => player.play(), 100);
                    }
                } catch (e) {
-                   console.log('[InlinePlayer] Load failed', e);
+                   if (__DEV__) console.log('[InlinePlayer] Load failed', e);
                }
            }
         }
@@ -335,7 +332,7 @@ export const PlaylistDetailScreen: React.FC = () => {
       const playlist = playlists.find((p) => p.id === playlistId);
       const playlistSongs = await playlistQueries.getPlaylistSongs(playlistId);
 
-      setPlaylistName(playlist?.name || 'Playlist');
+      setPlaylistName(playlist?.name ? displayPlaylistName(playlist.name) : 'Playlist');
       setPlaylistCover(playlist?.coverImageUri || null);
       setSongs(playlistSongs);
     } catch (e) {
@@ -409,8 +406,18 @@ export const PlaylistDetailScreen: React.FC = () => {
 
   // --- ACTIONS ---
   
-  // handlePlayPause and handleShuffle removed as they are not currently used in the UI.
-  // These can be reinstated if Play/Shuffle buttons are added to the header.
+  // Play from the top, or pause/resume when this playlist is already the one playing.
+  const playOrPause = useCallback(() => {
+    if (activeIsPlaying) {
+      usePlayerStore.getState().requestPlayback(!usePlayerStore.getState().isPlaying);
+    } else if (songs.length > 0) {
+      setPlaylistQueue(playlistId, songs, 0);
+    }
+  }, [activeIsPlaying, songs, playlistId, setPlaylistQueue]);
+
+  const shufflePlaylist = useCallback(() => {
+    if (songs.length > 0) setPlaylistQueue(playlistId, shuffled(songs), 0);
+  }, [songs, playlistId, setPlaylistQueue]);
   
   const handleSongPress = useCallback((song: Song, index: number) => {
     // If we filter, the index passed is from filtered list.
@@ -605,7 +612,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                </Text>
              )}
              <View style={styles.metaContainer}>
-                <Text style={styles.playlistMeta}>{songs.length} songs • {formatTotalDuration()}</Text>
+                <Text style={styles.playlistMeta}>{countOf(songs.length, 'song')} • {formatTotalDuration()}</Text>
                 {/* Sort Button */}
                 <Pressable 
                     style={styles.sortButton}
@@ -629,109 +636,22 @@ export const PlaylistDetailScreen: React.FC = () => {
                 </Pressable>
              </View>
 
-             {/* Search Bar Removed from here */}
-             
-             {/* Inline Player Controls */}
-             {/* Show this ALWAYS, or only when songs exist? User said "keep... in that place" */}
-             {songs.length > 0 && (
-                 <View style={styles.inlinePlayerContainer}>
-                     {/* Scrubber - Full Width */}
-                     <View style={styles.scrubberContainer}>
-                         <TimelineScrubber 
-                            currentTime={activeIsPlaying ? position : 0}
-                            duration={activeIsPlaying ? (duration > 0 ? duration : (currentSong?.duration || 180)) : (songs[0]?.duration || 180)}
-                            onSeek={async (value) => {
-                                if (activeIsPlaying && player) {
-                                    isSeeking.current = true;
-                                    if (seekTimeout.current) clearTimeout(seekTimeout.current);
-                                    const wasPlaying = usePlayerStore.getState().isPlaying;
-                                    await player.seekTo(value);
-                                    if (wasPlaying) player.play();
-                                    seekTimeout.current = setTimeout(() => {
-                                        isSeeking.current = false;
-                                    }, 1000);
-                                }
-                            }}
+             {/* Play and shuffle: the whole playlist in one tap (the mini player and the
+                 player itself have the transport and the scrubber). */}
+             {songs.length > 0 ? (
+                 <View style={styles.playRow}>
+                     <View style={styles.playRowButton}>
+                         <PrimaryButton
+                             icon={activeIsPlaying && isPlaying ? 'pause' : 'play'}
+                             label={activeIsPlaying && isPlaying ? 'Pause' : activeIsPlaying ? 'Resume' : 'Play'}
+                             onPress={playOrPause}
                          />
                      </View>
-
-                     {/* Compact transport — BouncePressable for light alive feedback */}
-                     <View style={styles.inlineControlsRow}>
-                        <BouncePressable
-                            style={styles.skipButton}
-                            onPress={() => {
-                              if (activeIsPlaying) previousInPlaylist();
-                            }}
-                            disabled={!activeIsPlaying}
-                            hitSlop={6}
-                        >
-                            <Ionicons name="play-skip-back" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
-                        </BouncePressable>
-
-                        <BouncePressable
-                            style={styles.skipButton}
-                            onPress={async () => {
-                                if (activeIsPlaying && player) {
-                                    const newTime = Math.max(0, position - 10);
-                                    const wasPlaying = usePlayerStore.getState().isPlaying;
-                                    await player.seekTo(newTime);
-                                    if (wasPlaying) player.play();
-                                }
-                            }}
-                            disabled={!activeIsPlaying}
-                            hitSlop={6}
-                        >
-                            <Ionicons name="play-back" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
-                        </BouncePressable>
-
-                        <BouncePressable
-                            style={styles.playButtonLarge}
-                            strong
-                            onPress={() => {
-                                if (activeIsPlaying) {
-                                    usePlayerStore.getState().requestPlayback(!isPlaying);
-                                } else if (songs.length > 0) {
-                                    usePlayerStore.getState().setPlaylistQueue(playlistId, songs, 0);
-                                }
-                            }}
-                        >
-                            <Ionicons
-                                name={activeIsPlaying && isPlaying ? 'pause' : 'play'}
-                                size={22}
-                                color="#000"
-                                style={{ marginLeft: activeIsPlaying && isPlaying ? 0 : 1 }}
-                            />
-                        </BouncePressable>
-
-                        <BouncePressable
-                            style={styles.skipButton}
-                            onPress={async () => {
-                                if (activeIsPlaying && player && duration > 1) {
-                                    const newTime = Math.min(duration - 1, position + 10);
-                                    const wasPlaying = usePlayerStore.getState().isPlaying;
-                                    await player.seekTo(newTime);
-                                    if (wasPlaying) player.play();
-                                }
-                            }}
-                            disabled={!activeIsPlaying}
-                            hitSlop={6}
-                        >
-                            <Ionicons name="play-forward" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
-                        </BouncePressable>
-
-                        <BouncePressable
-                            style={styles.skipButton}
-                            onPress={() => {
-                              if (activeIsPlaying) nextInPlaylist();
-                            }}
-                            disabled={!activeIsPlaying}
-                            hitSlop={6}
-                        >
-                            <Ionicons name="play-skip-forward" size={20} color={activeIsPlaying ? '#FFF' : 'rgba(255,255,255,0.3)'} />
-                        </BouncePressable>
+                     <View style={styles.playRowButton}>
+                         <GlassButton icon="shuffle" label="Shuffle" onPress={shufflePlaylist} />
                      </View>
                  </View>
-             )}
+             ) : null}
           </View>
   );
 
@@ -779,14 +699,15 @@ export const PlaylistDetailScreen: React.FC = () => {
               </Pressable>
           )}
           
-          {/* Title always visible over artwork (like home brand name). */}
-          {!isSearchActive && (
-              <Animated.Text style={styles.stickyHeaderTitle} numberOfLines={2}>
-                  {playlistName}
-              </Animated.Text>
+          {/* Title always visible over artwork: one line, and a long name scrolls
+              through slowly (rests a couple of seconds between loops). */}
+          {!isSearchActive ? (
+              <View style={styles.stickyHeaderTitleWrap}>
+                  <Marquee text={playlistName} style={styles.stickyHeaderTitle} active={isFocused} containerStyle={styles.stickyHeaderTitleBox} />
+              </View>
+          ) : (
+              <View style={{flex: 1}} />
           )}
-          
-          <View style={{flex: 1}} />
 
           {isSearchActive ? (
               <Animated.View style={[styles.searchPill, { flex: 1, marginRight: 8 }]}>
@@ -863,7 +784,7 @@ export const PlaylistDetailScreen: React.FC = () => {
       
       {isEditMode && (
           <BlurView intensity={20} tint="dark" style={[styles.editModeToast, { top: 60 + insets.top }]}>
-              <Text style={styles.editModeText}>Editing Playlist</Text>
+              <Text style={styles.editModeText}>Editing playlist</Text>
           </BlurView>
       )}
 
@@ -871,7 +792,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         options={menuOptions}
-        title="Edit Cover Art"
+        title="Edit cover art"
         anchorPosition={menuPosition}
       />
 
@@ -880,7 +801,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         onClose={() => setSortMenuVisible(false)}
         options={[
             { 
-               label: 'Custom Order', 
+               label: 'Custom order', 
                icon: sortOption === 'custom' ? 'checkmark' : undefined, 
                onPress: () => handleSortChange('custom') 
             },
@@ -890,7 +811,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                onPress: () => handleSortChange('title') 
             },
             { 
-               label: `Recently Uploaded ${sortOption === 'date' ? (sortDirection === 'asc' ? '(Oldest)' : '(Newest)') : ''}`, 
+               label: `Recently added ${sortOption === 'date' ? (sortDirection === 'asc' ? '(Oldest)' : '(Newest)') : ''}`, 
                icon: sortOption === 'date' ? (sortDirection === 'asc' ? 'arrow-up' : 'arrow-down') : 'time', 
                onPress: () => handleSortChange('date') 
             },
@@ -900,7 +821,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                onPress: () => handleSortChange('artist') 
             },
         ]}
-        title="Sort Playlist"
+        title="Sort playlist"
         anchorPosition={sortMenuAnchor}
       />
 
@@ -927,7 +848,7 @@ export const PlaylistDetailScreen: React.FC = () => {
 
       <ModernDeleteModal
         visible={showDeleteConfirm}
-        title="Remove Song"
+        title="Remove song"
         message="Remove this song from the playlist?"
         confirmText="Remove"
         onConfirm={async () => {
@@ -970,14 +891,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     zIndex: 100,
   },
+  stickyHeaderTitleWrap: { flex: 1, marginHorizontal: 12, justifyContent: 'center' },
+  stickyHeaderTitleBox: { alignSelf: 'stretch' },
   stickyHeaderTitle: {
-      flex: 1,
       fontSize: 18,
-      fontWeight: 'bold',
+      fontWeight: '700',
       color: '#fff',
-      marginLeft: 16,
-      textAlign: 'center',
-      marginRight: 16,
   },
   iconButton: {
     width: 40,
@@ -989,7 +908,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeButton: {
-      backgroundColor: '#1DB954',
+      backgroundColor: Glass.fillPressed,
   },
   listHeader: {
     alignItems: 'center',
@@ -1008,13 +927,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
-  inlinePlayerContainer: {
-      marginBottom: 12,
-      marginTop: 6,
+  // Play and shuffle side by side, as wide as the cover deck above them.
+  playRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 14,
+      marginBottom: 14,
       width: '100%',
       maxWidth: 340,
       alignSelf: 'center',
   },
+  playRowButton: { flex: 1 },
   coverArt: {
     width: 188,
     height: 188,
@@ -1031,7 +954,7 @@ const styles = StyleSheet.create({
       position: 'absolute',
       bottom: 8,
       right: 8,
-      backgroundColor: '#1DB954',
+      backgroundColor: Signal.wave,
       width: 32,
       height: 32,
       borderRadius: 16,
@@ -1120,18 +1043,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 20,
   },
-  playButtonLarge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
   secondaryButton: {
     width: 48,
     height: 48,
@@ -1162,11 +1073,6 @@ const styles = StyleSheet.create({
       justifyContent: 'space-between',
       paddingHorizontal: 10,
   },
-  scrubberContainer: {
-      width: '100%',
-      paddingHorizontal: 4,
-      marginBottom: 6,
-  },
   timerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -1177,25 +1083,6 @@ const styles = StyleSheet.create({
       fontSize: 11,
       color: '#FFFFFF',
       fontVariant: ['tabular-nums'],
-  },
-  // Compact transport — buttons sit as one control cluster, not across the screen.
-  inlineControlsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 14,
-      alignSelf: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 28,
-      backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  skipButton: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 40,
-      height: 40,
-      borderRadius: 20,
   },
   skipText: {
       position: 'absolute',

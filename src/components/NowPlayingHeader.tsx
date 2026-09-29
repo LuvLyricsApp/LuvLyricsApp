@@ -1,111 +1,50 @@
+/**
+ * Apple Music has no header bar on Now Playing — just a grabber at the top.
+ * Tap it (or swipe the screen down) to go back. While a Listen together room
+ * is open, a small chip beside it shows how many are listening.
+ */
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import CustomMenu from './CustomMenu';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface NowPlayingHeaderProps {
-  animatedStyle: any;
+  animatedStyle: React.ComponentProps<typeof Animated.View>['style'];
   controlsVisible: boolean;
   onGoBack: () => void;
-  onMenuPress: (event: any) => void;
-  menuVisible: boolean;
-  onMenuClose: () => void;
-  menuAnchor?: { x: number; y: number };
-  menuOptions: any[];
-  currentSongTitle?: string;
-  colors: {
-    textPrimary: string;
-    textSecondary: string;
-  };
-  isDark: boolean;
+  /** Listeners in the Listen together room, or null when not in one. */
+  together?: number | null;
+  onTogetherPress?: () => void;
 }
 
 const NowPlayingHeader: React.FC<NowPlayingHeaderProps> = ({
-  animatedStyle,
-  controlsVisible,
-  onGoBack,
-  onMenuPress,
-  menuVisible,
-  onMenuClose,
-  menuAnchor,
-  menuOptions,
-  currentSongTitle,
-  colors,
-  isDark,
+  animatedStyle, controlsVisible, onGoBack, together = null, onTogetherPress,
 }) => {
+  const insets = useSafeAreaInsets();
   return (
-    <Animated.View style={[styles.headerContainer, animatedStyle]} pointerEvents={controlsVisible ? 'auto' : 'none'}>
-      <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.blurContainer}>
-        <SafeAreaView edges={['top']} style={styles.headerContent}>
-          <Pressable onPress={onGoBack} style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-            <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
-          </Pressable>
-
-          <View style={{ alignItems: 'center', flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>Now playing</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{currentSongTitle}</Text>
-          </View>
-
-          <View style={styles.headerRight}>
-            <CustomMenu
-              visible={menuVisible}
-              onClose={onMenuClose}
-              anchorPosition={menuAnchor}
-              options={menuOptions}
-            />
-            <Pressable onPress={onMenuPress} style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-              <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </BlurView>
+    <Animated.View
+      style={[styles.container, { paddingTop: insets.top + 6 }, animatedStyle]}
+      pointerEvents={controlsVisible ? 'box-none' : 'none'}
+    >
+      <Pressable onPress={onGoBack} hitSlop={{ top: 12, bottom: 12, left: 40, right: 40 }} accessibilityRole="button" accessibilityLabel="Close player">
+        <View style={styles.grabber} />
+      </Pressable>
+      {together !== null ? (
+        <Pressable onPress={onTogetherPress} style={styles.chip} accessibilityRole="button" accessibilityLabel={`Listening together, ${together} in the room`}>
+          <MaterialCommunityIcons name="account-multiple" size={15} color="#fff" />
+          <Text style={styles.chipText}>{`Listening together · ${together}`}</Text>
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    overflow: 'hidden',
-  },
-  blurContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(10,10,10,0.3)',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    paddingTop: Platform.OS === 'android' ? 20 : 0,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    maxWidth: '60%',
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerButton: {
-    padding: 8,
-    borderRadius: 20,
-  },
+  container: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', zIndex: 20 },
+  grabber: { width: 38, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.55)', marginVertical: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, height: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.35)' },
+  chipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });
 
 export default React.memo(NowPlayingHeader);

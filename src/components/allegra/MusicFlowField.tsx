@@ -7,12 +7,12 @@
  * as Allegra leaves it out. Decorative only: pointer-transparent, paused when
  * the screen isn't focused, frozen on one frame under Reduce Motion.
  *
- * Rendered at half resolution and scaled up — the field is soft by design, and
- * that quarters the fragment cost on low-end phones.
+ * Rendered at about one device pixel per point and scaled up — the field is
+ * soft by design, and that keeps the fragment cost flat across screen densities.
  */
 import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
+import { Canvas, Fill, Group, LinearGradient, Rect, Shader, Skia, vec } from '@shopify/react-native-skia';
 import {
   useDerivedValue,
   useFrameCallback,
@@ -22,6 +22,7 @@ import {
 } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
 import { AuraPalette, hexToRgb } from './palette';
+import { useVisualBudget } from '../../hooks/useVisualBudget';
 
 const SKSL = `
 uniform float2 uResolution;
@@ -44,8 +45,10 @@ float bell(float x, float center, float width) {
 }
 
 float3 lightField(float2 uv) {
-  float tempo = 0.35 + uEnergy * 0.85;
-  float t = uTime * tempo;
+  // Constant tempo. Scaling time by energy (the old uTime * tempo) turned any
+  // energy change into a burst of speed, because the phase jump grows with
+  // how long the clock has run. Energy now shapes brightness and height only.
+  float t = uTime * 0.78;
   float aspect = uResolution.x / uResolution.y;
 
   float y = uv.y;
@@ -54,7 +57,7 @@ float3 lightField(float2 uv) {
   // Slow drift in place of the web pointer.
   x += 0.012 * sin(uTime * 0.21);
 
-  float flow = sin(uv.y * 6.0 - uTime * (1.2 + uEnergy * 2.0) + uMood) * 0.018 * (0.35 + uEnergy);
+  float flow = sin(uv.y * 6.0 - uTime * 2.2 + uMood) * 0.018 * (0.35 + uEnergy);
   x += flow;
 
   float dome = 0.5 + 0.5 * cos((x - 0.5) * 3.14159265 * 1.05);
@@ -105,7 +108,7 @@ half4 main(float2 fragCoord) {
   float ramp = phase - 0.5;
   float bevel = sin(ramp * 3.14159265);
   float lens = (0.55 * ramp + 0.225 * bevel) * 0.05 * glass;
-  lens += 0.004 * sin(uv.y * 18.0 - uTime * (1.4 + uEnergy * 2.0)) * glass * uEnergy;
+  lens += 0.004 * sin(uv.y * 18.0 - uTime * 2.4) * glass * uEnergy;
   float2 refracted = uv + float2(lens, ramp * 0.012 * glass);
 
   float3 color = lightField(refracted);
@@ -131,8 +134,9 @@ half4 main(float2 fragCoord) {
 const effect = Skia.RuntimeEffect.Make(SKSL);
 if (!effect && __DEV__) console.warn('[MusicFlowField] SkSL failed to compile');
 
-/** Canvas renders at this fraction of the view, then scales up. */
-const RENDER_SCALE = 0.5;
+// How often it redraws and at what density is not decided here: the visual
+// budget (hooks/useVisualBudget) sets the frame cap, the canvas scale and
+// whether the field rests, from the device tier, Battery Saver and playback.
 
 export type AuraMood = 'energy' | 'chill' | 'different' | 'surprise';
 const MOOD_VALUE: Record<AuraMood, number> = { energy: 0.2, chill: 1.0, different: 2.0, surprise: 3.0 };
@@ -146,7 +150,32 @@ interface MusicFlowFieldProps {
   paused?: boolean;
   width?: number;
   height?: number;
+  /** Light pours down from the top edge instead of rising from the bottom one. */
+  inverted?: boolean;
+  /**
+   * The field's own alpha falls from 1 to 0 between these two heights (0 top
+   * .. 1 bottom, as seen on screen), so it melts into whatever is behind it
+   * without having to match that colour.
+   */
+  fadeOut?: readonly [number, number];
 }
+
+/**
+ * An alpha mask that holds at 1 until `from`, then eases to 0 at `to` along a
+ * smoothstep, so the fade has no visible start or end line.
+ */
+export const meltStops = (from: number, to: number): { colors: string[]; positions: number[] } => {
+  const colors = ['#000000ff'];
+  const positions = [0];
+  const STEPS = 8;
+  for (let i = 0; i <= STEPS; i++) {
+    const t = i / STEPS;
+    const alpha = 1 - t * t * (3 - 2 * t);
+    colors.push(`#000000${Math.round(alpha * 255).toString(16).padStart(2, '0')}`);
+    positions.push(from + (to - from) * t);
+  }
+  return { colors, positions };
+};
 
 export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   palette,
@@ -155,11 +184,18 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   paused = false,
   width: widthProp,
   height: heightProp,
+  inverted = false,
+  fadeOut,
 }) => {
   const window = useWindowDimensions();
   const width = widthProp ?? window.width;
   const height = heightProp ?? window.height;
   const reduceMotion = useReducedMotion();
+  const budget = useVisualBudget();
+  const minStep = useSharedValue(budget.minStepSeconds);
+  useEffect(() => {
+    minStep.value = budget.minStepSeconds;
+  }, [budget.minStepSeconds, minStep]);
 
   const clock = useSharedValue(1.6);
   const shownEnergy = useSharedValue(energy);
@@ -174,33 +210,53 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   const colors = useSharedValue(target);
   const targetColors = useSharedValue(target);
 
+  const running = !paused && !reduceMotion && budget.running;
   useEffect(() => {
     targetColors.value = target;
-  }, [target, targetColors]);
+    // The per-frame easing only runs while frames do. When the field is
+    // resting (paused, off-screen, reduced motion) a new song's colours must
+    // still land — otherwise the room keeps the previous cover's tint.
+    if (!running) colors.value = target;
+  }, [target, targetColors, colors, running]);
 
   useEffect(() => {
     shownEnergy.value = withTiming(energy, { duration: Motion.duration.cinematic * 2, easing: Motion.ease.standard });
   }, [energy, shownEnergy]);
 
+  const pending = useSharedValue(0);
   const frame = useFrameCallback(info => {
     'worklet';
     // Clamped step: a stall or a trip to the background never makes time leap.
-    const dt = Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
+    pending.value += Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
+    if (pending.value < minStep.value) return; // no uniform write = no redraw this frame
+    const dt = Math.min(pending.value, 0.066);
+    pending.value = 0;
     clock.value += dt;
-    const next = colors.value.slice();
+    // Time-based easing: the colour glides over ~1.5s at 60Hz and 120Hz alike.
+    // Once it has arrived, stop rewriting it (no per-frame array churn).
     const goal = targetColors.value;
-    for (let i = 0; i < next.length; i++) next[i] += (goal[i] - next[i]) * 0.05;
+    const current = colors.value;
+    let moving = false;
+    for (let i = 0; i < goal.length; i++) {
+      if (Math.abs(goal[i] - current[i]) > 0.002) { moving = true; break; }
+    }
+    if (!moving) return;
+    const k = 1 - Math.exp(-dt * 2.2);
+    const next = current.slice();
+    for (let i = 0; i < next.length; i++) next[i] += (goal[i] - next[i]) * k;
     colors.value = next;
   }, false);
 
   useEffect(() => {
-    const running = !paused && !reduceMotion;
     frame.setActive(running);
     if (!running) colors.value = targetColors.value;
-  }, [paused, reduceMotion, frame, colors, targetColors]);
+  }, [running, frame, colors, targetColors]);
 
-  const renderW = Math.max(1, Math.round(width * RENDER_SCALE));
-  const renderH = Math.max(1, Math.round(height * RENDER_SCALE));
+  const melt = useMemo(() => (fadeOut ? meltStops(fadeOut[0], fadeOut[1]) : null), [fadeOut]);
+
+  const renderScale = budget.renderScale;
+  const renderW = Math.max(1, Math.round(width * renderScale));
+  const renderH = Math.max(1, Math.round(height * renderScale));
   const ribs = width / Math.min(64, Math.max(30, width * 0.032));
   const moodValue = MOOD_VALUE[mood];
 
@@ -231,14 +287,32 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
           transform: [
             { translateX: (width - renderW) / 2 },
             { translateY: (height - renderH) / 2 },
-            { scale: 1 / RENDER_SCALE },
+            { scale: 1 / renderScale },
+            ...(inverted ? [{ scaleY: -1 }] : []),
           ],
         }}
       >
         <Canvas style={{ width: renderW, height: renderH }}>
-          <Fill>
-            <Shader source={effect} uniforms={uniforms} />
-          </Fill>
+          {melt ? (
+            <Group layer>
+              <Fill>
+                <Shader source={effect} uniforms={uniforms} />
+              </Fill>
+              {/* Keeps the field only where the mask is opaque. The canvas is flipped when inverted. */}
+              <Rect x={0} y={0} width={renderW} height={renderH} blendMode="dstIn">
+                <LinearGradient
+                  start={vec(0, inverted ? renderH : 0)}
+                  end={vec(0, inverted ? 0 : renderH)}
+                  colors={melt.colors}
+                  positions={melt.positions}
+                />
+              </Rect>
+            </Group>
+          ) : (
+            <Fill>
+              <Shader source={effect} uniforms={uniforms} />
+            </Fill>
+          )}
         </Canvas>
       </View>
     </View>

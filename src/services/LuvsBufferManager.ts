@@ -146,14 +146,32 @@ class LuvsBufferManager {
   /**
    * Update active index - shifts buffer window, loads/unloads as needed
    */
-  async updateActiveIndex(newIndex: number, feedSongs: UnifiedSong[], shouldPlay: boolean = true) {
-    if (Platform.OS === 'android' && LuvsPlayerModule) {
-      this.activeIndex = newIndex;
-      const urls = feedSongs.map(s => s.streamUrl || s.downloadUrl || '');
-      await LuvsPlayerModule.updateActiveIndex(newIndex, urls, shouldPlay);
+  /**
+   * The taste map: play `song` and keep `warm` ready (what a swipe can reach
+   * next). Addressed by URL on Android, so moving between lanes never plays
+   * the wrong song from a stale index.
+   */
+  async activate(song: UnifiedSong, warm: UnifiedSong[], shouldPlay: boolean = true, startAtHook: boolean = false) {
+    const url = song.streamUrl || song.downloadUrl || '';
+    if (!url) return;
+    if (Platform.OS === 'android' && LuvsPlayerModule?.activateUrl) {
+      const warmUrls = warm.map(s => s.streamUrl || s.downloadUrl || '').filter(Boolean);
+      // On Android the player opens the clip on its hook itself, from the real length.
+      await LuvsPlayerModule.activateUrl(url, warmUrls, shouldPlay, startAtHook);
       return;
     }
+    // Index-keyed pool (iOS): start a fresh list each time.
+    if (Platform.OS !== 'android') {
+      await this.stopAll();
+      for (const index of [...this.slots.keys()]) await this.unloadSlot(index);
+    }
+    this.activeIndex = -1;
+    await this.updateActiveIndex(0, [song, ...warm], shouldPlay);
+  }
 
+  async updateActiveIndex(newIndex: number, feedSongs: UnifiedSong[], shouldPlay: boolean = true) {
+    // Android plays through the native URL-keyed pool (`activate`); this
+    // index-keyed pool is the JS one iOS uses.
     const lastIndex = this.activeIndex;
     if (newIndex === lastIndex) return;
     this.activeIndex = newIndex;

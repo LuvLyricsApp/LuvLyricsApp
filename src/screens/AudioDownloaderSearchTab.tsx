@@ -4,8 +4,14 @@ import {
     ActivityIndicator, ScrollView, FlatList, SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 
-import { useThemeColors } from '../contexts/ThemeContext';
+import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
+import { Tactile } from '../components/allegra/motion';
+import { PrimaryButton, GlassButton } from '../components/allegra/home';
+import * as Haptics from '../utils/haptics';
 import { Toast } from '../components/Toast';
 import { MultiSourceSearchService } from '../services/MultiSourceSearchService';
 import { UnifiedSong } from '../types/song';
@@ -14,14 +20,15 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import { useDownloaderTabStore, SearchTab as SearchTabState } from '../store/downloaderTabStore';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
-import {
-    DownloadGridCard,
-    BulkSwapModal,
-    PlaylistSelectionModal,
-} from '../components';
+import { DownloadGridCard } from '../components/DownloadGridCard';
+import { BulkSwapModal } from '../components/BulkSwapModal';
+import { PlaylistSelectionModal } from '../components/PlaylistSelectionModal';
 import * as Clipboard from 'expo-clipboard';
 import { BulkItem } from '../store/downloaderTabStore';
 import stringSimilarity from 'string-similarity';
+
+/** The collapsible results section (its header used to compare against an all-caps copy and never opened). */
+const REMIXES = 'Remixes and covers';
 
 // --- Sub-components ---
 
@@ -31,26 +38,16 @@ interface ScrollableHeaderProps {
     setActiveTab: (id: string) => void;
     closeTab: (id: string) => void;
     createTab: (query: string) => void;
-    selectionMode: boolean;
-    setSelectionMode: (mode: boolean) => void;
     activeTabMode: 'search' | 'bulk';
     updateTab: (id: string, updates: Partial<SearchTabState>) => void;
 }
 
 const ScrollableHeader: React.FC<ScrollableHeaderProps> = memo(({
     tabs, activeTabId, setActiveTab, closeTab, createTab,
-    selectionMode, setSelectionMode, activeTabMode, updateTab
+    activeTabMode, updateTab
 }) => {
-    const colors = useThemeColors();
     return (
     <View style={styles.toolbarRow}>
-        <Pressable
-            style={[styles.microBtn, selectionMode && styles.microBtnActive]}
-            onPress={() => setSelectionMode(!selectionMode)}
-        >
-            <Ionicons name={selectionMode ? "checkmark-circle" : "checkmark-circle-outline"} size={17} color={selectionMode ? '#fff' : colors.primary} />
-        </Pressable>
-
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -64,27 +61,30 @@ const ScrollableHeader: React.FC<ScrollableHeaderProps> = memo(({
                     onPress={() => setActiveTab(tab.id)}
                 >
                     <Text style={[styles.tabText, tab.id === activeTabId && styles.activeTabText]} numberOfLines={1}>
-                        {tab.query || 'New'}
+                        {tab.query || 'New search'}
                     </Text>
                     {tabs.length > 1 && (
-                        <Pressable onPress={() => closeTab(tab.id)} style={styles.closeTabBtn}>
-                            <Ionicons name="close" size={11} color="#666" />
+                        <Pressable onPress={() => closeTab(tab.id)} hitSlop={8} style={styles.closeTabBtn} accessibilityRole="button" accessibilityLabel="Close this search">
+                            <Ionicons name="close" size={12} color={Signal.inkMuted} />
                         </Pressable>
                     )}
                 </Pressable>
             ))}
         </ScrollView>
 
-        <Pressable style={styles.microBtn} onPress={() => createTab('')}>
-            <Ionicons name="add" size={18} color="#fff" />
-        </Pressable>
+        <Tactile onPress={() => { Haptics.selectionAsync().catch(() => {}); createTab(''); }} pressScale={0.9} accessibilityRole="button" accessibilityLabel="New search" style={styles.microBtn}>
+            <Ionicons name="add" size={19} color={Signal.ink} />
+        </Tactile>
 
-        <Pressable
+        <Tactile
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); updateTab(activeTabId, { mode: activeTabMode === 'bulk' ? 'search' : 'bulk' }); }}
+            pressScale={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={activeTabMode === 'bulk' ? 'Back to search' : 'Add a whole list of songs'}
             style={[styles.microBtn, activeTabMode === 'bulk' && styles.microBtnActive]}
-            onPress={() => updateTab(activeTabId, { mode: activeTabMode === 'bulk' ? 'search' : 'bulk' })}
         >
-            <Ionicons name={activeTabMode === 'bulk' ? 'layers' : 'layers-outline'} size={17} color={activeTabMode === 'bulk' ? '#7BBEFF' : '#555'} />
-        </Pressable>
+            <Ionicons name={activeTabMode === 'bulk' ? 'layers' : 'layers-outline'} size={18} color={activeTabMode === 'bulk' ? Signal.waveInk : Signal.inkSoft} />
+        </Tactile>
     </View>
     );
 });
@@ -98,13 +98,13 @@ const BulkHeader: React.FC<BulkHeaderProps> = memo((props) => (
     <View>
         <ScrollableHeader {...props} />
         <View style={styles.bulkTitleContainer}>
-            <Text style={styles.label}>3. Name your playlist</Text>
+            <Text style={styles.label}>Name your playlist</Text>
             <TextInput
                 style={styles.playlistInput}
                 value={props.bulkPlaylistName}
                 onChangeText={props.setBulkPlaylistName}
-                placeholder="My Awesome Playlist"
-                placeholderTextColor="#555"
+                placeholder="Playlist name"
+                placeholderTextColor={Signal.inkFaint}
             />
         </View>
     </View>
@@ -120,10 +120,20 @@ interface AudioDownloaderSearchTabProps {
 
 // Isolated: no props — reads from stores directly, never re-renders on queue progress
 export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, onDownloadStarted }: AudioDownloaderSearchTabProps) => {
-    const colors = useThemeColors();
 
     // --- Store ---
-    const { tabs, activeTabId, setActiveTab, closeTab, createTab, updateTab, clearAllSelections, getSelectedSongs } = useDownloaderTabStore();
+    const { tabs, activeTabId, setActiveTab, closeTab, createTab, updateTab, clearAllSelections, getSelectedSongs } = useDownloaderTabStore(
+        useShallow(s => ({
+            tabs: s.tabs,
+            activeTabId: s.activeTabId,
+            setActiveTab: s.setActiveTab,
+            closeTab: s.closeTab,
+            createTab: s.createTab,
+            updateTab: s.updateTab,
+            clearAllSelections: s.clearAllSelections,
+            getSelectedSongs: s.getSelectedSongs,
+        })),
+    );
     const activeTab = tabs.find(t => t.id === activeTabId) ?? tabs[0];
 
     // --- Derived from activeTab ---
@@ -136,9 +146,10 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     const selectedCount = (activeTab.selectedSongs ?? []).length;
     const readyBulkCount = (activeTab.bulkItems ?? []).filter(i => i.result !== null).length;
 
+    const insets = useSafeAreaInsets();
+
     // --- Local state ---
     const [searchMode, setSearchMode] = useState<'title' | 'artist'>('title');
-    const [selectionMode, setSelectionMode] = useState(false);
     const [jsonInput, setJsonInput] = useState('');
     const [remixSectionExpanded, setRemixSectionExpanded] = useState(false);
     const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
@@ -150,14 +161,14 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     // --- Refs ---
     const previewSoundRef = useRef<AudioPlayer | null>(null);
-    const downloadContextRef = useRef<'single' | 'selected' | 'bulk'>('single');
-    const pendingSingleRef = useRef<UnifiedSong | null>(null);
+    const downloadContextRef = useRef<'selected' | 'bulk'>('selected');
     const hasAutoSearchedRef = useRef(false);
     const hasAutoDownloadedRef = useRef(false);
 
     // --- Other stores ---
     const existingSongs = useSongsStore(state => state.songs);
-    const { addToQueue } = useDownloadQueueStore();
+    // Just the action: the whole store would re-render this tab on every download tick.
+    const addToQueue = useDownloadQueueStore(s => s.addToQueue);
 
     // --- Handlers ---
     const runSearchWithQuery = useCallback(async (q: string, mode: 'title' | 'artist' = 'title') => {
@@ -205,18 +216,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
         } catch {}
     }, [playingPreviewId]);
 
+    // A tap anywhere on a result ticks it; the bar at the bottom downloads what is ticked.
     const handlePress = useCallback((item: UnifiedSong) => {
-        if (selectionMode || (activeTab.selectedSongs ?? []).length > 0) {
-            useDownloaderTabStore.getState().toggleSelection(activeTabId, item.id);
-        } else {
-            downloadContextRef.current = 'single';
-            pendingSingleRef.current = item;
-            setPlaylistModalVisible(true);
-        }
-    }, [selectionMode, activeTab.selectedSongs, activeTabId]);
-
-    const handleLongPress = useCallback((item: UnifiedSong) => {
-        setSelectionMode(true);
+        Haptics.selectionAsync().catch(() => {});
         useDownloaderTabStore.getState().toggleSelection(activeTabId, item.id);
     }, [activeTabId]);
 
@@ -239,10 +241,6 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
             const selected = getSelectedSongs();
             addToQueue(selected.map(s => s.song), playlistId);
             clearAllSelections();
-            setSelectionMode(false);
-        } else if (ctx === 'single' && pendingSingleRef.current) {
-            addToQueue([pendingSingleRef.current], playlistId);
-            pendingSingleRef.current = null;
         } else if (ctx === 'bulk') {
             const songs = (activeTab.bulkItems ?? []).filter(i => i.result !== null).map(i => i.result!);
             addToQueue(songs, playlistId);
@@ -308,13 +306,13 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
             }
             updateTab(activeTabId, { isSearching: false });
         } catch {
-            setToast({ visible: true, message: 'Invalid JSON — expected [{"title":"...","artist":"..."}]', type: 'error' });
+            setToast({ visible: true, message: 'That list is not valid. Paste a list like [{"title": "Song", "artist": "Artist"}]', type: 'error' });
         }
     }, [jsonInput, activeTabId, existingSongs, updateTab]);
 
     const copyPromptToClipboard = useCallback(async () => {
         await Clipboard.setStringAsync('Return a JSON array: [{"title": "Song Name", "artist": "Artist Name"}]');
-        setToast({ visible: true, message: 'Prompt copied!', type: 'success' });
+        setToast({ visible: true, message: 'Prompt copied', type: 'success' });
     }, []);
 
     // --- Auto-search / auto-download from voice ---
@@ -337,7 +335,6 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     const sharedHeaderProps = {
         tabs, activeTabId, setActiveTab, closeTab, createTab,
-        selectionMode, setSelectionMode,
         activeTabMode: activeTab.mode,
         updateTab,
     };
@@ -347,24 +344,44 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
             {/* Search input */}
             <View style={styles.searchRow}>
                 <View style={styles.searchBarContainer}>
+                    <Ionicons name="search" size={18} color={Signal.inkMuted} style={styles.searchIcon} />
                     <TextInput
                         style={styles.unifiedInput}
-                        placeholder={searchMode === 'title' ? 'Song title...' : 'Artist name...'}
-                        placeholderTextColor="#666"
+                        placeholder={searchMode === 'title' ? 'Search by song title' : 'Search by artist'}
+                        placeholderTextColor={Signal.inkFaint}
                         value={searchMode === 'title' ? titleQuery : artistQuery}
                         onChangeText={text => { if (searchMode === 'title') setTitleQuery(text); else setArtistQuery(text); }}
                         onSubmitEditing={handleSearch}
                         returnKeyType="search"
+                        selectionColor={Signal.wave}
                     />
                     {(titleQuery || artistQuery) ? (
-                        <Pressable onPress={() => { setTitleQuery(''); setArtistQuery(''); }} style={styles.clearSearchBtn}>
-                            <Ionicons name="close-circle" size={16} color="#666" />
+                        <Pressable onPress={() => { setTitleQuery(''); setArtistQuery(''); }} hitSlop={8} style={styles.clearSearchBtn} accessibilityRole="button" accessibilityLabel="Clear the search">
+                            <Ionicons name="close-circle" size={18} color={Signal.inkMuted} />
                         </Pressable>
                     ) : null}
-                    <Pressable style={styles.searchModePill} onPress={() => setSearchMode(searchMode === 'title' ? 'artist' : 'title')}>
+                    <Tactile
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); setSearchMode(searchMode === 'title' ? 'artist' : 'title'); }}
+                        pressScale={0.94}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Searching by ${searchMode}. Tap to switch`}
+                        style={styles.searchModePill}
+                    >
                         <Text style={styles.searchModePillText}>{searchMode === 'title' ? 'Title' : 'Artist'}</Text>
-                    </Pressable>
+                    </Tactile>
                 </View>
+                <Tactile
+                    onPress={handleSearch}
+                    disabled={!(searchMode === 'title' ? titleQuery : artistQuery).trim() || activeTab.isSearching}
+                    pressScale={0.9}
+                    accessibilityRole="button"
+                    accessibilityLabel="Search"
+                    style={[styles.searchGo, (!(searchMode === 'title' ? titleQuery : artistQuery).trim() || activeTab.isSearching) && styles.searchGoOff]}
+                >
+                    {activeTab.isSearching
+                        ? <ActivityIndicator size="small" color={Signal.waveInk} />
+                        : <Ionicons name="arrow-forward" size={20} color={Signal.waveInk} />}
+                </Tactile>
             </View>
 
             {/* Content */}
@@ -375,25 +392,32 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                             <ScrollView>
                                 <ScrollableHeader {...sharedHeaderProps} />
                                 <View style={{ paddingHorizontal: 16 }}>
-                                    <Text style={styles.label}>1. Get the song list as JSON</Text>
-                                    <Pressable style={styles.copyPromptBtn} onPress={copyPromptToClipboard}>
-                                        <Text style={styles.copyPromptText}>Copy Prompt for ChatGPT</Text>
-                                    </Pressable>
-                                    <Text style={styles.label}>2. Paste it here</Text>
-                                    <TextInput
-                                        style={styles.jsonInput}
-                                        value={jsonInput}
-                                        onChangeText={setJsonInput}
-                                        placeholder={'[\n  { "title": "Song", "artist": "Artist" }\n]'}
-                                        placeholderTextColor="#555"
-                                        multiline
-                                    />
-                                    <Pressable style={styles.parseBtn} onPress={parseAndSearchBulk}>
-                                        {activeTab.isSearching
-                                            ? <ActivityIndicator color="#fff" />
-                                            : <Ionicons name="search" size={20} color="#fff" />}
-                                        <Text style={styles.parseBtnText}>Parse & Search</Text>
-                                    </Pressable>
+                                    <Text style={styles.bulkTitle}>Add a whole list</Text>
+                                    <Text style={styles.bulkHint}>Ask ChatGPT (or anyone) for your songs as a list, paste it below, and we find every one.</Text>
+                                    <View style={styles.bulkStep}>
+                                        <Text style={styles.label}>Get the song list</Text>
+                                        <GlassButton icon="copy-outline" label="Copy the prompt for ChatGPT" onPress={copyPromptToClipboard} />
+                                    </View>
+                                    <View style={styles.bulkStep}>
+                                        <Text style={styles.label}>Paste it here</Text>
+                                        <TextInput
+                                            style={styles.jsonInput}
+                                            value={jsonInput}
+                                            onChangeText={setJsonInput}
+                                            placeholder={'[\n  { "title": "Song", "artist": "Artist" }\n]'}
+                                            placeholderTextColor={Signal.inkFaint}
+                                            multiline
+                                            selectionColor={Signal.wave}
+                                        />
+                                    </View>
+                                    <View style={styles.bulkGo}>
+                                        <PrimaryButton
+                                            icon="search"
+                                            label={activeTab.isSearching ? 'Finding songs' : 'Find these songs'}
+                                            onPress={parseAndSearchBulk}
+                                            disabled={!jsonInput.trim() || !!activeTab.isSearching}
+                                        />
+                                    </View>
                                 </View>
                             </ScrollView>
                         ) : (
@@ -410,24 +434,24 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                     }
                                     keyExtractor={item => item.id}
                                     numColumns={2}
-                                    contentContainerStyle={{ paddingBottom: 140 }}
+                                    contentContainerStyle={{ paddingBottom: 220 }}
                                     renderItem={({ item }) => {
                                         if (!item.result) {
                                             return (
                                                 <View style={{ width: '50%', padding: 4 }}>
                                                     <View style={styles.bulkPlaceholder}>
                                                         {item.status === 'searching'
-                                                            ? <ActivityIndicator color={colors.primary} />
-                                                            : <Ionicons name="refresh-circle" size={40} color={colors.primary} />}
+                                                            ? <ActivityIndicator color={Signal.wave} />
+                                                            : <Ionicons name="refresh-circle" size={40} color={Signal.wave} />}
                                                         <Text style={styles.bulkPlaceholderTitle}>
                                                             {item.status === 'not_found' ? 'No match yet' : 'Ready to search'}
                                                         </Text>
                                                         <Text style={styles.bulkPlaceholderQuery}>{item.query.title}</Text>
                                                         <Text style={styles.bulkPlaceholderArtist}>{item.query.artist}</Text>
-                                                        <Pressable onPress={() => handleSwap(item)} style={styles.bulkActionBtn}>
-                                                            <Ionicons name="search" size={14} color="#fff" />
-                                                            <Text style={styles.bulkActionBtnText}>Retry manually</Text>
-                                                        </Pressable>
+                                                        <Tactile onPress={() => handleSwap(item)} pressScale={0.94} accessibilityRole="button" accessibilityLabel={`Choose a match for ${item.query.title}`} style={styles.bulkActionBtn}>
+                                                            <Ionicons name="search" size={14} color={Signal.ink} />
+                                                            <Text style={styles.bulkActionBtnText}>Choose a match</Text>
+                                                        </Tactile>
                                                     </View>
                                                 </View>
                                             );
@@ -444,35 +468,32 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                                     onArtistPress={() => {}}
                                                     selectionMode={false}
                                                 />
-                                                <View style={styles.swapOverlay}><Ionicons name="sync" size={12} color="#fff" /></View>
+                                                <View style={styles.swapOverlay}><Ionicons name="sync" size={12} color={Signal.ink} /></View>
                                                 {item.status === 'already_present' && (
                                                     <View style={styles.alreadyPresentOverlay}>
                                                         <View style={styles.alreadyPresentBadge}>
-                                                            <Ionicons name="library" size={14} color="#fff" />
-                                                            <Text style={styles.alreadyPresentBadgeText}>Already in Library</Text>
+                                                            <Ionicons name="checkmark-circle" size={14} color={Signal.wave} />
+                                                            <Text style={styles.alreadyPresentBadgeText}>Already in your library</Text>
                                                         </View>
-                                                        <Text style={styles.alreadyPresentText}>we will import to ur library dont worry!</Text>
+                                                        <Text style={styles.alreadyPresentText}>It will be added to the playlist without downloading again.</Text>
                                                     </View>
                                                 )}
-                                                <Pressable onPress={() => handleCycleNextCandidate(item)} style={[styles.bulkActionBtn, styles.bulkNextBtn]}>
+                                                <Tactile onPress={() => handleCycleNextCandidate(item)} pressScale={0.94} accessibilityRole="button" accessibilityLabel="Try the next match" style={[styles.bulkActionBtn, styles.bulkNextBtn]}>
                                                     {cyclingItemId === item.id
-                                                        ? <ActivityIndicator color="#fff" size="small" />
+                                                        ? <ActivityIndicator color={Signal.ink} size="small" />
                                                         : (<>
-                                                            <Ionicons name="play-skip-forward" size={14} color="#fff" />
+                                                            <Ionicons name="play-skip-forward" size={14} color={Signal.ink} />
                                                             <Text style={styles.bulkActionBtnText}>Next match</Text>
                                                         </>)}
-                                                </Pressable>
+                                                </Tactile>
                                             </View>
                                         );
                                     }}
                                 />
                                 {activeTab.mode === 'bulk' && readyBulkCount > 0 && (
                                     <View style={styles.actionBar}>
-                                        <Text style={styles.selectionText}>{readyBulkCount} songs ready</Text>
-                                        <Pressable style={styles.reviewBtn} onPress={handleBulkDownloadAction}>
-                                            <Text style={styles.reviewBtnText}>Download All to Playlist</Text>
-                                            <Ionicons name="download" size={18} color="#fff" />
-                                        </Pressable>
+                                        <Text style={styles.selectionText}>{readyBulkCount} ready</Text>
+                                        <PrimaryButton icon="arrow-down" label="Download all" onPress={handleBulkDownloadAction} compact />
                                     </View>
                                 )}
                             </>
@@ -482,8 +503,8 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                     <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
                         <ScrollableHeader {...sharedHeaderProps} />
                         <View style={styles.center}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={styles.statusText}>{activeTab.status}</Text>
+                            <ActivityIndicator size="large" color={Signal.wave} />
+                            <Text style={styles.statusText}>{activeTab.status || 'Searching'}</Text>
                         </View>
                     </ScrollView>
                 ) : activeTab.results.length > 0 || (activeTab.remixResults && activeTab.remixResults.length > 0) ? (
@@ -493,23 +514,26 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                             ListHeaderComponent={<ScrollableHeader {...sharedHeaderProps} />}
                             sections={[
                                 ...(activeTab.results.length > 0 ? [{ title: 'Official tracks', data: activeTab.results }] : []),
-                                { title: 'Remixes and covers', data: activeTab.remixResults, collapsed: !remixSectionExpanded },
+                                { title: REMIXES, data: activeTab.remixResults, collapsed: !remixSectionExpanded },
                             ]}
                             keyExtractor={item => item.id}
                             contentContainerStyle={styles.gridContent}
                             renderSectionHeader={({ section }) => (
                                 <Pressable
-                                    onPress={() => { if (section.title === 'REMIXES & COVERS') setRemixSectionExpanded(v => !v); }}
+                                    onPress={() => { if (section.title === REMIXES) { Haptics.selectionAsync().catch(() => {}); setRemixSectionExpanded(v => !v); } }}
+                                    disabled={section.title !== REMIXES}
                                     style={styles.sectionHeader}
+                                    accessibilityRole={section.title === REMIXES ? 'button' : 'header'}
+                                    accessibilityState={section.title === REMIXES ? { expanded: remixSectionExpanded } : undefined}
                                 >
-                                    <Text style={styles.sectionHeaderText}>{section.title} ({section.data.length})</Text>
-                                    {section.title === 'REMIXES & COVERS' && (
-                                        <Ionicons name={remixSectionExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#999" />
+                                    <Text style={styles.sectionHeaderText}>{section.title} · {section.data.length}</Text>
+                                    {section.title === REMIXES && (
+                                        <Ionicons name={remixSectionExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={Signal.inkMuted} />
                                     )}
                                 </Pressable>
                             )}
                             renderItem={({ item, section }) => {
-                                if (section.title === 'REMIXES & COVERS' && !remixSectionExpanded) return null;
+                                if (section.title === REMIXES && !remixSectionExpanded) return null;
                                 return (
                                     <View style={{ width: '50%', padding: 4 }}>
                                         <DownloadGridCard
@@ -517,10 +541,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                             isSelected={activeTab.selectedSongs.includes(item.id)}
                                             isPlayingPreview={playingPreviewId === item.id}
                                             onPress={() => handlePress(item)}
-                                            onLongPress={() => handleLongPress(item)}
                                             onPlayPress={() => handlePreviewToggle(item)}
                                             onArtistPress={() => openArtistTab(item.artist)}
-                                            selectionMode={selectionMode || activeTab.selectedSongs.length > 0}
+                                            selectionMode
                                         />
                                     </View>
                                 );
@@ -540,10 +563,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                     isSelected={activeTab.selectedSongs.includes(item.id)}
                                     isPlayingPreview={playingPreviewId === item.id}
                                     onPress={() => handlePress(item)}
-                                    onLongPress={() => handleLongPress(item)}
                                     onPlayPress={() => handlePreviewToggle(item)}
                                     onArtistPress={() => openArtistTab(item.artist)}
-                                    selectionMode={selectionMode || activeTab.selectedSongs.length > 0}
+                                    selectionMode
                                 />
                             )}
                         />
@@ -552,9 +574,14 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                     <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
                         <ScrollableHeader {...sharedHeaderProps} />
                         <View style={styles.center}>
-                            <Ionicons name="musical-notes-outline" size={64} color="#333" />
+                            <View style={styles.emptyIcon}>
+                                <Ionicons name="search" size={26} color={Signal.inkSoft} />
+                            </View>
+                            <Text style={styles.emptyTitle}>{activeTab.status || 'Find a song to save'}</Text>
                             <Text style={styles.emptyText}>
-                                {activeTab.status || 'Search for your favorite songs to download.'}
+                                {activeTab.status
+                                    ? 'Try the artist as well as the title, or check the spelling.'
+                                    : 'Search by title or artist. Tap results to pick them, then download.'}
                             </Text>
                         </View>
                     </ScrollView>
@@ -563,15 +590,13 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
             {/* Selection action bar */}
             {selectedCount > 0 && (
-                <View style={styles.actionBar}>
+                // Above the floating tab bar, not under it.
+                <View style={[styles.actionBar, { bottom: TAB_BAR_CLEARANCE + insets.bottom + 8 }]}>
                     <Text style={styles.selectionText}>{selectedCount} selected</Text>
-                    <Pressable style={styles.reviewBtn} onPress={handleBatchDownload}>
-                        <Text style={styles.reviewBtnText}>Download Selected</Text>
-                        <Ionicons name="download" size={18} color="#fff" />
-                    </Pressable>
-                    <Pressable style={styles.clearBtn} onPress={clearAllSelections}>
-                        <Ionicons name="close" size={24} color="#fff" />
-                    </Pressable>
+                    <PrimaryButton icon="arrow-down" label="Download" onPress={handleBatchDownload} compact />
+                    <Tactile onPress={clearAllSelections} hitSlop={8} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Clear the selection" style={styles.clearBtn}>
+                        <Ionicons name="close" size={20} color={Signal.ink} />
+                    </Tactile>
                 </View>
             )}
 
@@ -600,108 +625,110 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 const styles = StyleSheet.create({
     container: { flex: 1 },
     searchRow: {
-        paddingHorizontal: 16,
-        paddingBottom: 8,
-        paddingTop: 4,
-    },
-    searchBarContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        borderRadius: 22,
-        height: 46,
-        paddingRight: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
+        gap: 8,
+        paddingHorizontal: Space.md,
+        paddingBottom: Space.xs,
+        paddingTop: 2,
     },
+    searchBarContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Glass.fill,
+        borderRadius: Radius.pill,
+        height: 48,
+        paddingRight: 6,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: Glass.hairlineStrong,
+    },
+    searchIcon: { marginLeft: 14 },
     unifiedInput: {
-        flex: 1, color: '#fff', fontSize: 15, height: '100%',
-        paddingLeft: 12, paddingRight: 8,
+        flex: 1, minWidth: 0, color: Signal.ink, fontSize: 15, height: '100%',
+        paddingLeft: 10, paddingRight: 8,
     },
-    clearSearchBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+    clearSearchBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 2 },
     searchModePill: {
-        backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14,
-        minWidth: 66, height: 30, alignItems: 'center', justifyContent: 'center',
-        paddingHorizontal: 10, marginLeft: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
+        backgroundColor: Glass.fillLight, borderRadius: Radius.pill,
+        minWidth: 62, height: 34, alignItems: 'center', justifyContent: 'center',
+        paddingHorizontal: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong,
     },
-    searchModePillText: { color: '#7BBEFF', fontSize: 12, fontWeight: '700' },
+    searchModePillText: { color: Signal.ink, fontSize: 12, fontWeight: '600' },
+    searchGo: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: Signal.wave },
+    searchGoOff: { opacity: 0.4 },
     toolbarRow: {
         flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 10, paddingVertical: 5, gap: 6, marginBottom: 3,
+        paddingHorizontal: Space.sm, paddingVertical: 5, gap: 6, marginBottom: 3,
     },
     microBtn: {
-        width: 34, height: 34, borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+        width: 38, height: 38, borderRadius: 19,
+        backgroundColor: Glass.fillLight, justifyContent: 'center', alignItems: 'center',
+        borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline,
     },
-    microBtnActive: { backgroundColor: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.18)' },
+    microBtnActive: { backgroundColor: Signal.wave, borderColor: Signal.wave },
     tabItem: {
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 6,
-        backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, marginRight: 6,
-        borderWidth: 1, borderColor: 'transparent',
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, minHeight: 36,
+        backgroundColor: Glass.fillLight, borderRadius: Radius.pill, marginRight: 6,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline,
     },
-    activeTabItem: { backgroundColor: 'rgba(255,255,255,0.10)', borderColor: 'rgba(255,255,255,0.16)' },
-    tabText: { color: '#555', fontSize: 12, fontWeight: '600', maxWidth: 100 },
-    activeTabText: { color: '#7BBEFF', fontWeight: '700' },
+    activeTabItem: { backgroundColor: 'rgba(217, 230, 106, 0.16)', borderColor: Signal.wave },
+    tabText: { color: Signal.inkMuted, fontSize: 13, fontWeight: '600', maxWidth: 120 },
+    activeTabText: { color: Signal.ink },
     tabBarScroll: { alignItems: 'center', paddingVertical: 3 },
-    closeTabBtn: { marginLeft: 5 },
-    bulkTitleContainer: { paddingHorizontal: 16, marginBottom: 16 },
+    closeTabBtn: { marginLeft: 6 },
+    bulkTitleContainer: { paddingHorizontal: Space.md, marginBottom: Space.md },
     content: { flex: 1 },
-    gridContent: { padding: 12, paddingBottom: 140 },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    statusText: { color: '#666', marginTop: 16, fontSize: 13 },
-    emptyText: { color: '#444', marginTop: 16, fontSize: 16 },
+    gridContent: { padding: Space.sm, paddingBottom: 220 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Space.xl, paddingTop: 48 },
+    statusText: { color: Signal.inkMuted, marginTop: Space.md, fontSize: 14 },
+    emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fill, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+    emptyTitle: { color: Signal.ink, fontSize: 18, fontWeight: '700', marginTop: Space.md, textAlign: 'center' },
+    emptyText: { color: Signal.inkMuted, marginTop: 6, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+    // The floating bar over the results: how many, and the one thing to do next.
     actionBar: {
-        position: 'absolute', bottom: 24, left: 24, right: 24,
-        backgroundColor: '#1E1E1E', borderRadius: 24,
-        flexDirection: 'row', alignItems: 'center',
-        padding: 12, paddingHorizontal: 20,
-        elevation: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.6, shadowRadius: 12,
-        borderWidth: 1, borderColor: '#333',
+        position: 'absolute', left: Space.lg, right: Space.lg,
+        backgroundColor: Glass.fillHeavy, borderRadius: Radius.pill,
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        paddingVertical: 8, paddingLeft: 20, paddingRight: 8,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong,
     },
-    selectionText: { color: '#fff', fontSize: 15, fontWeight: 'bold', flex: 1 },
-    reviewBtn: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#1A1A1A', paddingHorizontal: 20, paddingVertical: 12,
-        borderRadius: 20, gap: 8, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 4,
-    },
-    reviewBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-    clearBtn: { padding: 8 },
-    bulkContainer: { padding: 16, flex: 1 },
-    label: { color: '#666', marginBottom: 8, marginTop: 16, fontWeight: '600', fontSize: 13 },
-    playlistInput: { backgroundColor: 'rgba(255,255,255,0.07)', color: '#fff', padding: 14, borderRadius: 18, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-    jsonInput: { backgroundColor: 'rgba(255,255,255,0.07)', color: '#ccc', padding: 12, borderRadius: 18, fontSize: 13, height: 160, textAlignVertical: 'top', fontFamily: 'monospace', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-    copyPromptBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#1E1E1E', borderRadius: 20, marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 4, },
-    copyPromptText: { color: '#EDEDED', fontSize: 12, fontWeight: '600' },
-    parseBtn: { backgroundColor: '#1A1A1A', padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 32, flexDirection: 'row', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 4, },
-    parseBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 8, marginHorizontal: 4 },
-    sectionHeaderText: { color: '#8a8a8a', fontSize: 14, fontWeight: '700' },
+    selectionText: { color: Signal.ink, fontSize: 15, fontWeight: '600', flex: 1 },
+    clearBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fillLight },
+    bulkContainer: { padding: Space.md, flex: 1 },
+    bulkTitle: { color: Signal.ink, fontSize: 20, fontWeight: '700', marginTop: Space.sm },
+    bulkHint: { color: Signal.inkMuted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+    bulkStep: { alignItems: 'flex-start' },
+    bulkGo: { marginTop: Space.lg, alignItems: 'flex-start' },
+    label: { color: Signal.inkSoft, marginBottom: 8, marginTop: Space.md, fontWeight: '600', fontSize: 14 },
+    playlistInput: { backgroundColor: Glass.fill, color: Signal.ink, paddingHorizontal: 16, height: 48, borderRadius: Radius.pill, fontSize: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong },
+    jsonInput: { alignSelf: 'stretch', backgroundColor: Glass.fill, color: Signal.inkSoft, padding: 14, borderRadius: Radius.panel - 4, fontSize: 13, height: 160, textAlignVertical: 'top', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Space.md, marginBottom: Space.xs, marginHorizontal: 6, minHeight: 32 },
+    sectionHeaderText: { color: Signal.inkSoft, fontSize: 15, fontWeight: '700' },
     gridCardWrapper: { width: '50%', padding: 4 },
-    swapOverlay: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(0,0,0,0.6)', padding: 4, borderRadius: 40, pointerEvents: 'none' },
+    swapOverlay: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(8,9,12,0.6)', padding: 5, borderRadius: 40, pointerEvents: 'none' },
     alreadyPresentOverlay: {
         position: 'absolute', bottom: 8, left: 8, right: 8,
-        backgroundColor: 'rgba(0,0,0,0.85)', padding: 10, borderRadius: 12,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+        backgroundColor: 'rgba(8,9,12,0.9)', padding: 10, borderRadius: Radius.well,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong,
         alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
     },
-    alreadyPresentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, marginBottom: 6, gap: 4 },
-    alreadyPresentBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    alreadyPresentText: { color: '#ccc', fontSize: 10, textAlign: 'center', lineHeight: 14, fontWeight: '500' },
+    alreadyPresentBadge: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 5 },
+    alreadyPresentBadgeText: { color: Signal.ink, fontSize: 11, fontWeight: '700' },
+    alreadyPresentText: { color: Signal.inkSoft, fontSize: 11, textAlign: 'center', lineHeight: 15 },
     bulkActionBtn: {
         marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
-        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14,
+        backgroundColor: Glass.fillPressed, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong,
+        paddingHorizontal: 12, minHeight: 32, borderRadius: Radius.pill,
     },
-    bulkActionBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-    bulkNextBtn: { position: 'absolute', bottom: 10, right: 10, marginTop: 0, backgroundColor: 'rgba(0,0,0,0.72)' },
+    bulkActionBtnText: { color: Signal.ink, fontSize: 12, fontWeight: '600' },
+    bulkNextBtn: { position: 'absolute', bottom: 10, right: 10, marginTop: 0, backgroundColor: 'rgba(8,9,12,0.72)' },
     bulkPlaceholder: {
-        height: 200, backgroundColor: '#111', borderRadius: 12,
+        height: 200, backgroundColor: Glass.fill, borderRadius: Radius.panel - 4,
         justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: '#222', paddingHorizontal: 8,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline, paddingHorizontal: 8,
     },
-    bulkPlaceholderTitle: { color: '#fff', marginTop: 8, fontSize: 12, textAlign: 'center', fontWeight: 'bold' },
-    bulkPlaceholderQuery: { color: '#666', marginTop: 4, fontSize: 12, textAlign: 'center', paddingHorizontal: 8 },
-    bulkPlaceholderArtist: { color: '#444', fontSize: 10, textAlign: 'center' },
+    bulkPlaceholderTitle: { color: Signal.ink, marginTop: 8, fontSize: 13, textAlign: 'center', fontWeight: '700' },
+    bulkPlaceholderQuery: { color: Signal.inkSoft, marginTop: 4, fontSize: 12, textAlign: 'center', paddingHorizontal: 8 },
+    bulkPlaceholderArtist: { color: Signal.inkMuted, fontSize: 11, textAlign: 'center' },
 });

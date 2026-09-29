@@ -21,6 +21,8 @@ import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { getPreloadedData } from './services/NativeStartup';
 import { ensureSearchIndex } from './services/NativeSearch';
+import { runWhenIdle } from './services/bootPhases';
+import { isBatterySaverOn } from './utils/batterySaver';
 import { SF_FONT_MAP } from './constants/fonts';
 
 // ─── Music Equalizer Loader ───────────────────────────────────────────────────
@@ -34,6 +36,8 @@ const LOADER_BARS = [
   { initH: 10, max: 38, min: 6,  dur: 630 },
 ];
 
+const LOADER_MAX = 52;
+
 const BAR_COLORS = [
   'rgba(255,255,255,0.35)',
   'rgba(255,255,255,0.6)',
@@ -43,14 +47,16 @@ const BAR_COLORS = [
 ];
 
 const MusicLoader: React.FC = () => {
-  const anims = React.useRef(LOADER_BARS.map(b => new Animated.Value(b.initH))).current;
+  // Bars are fixed 52pt tall and scale on Y via the native driver: the loader
+  // runs while JS is busiest (boot), so it must not need the JS thread.
+  const anims = React.useRef(LOADER_BARS.map(b => new Animated.Value(b.initH / LOADER_MAX))).current;
 
   useEffect(() => {
     const loops = LOADER_BARS.map((cfg, i) =>
       Animated.loop(
         Animated.sequence([
-          Animated.timing(anims[i], { toValue: cfg.max, duration: cfg.dur, useNativeDriver: false }),
-          Animated.timing(anims[i], { toValue: cfg.min, duration: cfg.dur, useNativeDriver: false }),
+          Animated.timing(anims[i], { toValue: cfg.max / LOADER_MAX, duration: cfg.dur, useNativeDriver: true }),
+          Animated.timing(anims[i], { toValue: cfg.min / LOADER_MAX, duration: cfg.dur, useNativeDriver: true }),
         ])
       )
     );
@@ -62,7 +68,7 @@ const MusicLoader: React.FC = () => {
     <View style={loaderStyles.bars}>
       {anims.map((anim, i) => (
         <View key={i} style={loaderStyles.barTrack}>
-          <Animated.View style={[loaderStyles.bar, { height: anim, backgroundColor: BAR_COLORS[i] }]} />
+          <Animated.View style={[loaderStyles.bar, { transform: [{ scaleY: anim }], backgroundColor: BAR_COLORS[i] }]} />
         </View>
       ))}
     </View>
@@ -72,7 +78,7 @@ const MusicLoader: React.FC = () => {
 const loaderStyles = StyleSheet.create({
   bars:     { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 56 },
   barTrack: { height: 56, justifyContent: 'flex-end' },
-  bar:      { width: 6, borderRadius: 3 },
+  bar:      { width: 6, height: LOADER_MAX, borderRadius: 3, transformOrigin: 'bottom' },
 });
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -90,7 +96,7 @@ const App: React.FC = () => {
 
       while (retries > 0) {
         try {
-          console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
+          if (__DEV__) console.log(`[APP] Initialization attempt ${4 - retries}/3...`);
 
           // Parallel: preload native data + audio mode + fonts (all while Hermes parsed the bundle)
           const [preloaded] = await Promise.all([
@@ -109,16 +115,6 @@ const App: React.FC = () => {
 
           // Open the write connection (fast — Kotlin already opened read-only above)
           await initDatabase();
-
-          // Restore any downloads that were in-flight when the app was last killed
-          import('./store/downloadQueueStore')
-            .then(m => m.useDownloadQueueStore.getState().hydrateFromDb())
-            .catch(() => {});
-
-          // Restore any lyrics scan jobs that were pending when the app was last killed
-          import('./store/lyricsScanQueueStore')
-            .then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb())
-            .catch(() => {});
 
           const { usePlaylistStore } = await import('./store/playlistStore');
 
@@ -147,25 +143,39 @@ const App: React.FC = () => {
             if (lastPlayed) usePlayerStore.getState().setInitialSong(lastPlayed);
           }
 
-          // Start desktop bridge if previously enabled
-          import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()).catch(console.error);
+          // Everything below waits for the first frame (see services/bootPhases).
+          // Each job runs once touches have settled, staggered so they don't
+          // land in a burst on the JS thread.
 
-          // Pre-fetch Luvs for instant playback
-          import('./services/luvsEngine').then(m => m.luvsEngine.prefetch()).catch(console.error);
+          // Restore downloads and lyrics scans that were in flight when the app was killed.
+          runWhenIdle('download queue', () =>
+            import('./store/downloadQueueStore').then(m => m.useDownloadQueueStore.getState().hydrateFromDb()));
+          runWhenIdle('lyrics scan queue', () =>
+            import('./store/lyricsScanQueueStore').then(m => m.useLyricsScanQueueStore.getState().hydrateFromDb()), 150);
 
-          // Build/verify FTS5 search index in background (Android only; no-op on iOS)
-          ensureSearchIndex().catch(() => {});
+          // Start the desktop bridge if it was on. It still starts by itself, just after the first frame.
+          runWhenIdle('desktop bridge', () =>
+            import('./store/desktopBridgeSettingsStore').then(m => m.useDesktopBridgeSettingsStore.getState().load()), 300);
 
-          console.log('[APP] Initialization successful');
+          // Build or verify the FTS5 search index (Android only; no-op on iOS).
+          runWhenIdle('search index', () => ensureSearchIndex(), 600);
+
+          // Warm Luvs so the first open is instant. It syncs the library, asks
+          // for taste picks over the network and fetches a feed, so it goes
+          // last and is skipped under Battery Saver (opening Luvs loads it then).
+          runWhenIdle('luvs warm-up', () => {
+            if (isBatterySaverOn()) return;
+            return import('./services/luvsEngine').then(m => m.luvsEngine.prefetch());
+          }, 4000);
+
+          // Playlist migration, likewise after the UI has rendered.
+          runWhenIdle('playlist migration', async () => {
+            const { migratePlaylistData } = await import('./database/db_migration');
+            await migratePlaylistData();
+          }, 900);
+
+          if (__DEV__) console.log('[APP] Initialization successful');
           setIsReady(true);
-          
-          // Run playlist migration AFTER UI renders (prevents startup freeze)
-          import('react-native').then(({ InteractionManager }) => {
-            InteractionManager.runAfterInteractions(async () => {
-              const { migratePlaylistData } = await import('./database/db_migration');
-              await migratePlaylistData();
-            });
-          });
 
           return; // Success - exit retry loop
         } catch (err) {
@@ -174,7 +184,7 @@ const App: React.FC = () => {
           
           retries--;
           if (retries > 0) {
-            console.log(`[APP] Retrying in 2 seconds...`);
+            if (__DEV__) console.log(`[APP] Retrying in 2 seconds...`);
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }

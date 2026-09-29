@@ -149,3 +149,25 @@ describe('adoptPreparedTrack', () => {
     expect(s.loadedAudioId).toBe('b');
   });
 });
+
+describe('mini player visibility', () => {
+  beforeEach(() => usePlayerStore.setState({ miniPlayerHiddenSources: new Set(), hideMiniPlayer: false }));
+
+  it('comes back when the player that hid it closes', () => {
+    const s = usePlayerStore.getState();
+    s.setMiniPlayerHiddenSource('NowPlaying', true);
+    expect(usePlayerStore.getState().hideMiniPlayer).toBe(true);
+    s.setMiniPlayerHiddenSource('NowPlaying', false);
+    expect(usePlayerStore.getState().hideMiniPlayer).toBe(false);
+  });
+
+  it('stays hidden while another screen still hides it', () => {
+    const s = usePlayerStore.getState();
+    s.setMiniPlayerHiddenSource('NowPlaying', true);
+    s.setMiniPlayerHidden(true); // e.g. the YouTube browser
+    s.setMiniPlayerHiddenSource('NowPlaying', false);
+    expect(usePlayerStore.getState().hideMiniPlayer).toBe(true);
+    s.setMiniPlayerHidden(false);
+    expect(usePlayerStore.getState().hideMiniPlayer).toBe(false);
+  });
+});

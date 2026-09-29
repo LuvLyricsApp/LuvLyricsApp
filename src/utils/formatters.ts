@@ -65,6 +65,13 @@ export const truncateText = (text: string, maxLength: number): string => {
 };
 
 /**
+ * "1 song", "2 songs": the count with the right noun. Pass the plural for
+ * words that don't just add an s.
+ */
+export const countOf = (count: number, singular: string, plural: string = `${singular}s`): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+/**
  * Generate unique ID using timestamp + random
  */
 export const generateId = (): string => {

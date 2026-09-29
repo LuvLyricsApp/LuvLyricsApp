@@ -2,12 +2,16 @@
 import './src/theme/appleTypography';
 import * as Sentry from '@sentry/react-native';
 import { registerRootComponent } from 'expo';
-import React from 'react';
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   enabled: !__DEV__,
   tracesSampleRate: 0.2,
+  // Both of these run all the time a trace is open: stall tracking keeps a
+  // timer ticking on the JS thread, native frames tracking hooks every frame.
+  // Traces stay on; the always-on watchers do not.
+  enableStallTracking: false,
+  enableNativeFramesTracking: false,
 });
 
 import App from './App';
@@ -18,11 +22,7 @@ import App from './App';
 registerRootComponent(App);
 
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
-import { SongWidget } from './src/widget/SongWidget';
+import { widgetTaskHandler } from './src/widget/widgetTaskHandler';
 
-registerWidgetTaskHandler(async (props) => {
-  const { renderWidget } = props;
-  renderWidget(
-    React.createElement(SongWidget)
-  );
-});
+// Home-screen widgets (Android): Now playing card and Playlist list.
+registerWidgetTaskHandler(widgetTaskHandler);

@@ -3,6 +3,16 @@ import { CanvasService } from '../services/canvas/CanvasService';
 import { CanvasArtwork } from '../services/canvas/types';
 import { useSettingsStore } from '../store/settingsStore';
 
+/** The phone's country as an Apple storefront ("en-IN" -> "in"), as Echo uses. */
+const deviceStorefront = (): string => {
+  try {
+    const region = Intl.DateTimeFormat().resolvedOptions().locale.split(/[-_]/)[1];
+    return region && region.length === 2 ? region.toLowerCase() : 'us';
+  } catch {
+    return 'us';
+  }
+};
+
 interface CanvasSongLike {
   id?: string;
   title?: string;
@@ -33,7 +43,7 @@ export const useCanvasArtwork = (song: CanvasSongLike | null | undefined): Canva
 
     // A skip mid-lookup must not paint the previous song's canvas.
     let cancelled = false;
-    CanvasService.resolve({ title, artist, album, duration }, { appleMusicToken, tidalToken })
+    CanvasService.resolve({ title, artist, album, duration }, { appleMusicToken, tidalToken, storefront: deviceStorefront() })
       .then(result => {
         if (!cancelled) setCanvas(result);
       })

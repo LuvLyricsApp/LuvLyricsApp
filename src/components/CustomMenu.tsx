@@ -1,6 +1,7 @@
 /**
- * LyricFlow - Custom Context Menu
- * iOS-style "drop-up" menu with blur effect and dark theme
+ * Context menu on Allegra's floating glass: frosted groups, hairline
+ * separators, the signal colour for Cancel and the warm accent for
+ * destructive rows.
  */
 
 import React from 'react';
@@ -12,8 +13,10 @@ import {
   Pressable,
   TouchableWithoutFeedback,
   Platform,
+  Dimensions,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { Frosted } from './allegra/Frosted';
+import { Glass, Signal } from '../constants/allegraTheme';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
   FadeIn, 
@@ -57,9 +60,7 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(150)}
           style={styles.overlay}
-        >
-          <BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} />
-        </Animated.View>
+        />
       </TouchableWithoutFeedback>
 
       <View style={styles.menuContainer} pointerEvents="box-none">
@@ -70,7 +71,11 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
             styles.menuContent,
             anchorPosition ? {
               position: 'absolute',
-              top: anchorPosition.y,
+              // Tapped in the lower half: open upward from the tap, so a
+              // button near the bottom never pushes the menu off screen.
+              ...(anchorPosition.y > Dimensions.get('window').height / 2
+                ? { bottom: Dimensions.get('window').height - anchorPosition.y + 8 }
+                : { top: anchorPosition.y }),
               right: anchorPosition.x > 200 ? 16 : undefined, // Align right if tapped on right side
               left: anchorPosition.x <= 200 ? 16 : undefined,
               width: 280, // Slightly wider for safer text fitting
@@ -79,6 +84,7 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
         >
           {/* Menu Items Group */}
           <View style={styles.groupContainer}>
+            <Frosted radius={18} intensity={60} tint={0.5} />
             {/* Title Header */}
             {title && (
               <View style={styles.header}>
@@ -112,7 +118,7 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
                     <Ionicons 
                       name={option.icon} 
                       size={20} 
-                      color={option.isDestructive ? '#FF453A' : '#FFF'} 
+                      color={option.isDestructive ? Signal.accent : Signal.inkSoft} 
                       style={{ marginLeft: 12 }} // Add spacing
                     />
                   )}
@@ -130,6 +136,7 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
               ]}
               onPress={onClose}
             >
+              <Frosted radius={18} intensity={60} tint={0.5} />
               <Text style={styles.cancelLabel}>Cancel</Text>
             </Pressable>
           )}
@@ -142,7 +149,7 @@ export const CustomMenu: React.FC<CustomMenuProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: Glass.scrim,
   },
   menuContainer: {
     flex: 1,
@@ -155,8 +162,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupContainer: {
-    backgroundColor: '#0A0A0A',
-    borderRadius: 14,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   header: {
@@ -164,12 +170,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: Glass.hairline,
   },
   headerTitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
+    color: Signal.inkMuted,
     textAlign: 'center',
   },
   option: {
@@ -178,38 +184,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#0A0A0A',
   },
   optionPressed: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Glass.fillPressed,
   },
   optionLabel: {
     fontSize: 17,
     fontWeight: '400',
-    color: '#FFF',
+    color: Signal.ink,
     flex: 1, // Allow text to take available space
   },
   destructiveLabel: {
-    color: '#FF453A',
+    color: Signal.accent,
   },
   separator: {
     height: 0.5,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: Glass.hairline,
     marginLeft: 16,
   },
   cancelButton: {
-    backgroundColor: '#0A0A0A',
-    borderRadius: 14,
+    borderRadius: 18,
+    overflow: 'hidden',
     paddingVertical: 16,
     alignItems: 'center',
   },
   cancelPressed: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Glass.fillPressed,
   },
   cancelLabel: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#0A84FF', // iOS Blue
+    color: Signal.wave,
   },
 });
 

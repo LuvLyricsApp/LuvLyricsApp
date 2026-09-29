@@ -3,4 +3,6 @@
   <color name="iconBackground">#000000</color>
   <color name="colorPrimary">#000000</color>
   <color name="colorPrimaryDark">#000000</color>
+  <!-- The dark room behind every screen: no white before first paint or during transitions. -->
+  <color name="appBackground">#07080B</color>
 </resources>

@@ -2,7 +2,7 @@
  * Allegra's shell-level ambient layer, for React Native.
  *
  *   base    — near-black with two radial glows of the cover's colours
- *   field   — MusicFlowField (reeded-glass light columns), 0.88 opacity; 0.3 paused
+ *   field   — MusicFlowField (reeded-glass light columns), 0.88 opacity; 0.5 paused
  *             (web uses 0.7 with a screen-blended flute layer; RN has no blend
  *             modes, so the field carries a little more of the light itself)
  *   flutes  — faint vertical colour bands
@@ -10,14 +10,21 @@
  *
  * Fixed behind the content, pointer-transparent, never owns layout.
  */
-import React, { useEffect } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import MusicFlowField, { AuraMood } from './MusicFlowField';
 import { AuraPalette } from './palette';
 import { Motion } from '../../constants/allegraTheme';
+import { useSettingsStore } from '../../store/settingsStore';
+import { usePlayerStore } from '../../store/playerStore';
+import GlassRoom from './GlassRoom';
+import GlowRoom from './GlowRoom';
+
+/** Paused, the field rests but still carries the cover's colour. */
+const PAUSED_FIELD = 0.5;
 
 interface DynamicAuraProps {
   palette: AuraPalette;
@@ -35,18 +42,41 @@ const withAlpha = (hex: string, alpha: number): string => {
   return `${hex}${a}`;
 };
 
-export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = false, active = true, mood = 'energy', dim = 0 }) => {
-  const { width, height } = useWindowDimensions();
-  const fieldOpacity = useSharedValue(playing ? 0.88 : 0.3);
+/**
+ * Settings → App background picks the room: the live shader, the lite frosted
+ * glass (no frame loop at all), or the glow (the mini player's animated glow
+ * across the top of the screen, black below).
+ */
+export const DynamicAura: React.FC<DynamicAuraProps> = props => {
+  const background = useSettingsStore(s => s.appBackground);
+  const hasSong = usePlayerStore(s => !!s.currentSongId);
+  const cover = usePlayerStore(s => s.currentSong?.coverImageUri);
+  if (background === 'glass') return <GlassRoom palette={hasSong ? props.palette : null} dim={props.dim} />;
+  if (background === 'glow') return <GlowRoom coverUri={cover} active={props.active} dim={props.dim} />;
+  return <ShaderRoom {...props} />;
+};
+
+const ShaderRoom: React.FC<DynamicAuraProps> = ({ palette, playing = false, active = true, mood = 'energy', dim = 0 }) => {
+  // Sized to the space it actually fills, not the window: on edge-to-edge
+  // Android the window height leaves out the navigation bar, which left an
+  // unpainted strip at the bottom. Start from the full screen until measured.
+  const [{ width, height }, setSize] = useState(() => Dimensions.get('screen'));
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    if (w > 0 && h > 0 && (Math.round(w) !== Math.round(width) || Math.round(h) !== Math.round(height))) {
+      setSize({ width: w, height: h, scale: 1, fontScale: 1 });
+    }
+  };
+  const fieldOpacity = useSharedValue(playing ? 0.88 : PAUSED_FIELD);
 
   useEffect(() => {
-    fieldOpacity.value = withTiming(playing ? 0.88 : 0.3, { duration: Motion.duration.crossfade, easing: Motion.ease.standard });
+    fieldOpacity.value = withTiming(playing ? 0.88 : PAUSED_FIELD, { duration: Motion.duration.crossfade, easing: Motion.ease.standard });
   }, [playing, fieldOpacity]);
 
   const fieldStyle = useAnimatedStyle(() => ({ opacity: fieldOpacity.value }));
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.base]} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, styles.base]} pointerEvents="none" onLayout={onLayout}>
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="glowA" cx="72%" cy="18%" rx="72%" ry="58%">
@@ -63,6 +93,7 @@ export const DynamicAura: React.FC<DynamicAuraProps> = ({ palette, playing = fal
       </Svg>
 
       <Animated.View style={[StyleSheet.absoluteFill, fieldStyle]}>
+        {/* The visual budget lets the field rest while music is paused on low-end phones and in Battery Saver. */}
         <MusicFlowField palette={palette} energy={playing ? 0.72 : 0.12} mood={mood} paused={!active} width={width} height={height} />
       </Animated.View>
 

@@ -11,7 +11,7 @@
 import { prepareNextInQueue, usePlayerStore } from '../../store/playerStore';
 import { useStreamHistoryStore } from '../../store/streamHistoryStore';
 import { useDownloadQueueStore } from '../../store/downloadQueueStore';
-import { UnifiedSong } from '../../types/song';
+import { Song, UnifiedSong } from '../../types/song';
 import { recommendFor } from './recommend';
 import { lyricaService } from '../LyricaService';
 import {
@@ -56,6 +56,18 @@ export const StreamService = {
     prepareNextInQueue();
   },
 
+  /** Adds songs to the end of the stream queue (a list still resolving in the background). */
+  append(songs: UnifiedSong[]): void {
+    const state = usePlayerStore.getState();
+    if (!state.playlistQueue || state.currentPlaylistId !== STREAM_QUEUE_ID) return;
+    const queued = state.playlistQueue.flatMap(s => [s.id, `${s.title.trim().toLowerCase()}|${(s.artist ?? '').trim().toLowerCase()}`]);
+    const fresh = dedupeStreamable(songs, queued);
+    if (fresh.length === 0) return;
+    remember(fresh);
+    state.updateQueue([...state.playlistQueue, ...fresh.map(s => toStreamSong(s))]);
+    prepareNextInQueue();
+  },
+
   /**
    * "Save" for a streamed song: queue it for download so it lands in the
    * library with lyrics and art. Returns false when the song is unknown.
@@ -69,6 +81,38 @@ export const StreamService = {
 
   catalogFor(streamId: string): UnifiedSong | undefined {
     return catalog.get(streamId);
+  },
+
+  /**
+   * Player menu → Radio: keep the current song playing and replace what
+   * follows with YouTube Music's automix for it (catalog audio). Works for a
+   * song on the phone too — it becomes the head of a stream queue.
+   * Resolves to how many songs were queued (0 = nothing found).
+   */
+  async startRadio(song: Song): Promise<number> {
+    const seed: UnifiedSong = catalog.get(song.id) ?? {
+      id: song.id,
+      title: song.title,
+      artist: song.artist ?? '',
+      highResArt: song.coverImageUri ?? '',
+      downloadUrl: song.audioUri ?? 'local',
+      source: 'Local',
+      duration: song.duration,
+    };
+    const recs = await recommendFor(seed, 25).catch(() => [] as UnifiedSong[]);
+    const state = usePlayerStore.getState();
+    if (state.currentSongId !== song.id) return 0; // skipped while it loaded
+    const fresh = dedupeStreamable(recs, [song.id, `${song.title.trim().toLowerCase()}|${(song.artist ?? '').trim().toLowerCase()}`]);
+    if (fresh.length === 0) return 0;
+    remember(fresh);
+    const current = state.currentSong ?? song;
+    usePlayerStore.setState({
+      playlistQueue: [current, ...fresh.map(s => toStreamSong(s))],
+      currentPlaylistId: STREAM_QUEUE_ID,
+      currentQueueIndex: 0,
+    });
+    prepareNextInQueue();
+    return fresh.length;
   },
 
   /**

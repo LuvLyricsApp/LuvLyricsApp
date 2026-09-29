@@ -1,162 +1,168 @@
-import React, { memo, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, FlatList,
-  TouchableOpacity, Image,
-} from 'react-native';
+/**
+ * Downloads: what is arriving, in Allegra's language. Each song shows its
+ * progress as a wave-coloured bar that grows by transform (never width), with
+ * pause / resume / retry / remove one tap away.
+ */
+import React, { memo, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Artwork from '../components/allegra/Artwork';
+import { Tactile } from '../components/allegra/motion';
+import { GlassButton } from '../components/allegra/home';
+import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
+import * as Haptics from '../utils/haptics';
 import { useDownloadQueueStore, QueueItem } from '../store/downloadQueueStore';
+import { useDownloadItem, useQueueShape } from '../store/downloadQueueSelectors';
+import { countOf } from '../utils/formatters';
 
-const getStatusColor = (status: string): { color: string } => {
-  switch (status) {
-    case 'completed': return { color: '#4CAF50' };
-    case 'failed':    return { color: '#F44336' };
-    case 'downloading': return { color: '#A1A1A1' };
-    case 'staging':   return { color: '#FFC107' };
-    case 'paused':    return { color: '#FFA000' };
-    default:          return { color: '#999' };
-  }
+const STATUS_TEXT: Record<QueueItem['status'], string> = {
+  pending: 'Waiting',
+  staging: 'Getting ready',
+  downloading: 'Downloading',
+  completed: 'Saved',
+  failed: 'Failed',
+  paused: 'Paused',
 };
 
-const QueueRow = memo(({ item }: { item: QueueItem }) => {
-  const removeItem  = useDownloadQueueStore(s => s.removeItem);
-  const pauseItem   = useDownloadQueueStore(s => s.pauseItem);
-  const resumeItem  = useDownloadQueueStore(s => s.resumeItem);
-  const retryItem   = useDownloadQueueStore(s => s.retryItem);
+const statusColor = (status: QueueItem['status']): string =>
+  status === 'completed' ? Signal.wave : status === 'failed' ? Signal.accent : status === 'paused' ? Signal.inkSoft : Signal.inkMuted;
 
-  const handlePause = useCallback(() => pauseItem(item.id), [pauseItem, item.id]);
-  const handleResume = useCallback(() => resumeItem(item.id), [resumeItem, item.id]);
-  const handleRetry = useCallback(() => retryItem(item.id), [retryItem, item.id]);
-  const handleRemove = useCallback(() => removeItem(item.id), [removeItem, item.id]);
+const tick = () => { Haptics.selectionAsync().catch(() => {}); };
+
+const IconAction: React.FC<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; color?: string }> = ({ icon, label, onPress, color = Signal.ink }) => (
+  <Tactile onPress={() => { tick(); onPress(); }} hitSlop={6} pressScale={0.88} accessibilityRole="button" accessibilityLabel={label} style={styles.action}>
+    <Ionicons name={icon} size={19} color={color} />
+  </Tactile>
+);
+
+// Each row reads its own item, so a progress tick re-renders one row, not the list.
+const QueueRow = memo(({ id }: { id: string }) => {
+  const item = useDownloadItem(id);
+  const removeItem = useDownloadQueueStore(s => s.removeItem);
+  const pauseItem = useDownloadQueueStore(s => s.pauseItem);
+  const resumeItem = useDownloadQueueStore(s => s.resumeItem);
+  const retryItem = useDownloadQueueStore(s => s.retryItem);
+
+  const handlePause = useCallback(() => pauseItem(id), [pauseItem, id]);
+  const handleResume = useCallback(() => resumeItem(id), [resumeItem, id]);
+  const handleRetry = useCallback(() => retryItem(id), [retryItem, id]);
+  const handleRemove = useCallback(() => removeItem(id), [removeItem, id]);
 
   if (!item?.song) return null;
 
+  const showBar = item.status === 'downloading' || item.status === 'completed' || item.status === 'paused';
+  const progress = item.status === 'completed' ? 1 : Math.max(0.02, Math.min(1, item.progress || 0));
+  const stage = item.status === 'downloading' ? item.stageStatus || 'Downloading' : STATUS_TEXT[item.status];
+
   return (
     <View style={styles.item}>
-      <Image source={{ uri: item.song.highResArt }} style={styles.art} />
+      <Artwork uri={item.song.highResArt} title={item.song.title || 'Untitled'} artist={item.song.artist} size={56} style={styles.art} />
       <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={1}>{item.song.title || 'Unknown Title'}</Text>
-        <Text style={styles.artist} numberOfLines={1}>{item.song.artist || 'Unknown Artist'}</Text>
+        <Text style={styles.title} numberOfLines={1}>{item.song.title || 'Unknown title'}</Text>
+        <Text style={styles.artist} numberOfLines={1}>{item.song.artist || 'Unknown artist'}</Text>
 
-        {(item.status === 'downloading' || item.status === 'completed' || item.status === 'paused') ? (
+        {showBar ? (
           <View style={styles.progressContainer}>
             <View style={styles.progressRow}>
-              <Text style={[styles.stageText, item.status === 'paused' && { color: '#FFA000' }]} numberOfLines={1}>
-                {item.status === 'completed' ? 'Done' :
-                 item.status === 'paused'    ? 'Paused' :
-                 item.stageStatus || 'Downloading...'}
-              </Text>
-              <Text style={styles.pct}>
-                {item.status === 'completed' ? '100%' : `${Math.round((item.progress || 0) * 100)}%`}
-              </Text>
+              <Text style={[styles.stage, { color: statusColor(item.status) }]} numberOfLines={1}>{stage}</Text>
+              <Text style={styles.pct}>{`${Math.round(progress * 100)}%`}</Text>
             </View>
             <View style={styles.track}>
-              <View style={[
-                styles.bar,
-                { width: `${item.status === 'completed' ? 100 : (item.progress || 0) * 100}%` as any },
-                item.status === 'completed' && { backgroundColor: '#4CAF50' },
-                item.status === 'paused'    && { backgroundColor: '#FFA000' },
-              ]} />
+              <View style={[styles.bar, { transform: [{ scaleX: progress }] }, item.status === 'paused' && styles.barPaused]} />
             </View>
           </View>
         ) : (
-          <View style={styles.statusRow}>
-            <Text style={[styles.status, getStatusColor(item.status)]}>
-              {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Pending'}
-            </Text>
-            {item.status === 'failed' && !!item.error && (
-              <Text style={styles.error} numberOfLines={1}> — {item.error}</Text>
-            )}
-          </View>
+          <Text style={[styles.status, { color: statusColor(item.status) }]} numberOfLines={1}>
+            {STATUS_TEXT[item.status] ?? 'Waiting'}
+            {item.status === 'failed' && item.error ? ` · ${item.error}` : ''}
+          </Text>
         )}
       </View>
 
       <View style={styles.actions}>
-        {item.status === 'downloading' && (
-          <TouchableOpacity onPress={handlePause} style={styles.actionBtn}>
-            <Ionicons name="pause" size={20} color="#fff" />
-          </TouchableOpacity>
-        )}
-        {item.status === 'paused' && (
-          <TouchableOpacity onPress={handleResume} style={styles.actionBtn}>
-            <Ionicons name="play" size={20} color="#4CAF50" />
-          </TouchableOpacity>
-        )}
-        {item.status === 'failed' && (
-          <TouchableOpacity onPress={handleRetry} style={styles.actionBtn}>
-            <Ionicons name="refresh" size={20} color="#A1A1A1" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={handleRemove} style={styles.actionBtn}>
-          <Ionicons name="close-circle" size={24} color="#666" />
-        </TouchableOpacity>
+        {item.status === 'downloading' ? <IconAction icon="pause" label="Pause download" onPress={handlePause} /> : null}
+        {item.status === 'paused' ? <IconAction icon="play" label="Resume download" onPress={handleResume} color={Signal.wave} /> : null}
+        {item.status === 'failed' ? <IconAction icon="refresh" label="Try again" onPress={handleRetry} color={Signal.wave} /> : null}
+        <IconAction icon="close" label="Remove from downloads" onPress={handleRemove} color={Signal.inkMuted} />
       </View>
     </View>
   );
 });
 
-// Isolated: only this subtree re-renders on queue changes (max 4/sec due to store throttle)
+// The list follows the queue's shape (items and their state), not its progress.
 export const AudioDownloaderQueueTab = memo(() => {
-  const queue = useDownloadQueueStore(s => s.queue);
+  const shape = useQueueShape();
   const clearCompleted = useDownloadQueueStore(s => s.clearCompleted);
-  const hasCompleted = queue.some(i => i.status === 'completed');
+  const { ids, done } = useMemo(() => {
+    const queue = useDownloadQueueStore.getState().queue;
+    return { ids: queue.map(i => i.id), done: queue.filter(i => i.status === 'completed').length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shape]);
+  const active = ids.length - done;
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={queue}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => <QueueRow item={item} />}
+        data={ids}
+        keyExtractor={id => id}
+        renderItem={({ item }) => <QueueRow id={item} />}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          ids.length > 0 ? (
+            <View style={styles.summary}>
+              <Text style={styles.summaryText}>
+                {active > 0 ? `${countOf(active, 'song')} on the way` : 'Everything is saved'}
+                {done > 0 && active > 0 ? ` · ${done} saved` : ''}
+              </Text>
+              {done > 0 ? <GlassButton compact label="Clear saved" onPress={clearCompleted} /> : null}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="download-outline" size={48} color="#333" />
-            <Text style={styles.emptyText}>No active downloads</Text>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="arrow-down" size={26} color={Signal.inkSoft} />
+            </View>
+            <Text style={styles.emptyTitle}>Nothing downloading</Text>
+            <Text style={styles.emptyBody}>Songs you save show up here while they arrive, then live in your Library.</Text>
           </View>
         }
       />
-      {hasCompleted && (
-        <TouchableOpacity onPress={clearCompleted} style={styles.clearBtn}>
-          <Text style={styles.clearBtnText}>Clear Completed</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 140 },
+  listContent: { paddingHorizontal: Space.md, paddingBottom: 220 },
+  summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, minHeight: 48 },
+  summaryText: { color: Signal.inkSoft, fontSize: 14, fontWeight: '600', flex: 1 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
+    marginBottom: 10,
     padding: 10,
+    borderRadius: Radius.panel,
+    backgroundColor: Glass.fill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Glass.hairline,
   },
-  art: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#333' },
+  art: { width: 56, height: 56, borderRadius: Radius.thumb + 2, overflow: 'hidden' },
   info: { flex: 1, marginLeft: 12, justifyContent: 'center' },
-  title: { color: '#fff', fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  artist: { color: '#aaa', fontSize: 13, marginBottom: 4 },
-  statusRow: { flexDirection: 'row', alignItems: 'center' },
-  status: { fontSize: 12, fontWeight: '500' },
-  error: { color: '#F44336', fontSize: 12, flex: 1 },
-  progressContainer: { marginTop: 2 },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  stageText: { color: '#ccc', fontSize: 11, maxWidth: '80%' },
-  pct: { color: '#4CAF50', fontSize: 11, fontWeight: 'bold' },
-  track: { height: 4, backgroundColor: '#333', borderRadius: 2, overflow: 'hidden' },
-  bar: { height: '100%', backgroundColor: '#4CAF50', borderRadius: 2 },
-  actions: { flexDirection: 'row', alignItems: 'center' },
-  actionBtn: { padding: 8 },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { color: '#444', marginTop: 12, fontSize: 16 },
-  clearBtn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    margin: 16,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  clearBtnText: { color: '#fff', fontWeight: '600' },
+  title: { color: Signal.ink, fontSize: 15, fontWeight: '600' },
+  artist: { color: Signal.inkMuted, fontSize: 13, marginTop: 1 },
+  status: { fontSize: 12, fontWeight: '600', marginTop: 5 },
+  progressContainer: { marginTop: 6 },
+  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  stage: { fontSize: 12, fontWeight: '600', flex: 1, marginRight: 8 },
+  pct: { color: Signal.inkSoft, fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  track: { height: 4, backgroundColor: 'rgba(244,241,234,0.12)', borderRadius: 2, overflow: 'hidden' },
+  bar: { height: '100%', width: '100%', backgroundColor: Signal.wave, borderRadius: 2, transformOrigin: 'left' },
+  barPaused: { backgroundColor: Signal.inkMuted },
+  actions: { flexDirection: 'row', alignItems: 'center', marginLeft: 4 },
+  action: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  empty: { alignItems: 'center', paddingTop: 72, paddingHorizontal: Space.xl },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: Glass.fill, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  emptyTitle: { color: Signal.ink, fontSize: 18, fontWeight: '700', marginTop: Space.md },
+  emptyBody: { color: Signal.inkMuted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 6 },
 });

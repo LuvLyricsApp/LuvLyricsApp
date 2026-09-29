@@ -122,3 +122,44 @@ export const accentInk = (p: AuraPalette): string => {
   const mix = (c: number) => (c * 0.62 + 0.38) * 255;
   return toHex(mix(r), mix(g), mix(b));
 };
+
+/**
+ * A calm mid-dark tone of the cover for small chrome (the mini player pill):
+ * the cover's hue, desaturated, at a fixed lightness so white text always reads.
+ */
+export const pillTint = (hex: string): string => {
+  const { hue, sat } = hexToHsl(hex);
+  return hslToHex(hue, Math.min(0.3, Math.max(0.12, sat * 0.45)), 0.3);
+};
+
+/**
+ * YouTube Music's player background: the cover's colour at the top washing
+ * down into near-black, so the controls always read. Returns [top, middle,
+ * bottom]; the hue is the cover's, lightness is clamped so a pale cover never
+ * glares and a dark one still shows its colour.
+ */
+export const youtubeWash = (hex: string): [string, string, string] => {
+  const { hue, sat, light } = hexToHsl(hex);
+  const s = Math.min(0.6, sat);
+  const top = hslToHex(hue, s, Math.min(0.34, Math.max(0.2, light * 0.6)));
+  const middle = hslToHex(hue, s * 0.8, Math.min(0.16, Math.max(0.09, light * 0.28)));
+  return [top, middle, '#0a0a0b'];
+};
+
+/** A colour a fraction `t` of the way from `a` to `b` (0 = a, 1 = b). */
+export const mixHex = (a: string, b: string, t: number): string => {
+  const ra = hexToRgb(a);
+  const rb = hexToRgb(b);
+  const k = Math.min(1, Math.max(0, t));
+  return toHex(...(ra.map((v, i) => (v + (rb[i] - v) * k) * 255) as [number, number, number]));
+};
+
+/** Where YouTubeBackdrop's gradient puts the three wash colours (top .. bottom). */
+export const WASH_STOPS = [0, 0.5, 0.9] as const;
+
+/** The wash colour at a height (0 top .. 1 bottom), so a layer can hand over to it seamlessly. */
+export const washAt = (colors: readonly [string, string, string], at: number): string => {
+  if (at <= WASH_STOPS[1]) return mixHex(colors[0], colors[1], (at - WASH_STOPS[0]) / (WASH_STOPS[1] - WASH_STOPS[0]));
+  if (at <= WASH_STOPS[2]) return mixHex(colors[1], colors[2], (at - WASH_STOPS[1]) / (WASH_STOPS[2] - WASH_STOPS[1]));
+  return colors[2];
+};

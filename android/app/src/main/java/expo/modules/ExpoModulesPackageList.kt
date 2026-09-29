@@ -30,6 +30,9 @@ class ExpoModulesPackageList : ModulesProvider {
         )
     }
 
+    // expo-video's VideoModule is marked @UnstableReactNativeAPI; referencing
+    // it needs an explicit opt-in or the Kotlin compile fails.
+    @OptIn(com.facebook.react.common.annotations.UnstableReactNativeAPI::class)
     override fun getModulesList(): List<Class<out Module>> = listOf(
         // Auto-linked expo modules
         expo.modules.fetch.ExpoFetchModule::class.java,
@@ -54,6 +57,7 @@ class ExpoModulesPackageList : ModulesProvider {
         expo.modules.sharing.SharingModule::class.java,
         expo.modules.sqlite.SQLiteModule::class.java,
         expo.modules.systemui.SystemUIModule::class.java,
+        expo.modules.video.VideoModule::class.java,
 
         // Local app modules
         com.lyricflow.app.modules.StartupModule::class.java,

@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { YtMiniPlayer } from './YtMiniPlayer';
+import PillPlayer from './PillPlayer';
+import { openPlayerSheet } from '../navigation/playerSheet';
 import { View, Text, Pressable, StyleSheet, Image, Dimensions, Platform, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
 import * as GestureHandler from 'react-native-gesture-handler';
 import SynchronizedLyrics from './SynchronizedLyrics';
 import InstrumentalWaveform, { isInstrumentalLyric } from './InstrumentalWaveform';
@@ -30,17 +29,22 @@ import Animated, {
 import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 
 import { usePlayer } from '../contexts/PlayerContext';
-import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue } from '../store/playerStore';
+import { diag } from '../utils/diag';
+import { usePlayerStore, playerControls, beginAudioLoad, endAudioLoad, prepareNextInQueue, takeRestoredLoad, takeResumePosition } from '../store/playerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSongsStore } from '../store/songsStore';
 import { useIsSongLiked } from '../hooks/useIsSongLiked';
 import { useIsDark } from '../contexts/ThemeContext';
 import { getGradientColors } from '../constants/gradients';
 import { TAB_BAR_HEIGHT, CLASSIC_MINI_PLAYER_HEIGHT } from '../constants/layout';
+import { pillBarInset, pillBarTop, PILL_STACK_GAP } from '../navigation/tabs';
+
+const PILL_RADIUS = 22;
 import { RotatingVinyl } from './VinylRecord';
 import { getCurrentLineIndex } from '../utils/timestampParser';
 import { Fonts } from '../constants/fonts';
 import Artwork from './allegra/Artwork';
+import { Signal } from '../constants/allegraTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -229,21 +233,25 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const loadedAudioId = usePlayerStore(state => state.loadedAudioId);
   const setLoadedAudioId = usePlayerStore(state => state.setLoadedAudioId);
   const hideMiniPlayer = usePlayerStore(state => state.hideMiniPlayer);
-  const setMiniPlayerHidden = usePlayerStore(state => state.setMiniPlayerHidden);
   const requestPlayback = usePlayerStore(state => state.requestPlayback);
   const storePlaying = usePlayerStore(state => state.isPlaying);
   const miniPlayerStyle = useSettingsStore(state => state.miniPlayerStyle);
   const libraryFocusMode = useSettingsStore(state => state.libraryFocusMode);
   const islandBgMode = useSettingsStore(state => state.islandBgMode);
   const classicBarBgMode = useSettingsStore(state => state.classicBarBgMode);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const navBarStyle = useSettingsStore(state => state.navBarStyle);
   const isDark = useIsDark();
   const toggleLike = useSongsStore(state => state.toggleLike);
-  const isLiked = useIsSongLiked(currentSong?.id);
+  const isLiked = useIsSongLiked(currentSong?.id, currentSong);
 
+  // The pill stays mounted under the player sheet so it can hand over to it
+  // (PillPlayer reads the sheet's progress); anything else hides it outright.
+  const hiddenOnlyBySheet = usePlayerStore(state =>
+    state.miniPlayerHiddenSources.size === 1 && state.miniPlayerHiddenSources.has('NowPlaying'));
+  const pillNav = navBarStyle === 'modern-pill';
   // Use store instead of navigation state to avoid root-level crashes
-  const isNowPlaying = hideMiniPlayer;
+  const isNowPlaying = hideMiniPlayer && !(pillNav && hiddenOnlyBySheet);
 
   // Animation for Play/Pause Button
   const playButtonScale = useSharedValue(1);
@@ -292,6 +300,10 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const isIsland = miniPlayerStyle === 'island' && isHomeTab;
   
   const screenHeight = Dimensions.get('window').height;
+  // With the floating pill tab bar, the collapsed player is a matching pill
+  // just above it (Apple Music style) and widens into the sheet as it expands.
+  const pillMode = navBarStyle === 'modern-pill';
+  const pillInset = pillBarInset(Dimensions.get('window').width);
 
   const gradientColors = currentSong?.gradientId 
     ? getGradientColors(currentSong.gradientId) 
@@ -361,7 +373,6 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   }, []);
 
   // Track if this is the first song loore)
-  const isInitialLoad = useRef(true);
 
   // Audio Sync Logic: Auto-load song if it changes in the store
   useEffect(() => {
@@ -380,16 +391,16 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
           setLoadedAudioId(songId);
           // Stage the following queue item in Media3 (Android) for gapless advance.
           prepareNextInQueue();
+          // A recovery reload carries on from where the song stopped.
+          const resumeAt = takeResumePosition(songId);
+          if (resumeAt !== null) playerControls.seekTo(resumeAt);
 
-          // On app startup (first load), don't auto-play
-          // On user-initiated song change, auto-play
-          if (isInitialLoad.current) {
-            isInitialLoad.current = false;
-            if (__DEV__) console.log('[MiniPlayer] Initial load - staying paused');
-          } else {
-            requestPlayback(true);
-            if (__DEV__) console.log('[MiniPlayer] User selected song - auto-playing');
-          }
+          // The last-played song restored at launch waits for a tap; anything
+          // the listener picked plays. (Keyed to that song: a fresh install
+          // used to swallow its first pick because it was the "first load".)
+          const restored = takeRestoredLoad(songId);
+          if (!restored) requestPlayback(true);
+          diag('audio', `pill loaded "${currentSong.title}", ${restored ? 'restored, waits for a tap' : 'play requested'}`);
         } catch (error) {
           if (__DEV__) console.error('[MiniPlayer] Failed to sync audio:', error);
         } finally {
@@ -399,8 +410,9 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
     };
 
     syncAudio();
+    // audioUri too: a streamed song can arrive before its audio link resolves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong?.id, player, loadedAudioId, setLoadedAudioId, setMiniPlayerHidden, requestPlayback]);
+  }, [currentSong?.id, currentSong?.audioUri, player, loadedAudioId, setLoadedAudioId, requestPlayback]);
 
   // Auto-close removed: Lyrics persist across songs
   // useEffect(() => { ... }, [currentSong?.id, isIsland]);
@@ -505,17 +517,34 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // animated height. Rounded top corners on half/full; always clip to it.
   const animatedClassicShellStyle = useAnimatedStyle(() => {
     if (isIsland) return {};
-    const halfR = interpolate(expansionProgress.value, [0, 0.35, 1], [0, 16, 28], Extrapolation.CLAMP);
+    const e = expansionProgress.value;
+    const halfR = interpolate(e, [0, 0.35, 1], [pillMode ? PILL_RADIUS : 0, 16, 28], Extrapolation.CLAMP);
     const fullR = interpolate(classicFullProgress.value, [0, 1], [0, 6], Extrapolation.CLAMP);
     // Whole pixels only: a rounded corner + overflow:hidden makes Android rebuild
     // the clip path whenever the radius changes. Reanimated diffs the style object
     // per prop, so quantising means most frames don't touch it at all. Sub-pixel
     // radius is not visible either way.
     const r = Math.round(halfR + fullR);
+    if (!pillMode) {
+      return {
+        height: classicHeightForProgress(),
+        borderTopLeftRadius: r,
+        borderTopRightRadius: r,
+        overflow: 'hidden' as const,
+      };
+    }
+    // Pill: inset like the tab bar and rounded all round while collapsed; the
+    // sides and bottom corners open out as it grows into the sheet.
+    const side = Math.round(pillInset * (1 - Math.min(1, e * 2)));
+    const bottomR = Math.round(PILL_RADIUS * (1 - Math.min(1, e * 2)));
     return {
       height: classicHeightForProgress(),
+      left: side,
+      right: side,
       borderTopLeftRadius: r,
       borderTopRightRadius: r,
+      borderBottomLeftRadius: bottomR,
+      borderBottomRightRadius: bottomR,
       overflow: 'hidden' as const,
     };
   });
@@ -656,6 +685,11 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // more than one GestureDetector (each carries its own handler tag). The classic
   // bar needs the same stage-drag behaviour at three mount points — the transport
   // row and the two edge rails — so each gets its own instance.
+  // The gestures are built before openNowPlaying exists; they reach it
+  // through this ref instead of capturing it.
+  const openNowPlayingRef = useRef<() => void>(() => {});
+  const requestOpenNowPlaying = useCallback(() => openNowPlayingRef.current(), []);
+
   const buildStageGesture = () => Gesture.Pan()
     .activeOffsetY([-5, 5])
     .activeOffsetX([-80, 80])
@@ -737,6 +771,12 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
         } else if (event.translationX > 60 || event.velocityX > 600) {
           runOnJS(skipBackward)();
         }
+        return;
+      }
+
+      // Swipe up opens the full Now Playing screen, as in Apple Music.
+      if (!expandedSV.value && (event.translationY < -40 || event.velocityY < -500)) {
+        runOnJS(requestOpenNowPlaying)();
         return;
       }
 
@@ -831,30 +871,17 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   const stageRailLeftGesture = buildStageGesture();
   const stageRailRightGesture = buildStageGesture();
 
-  const toggleExpand = useCallback(() => {
-    if (expanded) {
-      expansionProgress.value = withSpring(0);
-      lyricExpansionProgress.value = withSpring(0);
-      fullExpansionProgress.value = withSpring(0);
-      classicFullProgress.value = withSpring(0);
-      setExpanded(false);
-      setLyricExpanded(false);
-      setFullLyricExpanded(false);
-      setClassicFullExpanded(false);
-      return;
-    }
-    
-    // Canonical HALF pair — pin both, never assume classicFullProgress is already 0.
-    expansionProgress.value = withSpring(1);
-    classicFullProgress.value = withSpring(0);
-    setExpanded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
+  // The bar opens the Apple-style Now Playing screen, never the old
+  // half-height sheet that sat the lyrics at the bottom of the screen.
+  const onBarPress = useCallback(() => openNowPlayingRef.current(), []);
 
-  const openNowPlaying = useCallback(() => {
+  // `velocity`: a swipe up on the pill hands its speed to the sheet.
+  const openNowPlaying = useCallback((velocity?: number) => {
     if (currentSong) {
-      setMiniPlayerHidden(true);
-      navigation.navigate('NowPlaying', { songId: currentSong.id });
+      // No global hide here: NowPlaying hides the pill through its own source
+      // while it's focused and releases it as it closes. A global hide set
+      // here was never cleared, so the pill vanished after the player closed.
+      openPlayerSheet(currentSong.id, typeof velocity === 'number' ? velocity : 0);
       expansionProgress.value = withSpring(0);
       lyricExpansionProgress.value = withSpring(0);
       fullExpansionProgress.value = withSpring(0);
@@ -865,7 +892,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       setClassicFullExpanded(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong, setMiniPlayerHidden, navigation]);
+  }, [currentSong]);
+  openNowPlayingRef.current = openNowPlaying;
 
   const handleLyricPress = useCallback((timestamp: number) => {
       if (!fullLyricExpanded) {
@@ -937,7 +965,27 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
   // Classic bar is a root-level sibling of the stack (after it in tree), so it
   // can paint over the tab bar if its frame intersects. Anchor with `bottom`
   // equal to the full tab chrome — never bottom:0 + margin that can collapse.
-  const tabChromeH = TAB_BAR_HEIGHT + insets.bottom;
+  const tabChromeH = pillMode
+    ? pillBarTop(insets.bottom) + PILL_STACK_GAP
+    : TAB_BAR_HEIGHT + insets.bottom;
+
+  // The pill nav gets Echo Music's compact pill; the classic bar keeps the old UI.
+  if (pillMode) {
+    return (
+      <PillPlayer
+        title={currentSong.title}
+        artist={currentSong.artist}
+        coverImageUri={currentSong.coverImageUri}
+        playing={storePlaying}
+        bottom={tabChromeH}
+        sheetUp={hiddenOnlyBySheet}
+        onOpen={openNowPlaying}
+        onTogglePlay={togglePlay}
+        onNext={skipForward}
+        onPrevious={skipBackward}
+      />
+    );
+  }
 
   const classicShellStyle = [
     styles.container,
@@ -1010,7 +1058,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
 
       {/* Scrubber on the top edge of the transport row — same collapsed/half/full. */}
       {!isIsland && (
-         <View pointerEvents="box-none" style={styles.classicScrubberOverride}>
+         <View pointerEvents="box-none" style={[styles.classicScrubberOverride, pillMode && styles.pillScrubber]}>
            <TimelineScrubber
               currentTime={positionSV}
               duration={durationSV}
@@ -1022,7 +1070,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
       )}
       
       <AnimatedPressable 
-        onPress={!expanded ? toggleExpand : undefined} 
+        onPress={!expanded ? onBarPress : undefined} 
         pointerEvents={(!isIsland && expanded) ? 'box-none' : 'auto'}
         style={[
           styles.content, 
@@ -1091,7 +1139,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                 <GestureDetector gesture={panGesture}>
                     <View style={styles.expandedTopRow}>
                         {/* Rotating Vinyl */}
-                        <Pressable onPress={openNowPlaying} style={styles.vinylMargin}>
+                        <Pressable onPress={onBarPress} style={styles.vinylMargin}>
                              <RotatingVinyl 
                                 imageUri={currentSong.coverImageUri} 
                                 size={64} 
@@ -1208,8 +1256,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                         artist={currentSong.artist || ''}
                         coverImageUri={currentSong.coverImageUri}
                         isIsland={isIsland}
-                        onPress={openNowPlaying}
-                        onBodyPress={toggleExpand}
+                        onPress={onBarPress}
+                        onBodyPress={onBarPress}
                     />
                     <PlaybackControls
                         variant="island-collapsed"
@@ -1241,8 +1289,8 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             artist={currentSong.artist || ''}
                             coverImageUri={currentSong.coverImageUri}
                             isIsland={isIsland}
-                            onPress={openNowPlaying}
-                            onBodyPress={toggleExpand}
+                            onPress={onBarPress}
+                            onBodyPress={onBarPress}
                         />
                         {/* Like the currently playing song without leaving the bar. */}
                         <Pressable
@@ -1256,7 +1304,7 @@ export const MiniPlayer: React.FC<{ isHomeTab?: boolean }> = ({ isHomeTab = true
                             <Ionicons
                                 name={isLiked ? 'checkmark-circle' : 'add-circle-outline'}
                                 size={24}
-                                color={isLiked ? '#1DB954' : '#fff'}
+                                color={isLiked ? Signal.wave : '#fff'}
                             />
                         </Pressable>
                         <PlaybackControls
@@ -1419,6 +1467,8 @@ const styles = StyleSheet.create({
   // the track paints from the wrapper's y=0 downward. left/right 0 makes it span the
   // real screen width at runtime — the scrubber measures itself via onLayout, so no
   // width is hardcoded anywhere.
+  // Keeps the track clear of the pill's rounded corners.
+  pillScrubber: { left: 18, right: 18 },
   classicScrubberOverride: {
     position: 'absolute',
     bottom: CLASSIC_TRANSPORT_H - CLASSIC_SCRUBBER_HIT_H,
@@ -1471,10 +1521,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20
   },
   expandedLyricText: {
-    // fontFamily intentionally omitted — SynchronizedLyrics owns the
-    // SF Pro / Inter face + bold-active weight swap.
     color: '#fff',
     fontSize: 23,
+    lineHeight: 28,
+    marginVertical: 10,
     textAlign: 'center',
   },
   expandedContent: {

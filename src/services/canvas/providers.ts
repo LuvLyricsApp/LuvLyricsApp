@@ -4,8 +4,9 @@
  * 1. EchoCanvas  — community manifest of hand-mapped song -> mp4/m3u8 loops.
  * 2. ArtistVideo — ArchiveTune's public artwork service (animated covers).
  * 3. Tidal       — album video covers, needs a Tidal client token (optional).
- * 4. AppleMusic  — album motion artwork via the official Apple Music API,
- *                  needs YOUR MusicKit developer token (optional).
+ * 4. AppleMusic  — album motion artwork. With your own MusicKit token it uses
+ *                  the official API; otherwise Apple's web-player token, read
+ *                  live from music.apple.com (appleWebToken.ts), as Echo does.
  *
  * Each provider returns null on any failure; none of them throw.
  */
@@ -172,61 +173,100 @@ const albumIdFromUrl = (url?: string): string | null => {
   return match?.[1] ?? null;
 };
 
+const AMP_API = 'https://amp-api.music.apple.com/v1/catalog';
+/** Apple's web player's own request shape (Echo's AppleMusicCanvasProvider). */
+const WEB_HEADERS = {
+  Origin: 'https://music.apple.com',
+  Referer: 'https://music.apple.com/',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+};
+
+/** Echo searches with the song + artist (+ album), in the phone's storefront. */
+const searchTerm = (title: string, artist: string, album?: string) => {
+  let term = fuzzyContains(title, artist) ? title : `${artist} ${title}`;
+  if (album && !fuzzyContains(term, album)) term = `${term} ${album}`;
+  return term;
+};
+
+export interface AppleCanvasDeps {
+  /** The web player token (appleWebToken.ts). */
+  webToken: () => Promise<string | null>;
+  invalidateWebToken: () => void;
+}
+
 export const fetchAppleMusicCanvas = async (
   { title, artist, album }: CanvasQuery,
   creds: CanvasCredentials,
   signal?: AbortSignal,
+  deps?: AppleCanvasDeps,
 ): Promise<CanvasArtwork | null> => {
-  const token = creds.appleMusicToken?.trim();
-  if (!token || !title.trim() || !artist.trim()) return null;
+  if (!title.trim() || !artist.trim()) return null;
+  const userToken = creds.appleMusicToken?.trim();
+  // Without the listener's own MusicKit token, use the web player's (Echo's way).
+  const useWeb = !userToken && !!deps;
   const storefront = (creds.storefront ?? 'us').toLowerCase();
-  const headers = { Authorization: `Bearer ${token}` };
+  const base = useWeb ? AMP_API : APPLE_API;
 
-  let term = fuzzyContains(title, artist) ? title : `${artist} ${title}`;
-  if (album && !fuzzyContains(term, album)) term = `${term} ${album}`;
-
-  const search = await fetchJson<AppleSearchResponse>(
-    buildUrl(`${APPLE_API}/${storefront}/search`, { term, types: 'songs', limit: 10, include: 'albums' }),
-    { signal, headers },
-  );
-
-  const ranked = (search?.results?.songs?.data ?? [])
-    .map(item => {
-      const a = item.attributes;
-      if (!a?.name || !a.artistName || isBlacklistedCollection(a.name, a.albumName)) return null;
-      const score = scoreResult({
-        term: title,
-        artist,
-        album,
-        resultName: a.name,
-        resultArtist: a.artistName,
-        resultCollection: a.albumName,
-      });
-      return score === null ? null : { item, score };
-    })
-    .filter((r): r is { item: AppleResource; score: number } => r !== null && r.score >= MIN_MATCH_SCORE)
-    .sort((x, y) => y.score - x.score);
-
-  const tried = new Set<string>();
-  for (const { item } of ranked) {
-    const albumId = item.relationships?.albums?.data?.[0]?.id ?? albumIdFromUrl(item.attributes?.url);
-    if (!albumId || albumId.startsWith('pl.') || tried.has(albumId)) continue;
-    tried.add(albumId);
-
-    const res = await fetchJson<AppleAlbumResponse>(
-      buildUrl(`${APPLE_API}/${storefront}/albums/${albumId}`, { extend: 'editorialVideo' }),
-      { signal, headers },
+  const run = async (token: string): Promise<CanvasArtwork | null | 'rejected'> => {
+    const headers = { Authorization: `Bearer ${token}`, ...(useWeb ? WEB_HEADERS : {}) };
+    const search = await fetchJson<AppleSearchResponse>(
+      buildUrl(`${base}/${storefront}/search`, { term: searchTerm(title, artist, album), types: 'songs', limit: 10, include: 'albums', extend: 'editorialVideo' }),
+      { signal, headers, timeoutMs: 15_000 },
     );
-    const albumAttrs = res?.data?.[0]?.attributes;
-    if (!albumAttrs || isBlacklistedCollection(albumAttrs.name)) continue;
-    const url = extractEditorialVideoUrl(albumAttrs.editorialVideo);
-    if (url) {
-      return toArtwork(url, 'AppleMusic', {
-        name: item.attributes?.name,
-        artist: item.attributes?.artistName ?? albumAttrs.artistName,
-        albumName: albumAttrs.name,
-      });
+    if (!search) return 'rejected';
+
+    const ranked = (search.results?.songs?.data ?? [])
+      .map(item => {
+        const a = item.attributes;
+        if (!a?.name || !a.artistName || isBlacklistedCollection(a.name, a.albumName)) return null;
+        const score = scoreResult({ term: title, artist, album, resultName: a.name, resultArtist: a.artistName, resultCollection: a.albumName });
+        return score === null ? null : { item, score };
+      })
+      .filter((r): r is { item: AppleResource; score: number } => r !== null && r.score >= MIN_MATCH_SCORE)
+      .sort((x, y) => y.score - x.score);
+
+    const tried = new Set<string>();
+    for (const { item } of ranked) {
+      // Echo: a song result can carry its album's motion directly.
+      const direct = extractEditorialVideoUrl(item.attributes?.editorialVideo);
+      if (direct) {
+        return toArtwork(direct, 'AppleMusic', { name: item.attributes?.name, artist: item.attributes?.artistName, albumName: item.attributes?.albumName });
+      }
+      const albumId = item.relationships?.albums?.data?.[0]?.id ?? albumIdFromUrl(item.attributes?.url);
+      if (!albumId || albumId.startsWith('pl.') || tried.has(albumId)) continue;
+      tried.add(albumId);
+
+      const res = await fetchJson<AppleAlbumResponse>(
+        buildUrl(`${base}/${storefront}/albums/${albumId}`, { extend: 'editorialVideo' }),
+        { signal, headers, timeoutMs: 15_000 },
+      );
+      const albumAttrs = res?.data?.[0]?.attributes;
+      if (!albumAttrs || isBlacklistedCollection(albumAttrs.name)) continue;
+      const url = extractEditorialVideoUrl(albumAttrs.editorialVideo);
+      if (url) {
+        return toArtwork(url, 'AppleMusic', {
+          name: item.attributes?.name,
+          artist: item.attributes?.artistName ?? albumAttrs.artistName,
+          albumName: albumAttrs.name,
+        });
+      }
     }
+    return null;
+  };
+
+  if (!useWeb) {
+    if (!userToken) return null;
+    const r = await run(userToken);
+    return r === 'rejected' ? null : r;
   }
-  return null;
+  const token = await deps!.webToken();
+  if (!token) return null;
+  const first = await run(token);
+  if (first !== 'rejected') return first;
+  // Apple rejected the token (rotated): read the web player again, retry once.
+  deps!.invalidateWebToken();
+  const fresh = await deps!.webToken();
+  if (!fresh || fresh === token) return null;
+  const second = await run(fresh);
+  return second === 'rejected' ? null : second;
 };

@@ -3,7 +3,9 @@
  *
  * The engine is Kotlin (LuvsEngineModule): Saavn search, ranking, filtering, feed
  * state and preference persistence all run natively. Feeds are written into
- * useLuvsFeedStore so the React components stay backend-agnostic.
+ * useLuvsFeedStore so the React components stay backend-agnostic. Before each
+ * page the engine also gets recommendations from the listener's streaming
+ * (luvsTaste.ts), which it weaves in alongside its artist discovery.
  *
  * Android-only. Every call is inert elsewhere, so iOS renders the empty state
  * rather than crashing — until a Swift port lands.
@@ -14,6 +16,9 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Song, UnifiedSong } from '../types/song';
 import { useLuvsFeedStore } from '../store/luvsFeedStore';
 import { useSongsStore } from '../store/songsStore';
+import { useStreamHistoryStore } from '../store/streamHistoryStore';
+import { recommendFor } from './stream/recommend';
+import { loadTaste } from './luvsTaste';
 
 export interface LuvInteractionPayload {
   songId: string;
@@ -35,6 +40,18 @@ interface LuvsEngineNativeModule {
     audioUri?: string | null;
     duration?: number | null;
     hasLyrics: boolean;
+  }[]): void;
+
+  /** Streaming-taste recommendations, woven into the next pages (newer binaries only). */
+  setTasteCandidates?(songs: {
+    id: string;
+    title: string;
+    artist: string;
+    highResArt: string;
+    downloadUrl: string;
+    source: string;
+    duration?: number | null;
+    language?: string | null;
   }[]): void;
 
   refresh(): Promise<UnifiedSong[]>;
@@ -85,6 +102,40 @@ function syncLibrary(module: LuvsEngineNativeModule): void {
   lastLibrarySignature = signature;
 }
 
+// Longest a feed call waits for YouTube Music. A slower answer still lands in
+// the cache and joins the next page.
+const TASTE_WAIT_MS = 3500;
+
+/**
+ * Hands the engine what the listener's streaming says they like (Echo Music's
+ * radio-from-your-plays, see luvsTaste.ts) before it builds a page.
+ */
+async function pushTaste(module: LuvsEngineNativeModule): Promise<void> {
+  if (!module.setTasteCandidates) return;
+  const request = loadTaste(
+    useStreamHistoryStore.getState().plays,
+    useSongsStore.getState().songs,
+    (seed, limit) => recommendFor(seed, limit),
+  );
+  const songs = await Promise.race([
+    request.catch(() => [] as UnifiedSong[]),
+    new Promise<null>(resolve => setTimeout(() => resolve(null), TASTE_WAIT_MS)),
+  ]);
+  if (!songs || songs.length === 0) return;
+  module.setTasteCandidates(
+    songs.map(s => ({
+      id: s.id,
+      title: s.title,
+      artist: s.artist,
+      highResArt: s.highResArt,
+      downloadUrl: s.streamUrl || s.downloadUrl,
+      source: s.source,
+      duration: s.duration ?? null,
+      language: s.language ?? null,
+    })),
+  );
+}
+
 function commitFeed(songs: UnifiedSong[]): UnifiedSong[] {
   if (songs.length > 0) {
     useLuvsFeedStore.getState().setFeedSongs(songs);
@@ -99,6 +150,7 @@ export const luvsEngine = {
   async refresh(): Promise<UnifiedSong[]> {
     if (!native) return [];
     syncLibrary(native);
+    await pushTaste(native);
     useLuvsFeedStore.getState().setCurrentIndex(0);
     return commitFeed(await native.refresh());
   },
@@ -106,6 +158,7 @@ export const luvsEngine = {
   async loadMore(): Promise<UnifiedSong[]> {
     if (!native) return [];
     syncLibrary(native);
+    await pushTaste(native);
     // Kotlin sends only the new page; appending here keeps bridge traffic flat
     // instead of growing with every page.
     const page = await native.loadMore();
@@ -118,6 +171,7 @@ export const luvsEngine = {
   async prefetch(): Promise<void> {
     if (!native) return;
     syncLibrary(native);
+    await pushTaste(native);
     commitFeed(await native.prefetch());
   },
 

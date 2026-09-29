@@ -66,12 +66,15 @@ function Bar({
     }
   }, [active, min, max, duration, delay, scale, h]);
 
+  // A fixed-height bar scaled on Y: transform only, so dancing bars never
+  // re-run layout on every frame.
+  const full = max * scale;
   const style = useAnimatedStyle(() => ({
-    height: h.value,
+    transform: [{ scaleY: h.value / full }],
     opacity: active ? 1 : 0.35,
   }));
 
-  return <Animated.View style={[styles.bar, active && styles.activeBar, style]} />;
+  return <Animated.View style={[styles.bar, { height: full }, active && styles.activeBar, style]} />;
 }
 
 /**

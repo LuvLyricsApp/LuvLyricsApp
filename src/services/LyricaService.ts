@@ -70,14 +70,14 @@ class LyricaService {
 
       if (syncedOnly) {
         strategies = strategies.filter(s => s.timestamps);
-        console.log('[Lyrica] Synced-only mode active');
+        if (__DEV__) console.log('[Lyrica] Synced-only mode active');
       }
       
       for (const strategy of strategies) {
         let url = `${BASE_URL}/?artist=${encodeURIComponent(cleanArtist)}&song=${encodeURIComponent(cleanSong)}&timestamps=${strategy.timestamps}&fast=${strategy.fast}&metadata=true`;
         if (duration) url += `&duration=${Math.floor(duration)}`;
         
-        console.log(`[Lyrica] Trying ${strategy.label}`);
+        if (__DEV__) console.log(`[Lyrica] Trying ${strategy.label}`);
         
         let result: LyricaResult | null;
         try {
@@ -137,7 +137,7 @@ class LyricaService {
         }
         
         const truncatedError = errorText.length > 200 ? errorText.substring(0, 200) + '...' : errorText;
-        console.log(`[Lyrica] ${label} HTTP ${response.status}:`, truncatedError);
+        if (__DEV__) console.log(`[Lyrica] ${label} HTTP ${response.status}:`, truncatedError);
         if (response.status === 404) {
           return null;
         }
@@ -225,7 +225,7 @@ class LyricaService {
          throw new Error('Lyrics request timed out');
       }
 
-      console.log(`[Lyrica] ${label} failed:`, err.message || 'Unknown Network Error');
+      if (__DEV__) console.log(`[Lyrica] ${label} failed:`, err.message || 'Unknown Network Error');
       throw err instanceof Error ? err : new Error('Lyrics request failed');
     }
   }

@@ -95,7 +95,8 @@ export const Motion = {
     emphasis: Easing.bezier(0.2, 0, 0, 1),
   },
   spring: {
-    tactile: { stiffness: 400, damping: 30, mass: 1 },
+    // Press feedback: firm and quick to settle, so a tap registers at once (a hint of give, not a wobble).
+    tactile: { stiffness: 700, damping: 40, mass: 0.8 },
     sheet: { stiffness: 300, damping: 34, mass: 1 },
     hero: { stiffness: 220, damping: 30, mass: 1 },
     lyrics: { stiffness: 260, damping: 38, mass: 0.85 },

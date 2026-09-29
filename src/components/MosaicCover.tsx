@@ -14,15 +14,17 @@ interface MosaicCoverProps {
   size: number; // Total width/height of the mosaic
   /** Playlist name — gives an empty playlist its own cover. */
   name?: string;
+  /** Print the name on an empty playlist's cover — only where no title sits beside it. */
+  label?: boolean;
 }
 
-export const MosaicCover: React.FC<MosaicCoverProps> = ({ songs, size, name }) => {
+export const MosaicCover: React.FC<MosaicCoverProps> = ({ songs, size, name, label = false }) => {
   const frame = [styles.frame, { width: size, height: size }];
 
   if (songs.length === 0) {
     return (
       <View style={frame}>
-        <GeneratedArtwork title={name || 'New playlist'} size={size} label />
+        <GeneratedArtwork title={name || 'New playlist'} size={size} label={label} />
       </View>
     );
   }

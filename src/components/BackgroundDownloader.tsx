@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useDownloadQueueStore } from '../store/downloadQueueStore';
 import { useSongsStore } from '../store/songsStore';
@@ -7,22 +7,19 @@ import { lyricaService } from '../services/LyricaService';
 import { useLyricsScanQueueStore } from '../store/lyricsScanQueueStore';
 import { processLyricsScanQueue } from '../services/lyricsScanWorker';
 import { usePlaylistStore } from '../store/playlistStore';
-import { useKeepAwake } from 'expo-keep-awake';
+import { useStreamLikesStore } from '../store/streamLikesStore';
+import { matchKey } from '../utils/downloadState';
 import * as playlistQueries from '../database/playlistQueries';
 import { downloadManager } from '../services/DownloadManager';
 import { findYouTubeVideoId } from '../services/YouTubeSearchService';
 import { patchYoutubeVideoId } from '../database/queries';
-
-// Wrapper component to conditionally use the hook
-const KeepAwakeController = () => {
-  useKeepAwake();
-  return null;
-};
+import { useQueueShape } from '../store/downloadQueueSelectors';
 
 export const BackgroundDownloader = () => {
     // This component is mounted for the whole app lifetime, so it must not
-    // re-render on unrelated queue-store fields.
-    const queue = useDownloadQueueStore(s => s.queue);
+    // re-render on progress ticks. It reads the queue's shape (which items, in
+    // what state) and pulls the items themselves from the store when that changes.
+    const queueShape = useQueueShape();
     const updateItem = useDownloadQueueStore(s => s.updateItem);
     const addSong = useSongsStore(state => state.addSong);
     const activeDownloads = useRef<Set<string>>(new Set());
@@ -38,15 +35,19 @@ export const BackgroundDownloader = () => {
         }
     }, [scanQueue, scanProcessing]);
 
-    // Prevent screen from sleeping while downloading
-    const hasActiveDownloads = queue.some(item => item.status === 'downloading' || item.status === 'pending');
-    
-    // Use the wrapper component to activate keep-awake only when needed
-    // This avoids hook rule violations and import errors for non-existent static methods
-
+    // Downloads run in WorkManager and finish through the events below, so the
+    // screen no longer has to be kept awake for them. `mounted` is what the
+    // progress and lyrics steps check: it used to be a flag scoped to one run
+    // of the effect below, which the very next queue change flipped off, so a
+    // running download's progress and its parallel lyrics search were dropped.
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
 
     useEffect(() => {
-        let isActive = true;
+        const queue = useDownloadQueueStore.getState().queue;
 
         // Cleanup: Remove IDs from activeDownloads that are no longer in the queue
         // This handles the case where a user removes a currently downloading song
@@ -134,7 +135,7 @@ export const BackgroundDownloader = () => {
                     stagingPayload,
                     (progress) => {
                         const scaledProgress = progress * 0.8;
-                        if (isActive) updateItem(item.id, { progress: scaledProgress });
+                        if (mounted.current) updateItem(item.id, { progress: scaledProgress });
                     },
                     useSettingsStore.getState().downloadDirectoryUri
                 );
@@ -142,7 +143,7 @@ export const BackgroundDownloader = () => {
                 if (__DEV__) console.log(`[BackgroundDownloader] Audio download completed. Checking parallel lyrics search results...`);
 
                 // 3. Process Lyrics (Phase 2: Lyrics - 80% to 100%)
-                if (isActive) {
+                if (mounted.current) {
                     updateItem(item.id, { progress: 0.85, stageStatus: 'Processing lyrics...' });
                     
                     try {
@@ -196,6 +197,13 @@ export const BackgroundDownloader = () => {
                 if (__DEV__) console.log(`[BackgroundDownloader] Calling addSong...`);
                 await addSong(newSong);
 
+                // A streamed song the listener liked while it downloaded: the like
+                // goes on the row it just got, which puts it in Liked songs.
+                if (useStreamLikesStore.getState().take(matchKey(newSong.title, newSong.artist))) {
+                    const playlists = usePlaylistStore.getState();
+                    if (!playlists.likedSongIds.has(newSong.id)) playlists.toggleLiked(newSong.id).catch(() => {});
+                }
+
                 // Beta: silently fetch YouTube videoId after song saved
                 const apiKey = useSettingsStore.getState().youtubeApiKey;
                 if (apiKey) {
@@ -246,6 +254,7 @@ export const BackgroundDownloader = () => {
                 // Also remove from active set on error before updating status
                 activeDownloads.current.delete(item.id);
                 
+                useStreamLikesStore.getState().remove(matchKey(item.song.title, item.song.artist));
                 updateItem(item.id, { status: 'failed', error: errorMessage, stageStatus: 'Failed' });
             } finally {
                 // Double check cleanup just in case
@@ -269,15 +278,10 @@ export const BackgroundDownloader = () => {
             }
         }
 
-        return () => {
-            isActive = false;
-        };
-    }, [queue, updateItem, addSong]);
+        // Re-runs when the queue's shape changes (an item added, removed, or moved to
+        // another state), which is also what frees a slot for the next pending item.
+    }, [queueShape, updateItem, addSong]);
 
-    return (
-        <>
-            {hasActiveDownloads && <KeepAwakeController />}
-        </>
-    );
+    return null;
 };
 export default BackgroundDownloader;

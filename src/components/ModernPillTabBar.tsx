@@ -16,8 +16,8 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useThemeColors, useIsDark } from '../contexts/ThemeContext';
 import { VoiceMicButton } from './VoiceMicButton';
 import { Glass, Motion, Radius } from '../constants/allegraTheme';
-import { VISIBLE_TABS } from '../navigation/tabs';
-import { MoreMenu, useMoreMenu } from './MoreMenu';
+import { PILL_BAR_HEIGHT, PILL_PLAYER_HEIGHT, PILL_STACK_GAP, pillBarBottom, VISIBLE_TABS } from '../navigation/tabs';
+import { HostedMoreMenu, useMoreMenu } from './MoreMenu';
 import { MorphIcon } from './allegra/motion';
 
 const MORE_KEY = '__more__';
@@ -53,10 +53,8 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const micEnabled = useSettingsStore(s => s.micEnabled);
   const isDark = useIsDark();
   const colors = useThemeColors();
-  // iOS floats the bar into the home-indicator zone, as Apple Music does; on
-  // Android it has to clear the gesture / 3-button bar, which edge-to-edge draws under.
   const insets = useSafeAreaInsets();
-  const bottomOffset = Platform.OS === 'ios' ? 12 : insets.bottom + 8;
+  const bottomOffset = pillBarBottom(insets.bottom);
   const { width: screenWidth } = useWindowDimensions();
   const [pill, setPill] = useState({ width: 0, height: 64 });
   const more = useMoreMenu(state, navigation);
@@ -75,19 +73,24 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
   const activeIconColor = isDark ? '#FFFFFF' : colors.textPrimary;
   const inactiveIconColor = isDark ? 'rgba(255,255,255,0.45)' : colors.textMuted;
 
-  // Kept translucent so list content stays visible through the pill's BlurView.
+  // Nearly opaque: scrolled content used to show through the pill (chips and
+  // labels from the page collided with the tab names). The scrim below fades
+  // the list out before it reaches the bar.
   const pillBg = 'transparent';
   const overlayColor = isDark ? '#0A0A0C' : '#FFFFFF';
   const overlayOpacity = isDark ? 0.90 : 0.82;
-  const fallbackBg = isDark ? 'rgba(10,10,12,0.35)' : 'rgba(255,255,255,0.35)';
+  const fallbackBg = isDark ? 'rgba(10,10,12,0.93)' : 'rgba(255,255,255,0.9)';
   const gradientColors: [string, string] = isDark
-    ? ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']
+    ? ['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.5)']
     : ['rgba(255,255,255,0.1)', 'rgba(248,248,252,0.5)'];
+  // Behind the pill and the mini player floating over it: content fades to the
+  // page's own colour, so nothing reads through or collides at their edges.
+  const scrimHeight = bottomOffset + PILL_BAR_HEIGHT + PILL_STACK_GAP + PILL_PLAYER_HEIGHT + 44;
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
 
   const renderTab = (route: typeof state.routes[0]) => {
     const { options } = descriptors[route.key];
-    const isFocused = route.key === activeKey && !more.open;
+    const isFocused = route.key === activeKey && !moreActive;
     const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name;
 
     const onPress = async () => {
@@ -165,7 +168,13 @@ export const ModernPillTabBar: React.FC<BottomTabBarProps> = ({
       style={[styles.container, more.open ? { top: 0, bottom: 0, paddingBottom: bottomOffset } : { bottom: bottomOffset }]}
       pointerEvents="box-none"
     >
-      <MoreMenu
+      <LinearGradient
+        pointerEvents="none"
+        colors={isDark ? ['rgba(8,9,12,0)', 'rgba(8,9,12,0.72)', 'rgba(8,9,12,0.96)'] : ['rgba(248,248,252,0)', 'rgba(248,248,252,0.8)', 'rgba(248,248,252,0.96)']}
+        locations={[0, 0.5, 1]}
+        style={[styles.scrim, { height: scrimHeight, bottom: -bottomOffset }]}
+      />
+      <HostedMoreMenu
         open={more.open}
         activeKey={more.activeKey}
         anchorBottom={bottomOffset + pill.height}
@@ -253,6 +262,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 100,
   },
+  scrim: { position: 'absolute', left: 0, right: 0 },
   pillContainer: {
     width: '92%',
     maxWidth: 440,

@@ -11,33 +11,33 @@ export const AppStrings = {
 
 export const SettingsStrings = {
   screenTitle: 'Settings',
-  musicLanguages: 'Music Languages',
+  musicLanguages: 'Music languages',
   songs: 'Songs',
   liked: 'Liked',
   hidden: 'Hidden',
   cancel: 'Cancel',
   close: 'Close',
   save: 'Save',
-  trustedPairing: 'Trusted Pairing',
+  trustedPairing: 'Trusted pairing',
   unhide: 'Unhide',
 };
 
 export const PlaylistsStrings = {
-  yourLibrary: 'Your Library',
+  yourLibrary: 'Your library',
   noPlaylistsYet: 'No playlists yet',
-  createPlaylist: 'Create Playlist',
+  createPlaylist: 'Create playlist',
 };
 
 export const LikedSongsStrings = {
-  likedSongs: 'Liked Songs',
+  likedSongs: 'Liked songs',
   noLikedSongsYet: 'No liked songs yet',
 };
 
 export const YoutubeBrowserStrings = {
-  connectionFailed: 'Connection Failed',
+  connectionFailed: 'Connection failed',
   retry: 'Retry',
-  analyzingStream: 'Analyzing stream...',
-  downloadThisSong: 'Download this Song',
+  analyzingStream: 'Analyzing stream…',
+  downloadThisSong: 'Download this song',
 };
 
 export const SearchResultsStrings = {

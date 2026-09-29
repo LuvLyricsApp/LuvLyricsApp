@@ -25,8 +25,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { create } from 'zustand';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../utils/haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Glass, Motion, Signal } from '../constants/allegraTheme';
 import { usePlayerStore } from '../store/playerStore';
@@ -47,13 +48,12 @@ export interface MoreItem {
 /** The three places people jump to most — big tiles across the top. */
 export const MORE_TILES: readonly MoreItem[] = [
   { key: 'Search', label: 'Search', icon: 'search' },
-  { key: 'Library', label: 'Library', icon: 'library-outline' },
-  { key: 'Downloads', label: 'Downloads', icon: 'arrow-down-circle-outline' },
+  { key: 'Playlists', label: 'Playlists', icon: 'albums-outline' },
+  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline' },
 ];
 
 /** Less frequent destinations, listed below the tiles. */
 export const MORE_ROWS: readonly MoreItem[] = [
-  { key: 'AudioDownloader', label: 'Get songs', icon: 'cloud-download-outline', hint: 'Download any track' },
   { key: 'Settings', label: 'Settings', icon: 'settings-outline', hint: 'Playback, lyrics, look' },
 ];
 
@@ -139,7 +139,7 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
   };
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, styles.layer]} pointerEvents={open ? 'auto' : 'none'}>
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close menu">
           <Frosted radius={0} intensity={22} tint={0.18} edge={false} />
@@ -211,6 +211,9 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBotto
 };
 
 const styles = StyleSheet.create({
+  // Painting after the pill isn't enough: the pill carries zIndex 10 and the
+  // tab bar 1000 / elevation 100, and both drew over a menu with none.
+  layer: { zIndex: 2000, elevation: 200 },
   card: {
     position: 'absolute',
     width: 292,
@@ -265,6 +268,28 @@ const styles = StyleSheet.create({
 
 export default MoreMenu;
 
+// ── Hosting ───────────────────────────────────────────────────────────────
+// The tab bar owns the menu's state, but the mini player pill is mounted at
+// the root after the navigator, so a menu drawn inside the tab bar opened
+// underneath the pill. The tab bar publishes the menu here instead, and
+// MoreMenuHost draws it at the root, after the pill.
+const useHostedMenu = create<{ menu: MoreMenuProps | null }>(() => ({ menu: null }));
+
+/** Drop-in for <MoreMenu> inside a tab bar: renders nothing, publishes to the host. */
+export const HostedMoreMenu: React.FC<MoreMenuProps> = ({ open, activeKey, anchorBottom, anchorRight, onSelect, onClose }) => {
+  useEffect(() => {
+    useHostedMenu.setState({ menu: { open, activeKey, anchorBottom, anchorRight, onSelect, onClose } });
+  }, [open, activeKey, anchorBottom, anchorRight, onSelect, onClose]);
+  useEffect(() => () => useHostedMenu.setState({ menu: null }), []);
+  return null;
+};
+
+/** Mounted once at the root, after the mini player, so the menu opens over the pill. */
+export const MoreMenuHost: React.FC = () => {
+  const menu = useHostedMenu(s => s.menu);
+  return menu ? <MoreMenu {...menu} /> : null;
+};
+
 type TabState = BottomTabBarProps['state'];
 type TabNavigation = BottomTabBarProps['navigation'];
 
@@ -273,8 +298,9 @@ export const activeMoreKey = (state: TabState): string | null => {
   const route = state.routes[state.index];
   if (!route) return null;
   if (route.name === 'Library') {
+    // The Library tab itself is on the bar; its Playlists screens belong to •••.
     const nested = route.state?.routes?.[route.state.index ?? 0]?.name;
-    return nested === 'Downloads' ? 'Downloads' : 'Library';
+    return nested === 'Playlists' || nested === 'PlaylistDetail' ? 'Playlists' : null;
   }
   return MORE_ITEMS.some(i => i.key === route.name) ? route.name : null;
 };
@@ -291,8 +317,7 @@ export const useMoreMenu = (state: TabState, navigation: TabNavigation) => {
   const close = useCallback(() => setOpen(false), []);
   const select = useCallback((key: string) => {
     setOpen(false);
-    if (key === 'Library') navigation.navigate('Library', { screen: 'PlaylistsHome' });
-    else if (key === 'Downloads') navigation.navigate('Library', { screen: 'Downloads' });
+    if (key === 'Playlists') navigation.navigate('Library', { screen: 'Playlists' });
     else navigation.navigate(key);
   }, [navigation]);
   return { open, toggle, close, select, activeKey: activeMoreKey(state) };

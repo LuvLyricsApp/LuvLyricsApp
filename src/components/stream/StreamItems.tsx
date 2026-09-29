@@ -96,13 +96,15 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
 /** Opacity-only shimmer — the one motion Reduce Motion keeps (as a still). */
 export const ShimmerBlock: React.FC<{ width: number | `${number}%`; height: number; radius?: number }> = ({ width, height, radius = Radius.well }) => {
   const reduce = useReducedMotion();
-  const opacity = useSharedValue(0.45);
+  // Pressed-glass white: the lighter fill vanished over a bright shader and the
+  // page read as empty while it loaded.
+  const opacity = useSharedValue(0.55);
   useEffect(() => {
     if (reduce) return;
-    opacity.value = withRepeat(withTiming(0.9, { duration: Motion.duration.cinematic * 1.4, easing: Motion.ease.standard }), -1, true);
+    opacity.value = withRepeat(withTiming(1, { duration: Motion.duration.cinematic * 1.4, easing: Motion.ease.standard }), -1, true);
   }, [opacity, reduce]);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: Glass.fillLight }, style]} />;
+  return <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: Glass.fillPressed }, style]} />;
 };
 
 export const styles = StyleSheet.create({

@@ -18,6 +18,7 @@ import { Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -27,7 +28,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../utils/haptics';
+import { voiceLevel } from '../playback/voiceLevel';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVoiceCommands } from '../hooks/useVoiceCommands';
@@ -40,25 +42,30 @@ interface Props {
   variant?: 'floating' | 'inline';
 }
 
-// Long-press threshold: 600ms feels natural for hold-to-talk
-const LONG_PRESS_MS = 600;
+/** Longer than this is a hold: letting go stops listening at once. */
+const HOLD_MS = 280;
+export const isHoldRelease = (pressedAt: number, releasedAt: number): boolean => releasedAt - pressedAt >= HOLD_MS;
 const BAR_SHAPE = [0.55, 1, 0.75, 0.45];
 const ERROR_RED = '#ff5a4f';
 
-const Bar: React.FC<{ level: number; weight: number; active: boolean; size: number }> = ({ level, weight, active, size }) => {
+const Bar: React.FC<{ weight: number; active: boolean; size: number }> = ({ weight, active, size }) => {
   const h = useSharedValue(0.45);
-  useEffect(() => {
-    h.value = withSpring(active ? 0.45 + Math.min(1, level) * 0.55 * weight : 0.45, Motion.spring.tactile);
-  }, [level, weight, active, h]);
+  const on = useSharedValue(active ? 1 : 0);
+  useEffect(() => { on.value = active ? 1 : 0; }, [active, on]);
+  // Follows the live level on the UI thread (playback/voiceLevel).
+  useAnimatedReaction(
+    () => (on.value ? 0.45 + Math.min(1, voiceLevel.value) * 0.55 * weight : 0.45),
+    target => { h.value = withSpring(target, Motion.spring.tactile); },
+  );
   const style = useAnimatedStyle(() => ({ transform: [{ scaleY: h.value }] }));
   return <Animated.View style={[styles.bar, { height: size * 0.42, width: Math.max(2.5, size * 0.065) }, style]} />;
 };
 
 export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' }) => {
   const size = variant === 'inline' ? 44 : 56;
-  const { isListening: hookListening, audioLevel, error, startListening, stopListening } = useVoiceCommands();
+  const { isListening: hookListening, error, startListening, stopListening } = useVoiceCommands();
   const phase = useVoiceSearchStore(s => s.phase);
-  const voiceMode = useSettingsStore(s => s.voiceMode ?? 'tap');
+  const voiceMode = useSettingsStore(s => s.voiceMode ?? 'hold');
   const reduce = useReducedMotion();
 
   const isListening = hookListening || phase === 'listening';
@@ -66,7 +73,7 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
   const isTapMode = voiceMode === 'tap';
 
   const wasListeningOnPressRef = useRef(false);
-  const isHoldRef = useRef(false);
+  const pressedAtRef = useRef(0);
 
   // ── Motion values ──────────────────────────────────────────────────────
   const press = useSharedValue(1);      // finger-down sink
@@ -93,9 +100,12 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
     }
   }, [isListening, reduce, bloom, pulse, halo]);
 
-  useEffect(() => {
-    if (isListening) halo.value = withSpring(Math.min(1, audioLevel), Motion.spring.tactile);
-  }, [audioLevel, isListening, halo]);
+  const listeningSV = useSharedValue(isListening ? 1 : 0);
+  useEffect(() => { listeningSV.value = isListening ? 1 : 0; }, [isListening, listeningSV]);
+  useAnimatedReaction(
+    () => (listeningSV.value ? Math.min(1, voiceLevel.value) : -1),
+    level => { if (level >= 0) halo.value = withSpring(level, Motion.spring.tactile); },
+  );
 
   useEffect(() => {
     arc.value = withTiming(isThinking ? 1 : 0, { duration: Motion.duration.base });
@@ -139,32 +149,31 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
   }));
 
   // ── Press handling (tap-to-toggle or hold-to-talk, per Settings) ──────────
+  // Listening starts the moment the finger lands. Hold mode: a hold (longer
+  // than HOLD_MS) stops the instant the finger lifts — push to talk; a quick
+  // tap keeps listening until the speaker goes quiet or taps again. Tap mode:
+  // taps start and stop. The old flow only stopped after a 600ms long press
+  // registered, so most releases kept listening for seconds.
   const onPressIn = useCallback(() => {
     press.value = withSpring(0.86, Motion.spring.tactile);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    isHoldRef.current = false;
+    pressedAtRef.current = Date.now();
     wasListeningOnPressRef.current = isListening;
     if (!isListening) startListening();
   }, [isListening, startListening, press]);
 
-  const onLongPress = useCallback(() => {
-    if (isTapMode) return;
-    isHoldRef.current = true;
-  }, [isTapMode]);
-
   const onPressOut = useCallback(() => {
     press.value = withSpring(1, Motion.spring.tactile);
-    if (!isTapMode && isHoldRef.current) {
+    if (wasListeningOnPressRef.current) {
+      // A tap on a listening mic stops it, in either mode.
+      stopListening();
+      return;
+    }
+    if (!isTapMode && isHoldRelease(pressedAtRef.current, Date.now())) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       stopListening();
     }
   }, [isTapMode, stopListening, press]);
-
-  const onPress = useCallback(() => {
-    // Tap mode: a second tap stops. Hold mode: a quick tap while listening is
-    // the safety valve that stops too.
-    if (wasListeningOnPressRef.current) stopListening();
-  }, [stopListening]);
 
   // Rings are larger than the disc but never change the layout: they sit
   // centred on it and spill over, so the tab bar keeps its height.
@@ -184,9 +193,6 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
       <Pressable
         onPressIn={onPressIn}
         onPressOut={onPressOut}
-        onPress={onPress}
-        onLongPress={onLongPress}
-        delayLongPress={LONG_PRESS_MS}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -215,7 +221,7 @@ export const VoiceMicButton: React.FC<Props> = ({ style, variant = 'floating' })
           </Animated.View>
           <Animated.View style={[styles.glyph, styles.bars, liveLayer]}>
             {BAR_SHAPE.map((w, i) => (
-              <Bar key={i} weight={w} level={audioLevel} active={isListening} size={size} />
+              <Bar key={i} weight={w} active={isListening} size={size} />
             ))}
           </Animated.View>
         </Animated.View>

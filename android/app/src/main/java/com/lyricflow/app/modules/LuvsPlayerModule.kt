@@ -4,21 +4,52 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.content.Context
+import android.os.PowerManager
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.*
 
+private const val HOOK_MIN_SECONDS = 90.0
+private const val HOOK_FRACTION = 0.3
+private const val HOOK_EARLIEST = 25.0
+private const val HOOK_LATEST = 70.0
+
+// Every warm player pre-buffers over the network whether or not the listener
+// ever swipes to it, so each one is held to a short buffer instead of the
+// default 50 seconds. A clip is short and a swipe is cheap to re-fetch.
+private const val BUFFER_MIN_MS = 10_000
+private const val BUFFER_MAX_MS = 20_000
+private const val BUFFER_FOR_PLAYBACK_MS = 1_000
+private const val BUFFER_AFTER_REBUFFER_MS = 2_000
+
+// Players are built on the main thread; a beat between them keeps a swipe from
+// stalling behind a burst of allocations.
+private const val WARM_STAGGER_MS = 80L
+
 class LuvsPlayerModule : Module() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val players = mutableMapOf<Int, ExoPlayer>()
-    private var activeIndex = -1
+    // The taste map (lanes × depth) addresses songs by URL: an index means
+    // nothing once there is more than one list. This is the one pool.
+    private val byUrl = mutableMapOf<String, ExoPlayer>()
+    private var activeUrl: String? = null
+
+    /** The player that is live. */
+    private fun activePlayer(): ExoPlayer? = activeUrl?.let { byUrl[it] }
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
     private var statusJob: Job? = null
+
+    /** Battery Saver: warm only the very next clip. */
+    private fun powerSaveOn(): Boolean {
+        val context = appContext.reactContext ?: return false
+        return (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isPowerSaveMode ?: false
+    }
 
     override fun definition() = ModuleDefinition {
         Name("LuvsPlayer")
@@ -34,7 +65,7 @@ class LuvsPlayerModule : Module() {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
-                
+
                 audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(playbackAttributes)
                     .setAcceptsDelayedFocusGain(true)
@@ -64,58 +95,64 @@ class LuvsPlayerModule : Module() {
                 }
 
                 // Release all players
-                players.values.forEach { it.release() }
-                players.clear()
-                activeIndex = -1
+                byUrl.values.forEach { it.release() }
+                byUrl.clear()
+                activeUrl = null
             }
         }
 
-        AsyncFunction("updateActiveIndex") { newIndex: Int, urls: List<String>, shouldPlay: Boolean ->
-            val oldIndex = activeIndex
-            if (newIndex == oldIndex) return@AsyncFunction
-            activeIndex = newIndex
-
+        /**
+         * Plays `url` (from the start) and keeps `warm` prepared — the songs a
+         * swipe can reach next. Everything else is released. Players already
+         * warm start instantly.
+         */
+        AsyncFunction("activateUrl") { url: String, warm: List<String>, shouldPlay: Boolean, startAtHook: Boolean ->
             scope.launch {
-                // 1. Pause and detach listener from previous active player
-                if (oldIndex != -1) {
-                    players[oldIndex]?.run {
-                        pause()
-                    }
-                }
-
+                activePlayer()?.pause()
                 stopStatusPoller()
-
-                // 2. Play new active player
-                val currentUrl = urls.getOrNull(newIndex)
-                if (currentUrl != null) {
-                    var player = players[newIndex]
-                    if (player == null) {
-                        player = createPlayerForUrl(currentUrl)
-                        players[newIndex] = player
-                    }
-
-                    if (shouldPlay) {
-                        player.seekTo(0)
-                        player.play()
-                        startStatusPoller(player)
-                    }
+                activeUrl = url
+                val player = byUrl[url] ?: try {
+                    createPlayerForUrl(url).also { byUrl[url] = it }
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (shouldPlay) {
+                    player.seekTo(0)
+                    // The clip opens on its hook. The player knows the real length
+                    // once it is ready; the catalogue's duration is often missing,
+                    // which used to leave every clip at 0:00.
+                    if (startAtHook) seekToHookWhenKnown(player)
+                    player.play()
+                    startStatusPoller(player)
                 }
 
-                // 3. Manage background preload window: 1 behind, 4 ahead
-                manageSlidingWindow(newIndex, urls)
+                val warmUrls = if (powerSaveOn()) warm.take(1) else warm
+                val keep = (warmUrls + url).toSet()
+                byUrl.keys.filter { it !in keep }.forEach { key -> byUrl.remove(key)?.release() }
+                // Warm the rest just after, so the song you landed on loads first.
+                delay(300)
+                if (activeUrl != url) return@launch
+                for (next in warmUrls) {
+                    if (next.isBlank() || byUrl.containsKey(next)) continue
+                    try {
+                        byUrl[next] = createPlayerForUrl(next)
+                    } catch (_: Exception) {}
+                    delay(WARM_STAGGER_MS)
+                    if (activeUrl != url) return@launch
+                }
             }
         }
 
         Function("pause") {
             scope.launch {
-                players[activeIndex]?.pause()
+                activePlayer()?.pause()
                 stopStatusPoller()
             }
         }
 
         Function("resume") {
             scope.launch {
-                val player = players[activeIndex]
+                val player = activePlayer()
                 player?.play()
                 player?.let { startStatusPoller(it) }
             }
@@ -123,52 +160,50 @@ class LuvsPlayerModule : Module() {
 
         Function("seekTo") { millis: Double ->
             scope.launch {
-                players[activeIndex]?.seekTo(millis.toLong())
+                activePlayer()?.seekTo(millis.toLong())
             }
         }
+    }
+
+    /**
+     * Moves a clip to its hook once its real length is known. Kept in step with
+     * services/luvsHook.ts: songs under 90s start from the top, otherwise about
+     * 30% in, clamped to 25–70 seconds so intros are skipped and the hook is
+     * never overshot on a long track.
+     */
+    private fun seekToHookWhenKnown(player: ExoPlayer) {
+        fun apply(): Boolean {
+            val duration = player.duration
+            if (duration == C.TIME_UNSET || duration <= 0) return false
+            val seconds = duration / 1000.0
+            if (seconds >= HOOK_MIN_SECONDS) {
+                val target = Math.round((seconds * HOOK_FRACTION).coerceIn(HOOK_EARLIEST, HOOK_LATEST))
+                player.seekTo(target * 1000L)
+            }
+            return true
+        }
+        if (apply()) return
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY && apply()) player.removeListener(this)
+            }
+        })
     }
 
     private fun createPlayerForUrl(url: String): ExoPlayer {
         val context = appContext.reactContext ?: throw Exception("React context not available")
-        val player = ExoPlayer.Builder(context).build()
+        // A load control per player: each owns its allocator, so they cannot be shared.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(BUFFER_MIN_MS, BUFFER_MAX_MS, BUFFER_FOR_PLAYBACK_MS, BUFFER_AFTER_REBUFFER_MS)
+            .build()
+        val player = ExoPlayer.Builder(context).setLoadControl(loadControl).build()
         player.repeatMode = Player.REPEAT_MODE_OFF
-        
+
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
         player.prepare()
-        
+
         return player
-    }
-
-    private fun manageSlidingWindow(currentIndex: Int, urls: List<String>) {
-        val minIndex = currentIndex - 1
-        val maxIndex = currentIndex + 4
-
-        // Unload out-of-window players
-        val toRemove = players.keys.filter { it < minIndex || it > maxIndex }
-        toRemove.forEach { idx ->
-            players[idx]?.release()
-            players.remove(idx)
-        }
-
-        // Preload in-window players
-        for (i in minIndex..maxIndex) {
-            if (i == currentIndex || i < 0 || i >= urls.size) continue
-            if (!players.containsKey(i)) {
-                val url = urls[i]
-                scope.launch(Dispatchers.Default) {
-                    delay(400) // Delay neighbor load slightly to give priority to active reel swiping
-                    if (activeIndex != currentIndex) return@launch // Abort if user swiped again
-
-                    withContext(Dispatchers.Main) {
-                        try {
-                            val player = createPlayerForUrl(url)
-                            players[i] = player
-                        } catch (_: Exception) {}
-                    }
-                }
-            }
-        }
     }
 
     private fun startStatusPoller(player: ExoPlayer) {

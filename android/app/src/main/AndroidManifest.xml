@@ -16,6 +16,8 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+  <!-- Player menu → Set as ringtone (the user grants it on the system "modify settings" page). -->
+  <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -51,5 +53,21 @@
         <action android:name="androidx.media3.session.MediaSessionService"/>
       </intent-filter>
     </service>
+    <!-- Home-screen widgets (react-native-android-widget); mirrors the plugin config in app.json. -->
+    <service android:name="com.reactnativeandroidwidget.RNWidgetCollectionService" android:permission="android.permission.BIND_REMOTEVIEWS"/>
+    <receiver android:name=".widget.NowPlaying" android:exported="false" android:label="Now playing">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+        <action android:name="com.lyricflow.app.WIDGET_CLICK"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widgetprovider_nowplaying"/>
+    </receiver>
+    <receiver android:name=".widget.Playlist" android:exported="false" android:label="Playlist">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+        <action android:name="com.lyricflow.app.WIDGET_CLICK"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widgetprovider_playlist"/>
+    </receiver>
   </application>
 </manifest>

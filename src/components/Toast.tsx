@@ -3,6 +3,8 @@ import { Animated, StyleSheet, Text, View, Pressable, Easing } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettingsStore } from '../store/settingsStore';
+import { Frosted } from './allegra/Frosted';
+import { Signal } from '../constants/allegraTheme';
 
 interface ToastProps {
   visible: boolean;
@@ -122,7 +124,7 @@ export const Toast: React.FC<ToastProps> = ({
           toValue: 0,
           duration: holdMs,
           easing: Easing.linear,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]);
       animRef.current = anim;
@@ -162,7 +164,7 @@ export const Toast: React.FC<ToastProps> = ({
 
   const isError = displayType === 'error';
   const isInfo = displayType === 'info';
-  const accent = isError ? '#FF453A' : isInfo ? '#64D2FF' : '#30D158';
+  const accent = isError ? Signal.accent : isInfo ? Signal.vibeBlue : Signal.wave;
   const iconName =
     displayType === 'success'
       ? 'checkmark-circle'
@@ -192,6 +194,7 @@ export const Toast: React.FC<ToastProps> = ({
         accessibilityRole="alert"
         accessibilityLiveRegion="polite"
       >
+        <Frosted radius={22} intensity={55} tint={0.5} />
         <View style={styles.row}>
           <View style={[styles.iconDot, { backgroundColor: `${accent}22` }]}>
             <Ionicons name={iconName} size={18} color={accent} />
@@ -206,10 +209,9 @@ export const Toast: React.FC<ToastProps> = ({
               styles.progressFill,
               {
                 backgroundColor: accent,
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
+                // scaleX on the native driver: the countdown keeps moving even
+                // while JS is busy, and never re-runs layout.
+                transform: [{ scaleX: progress }],
               },
             ]}
           />
@@ -225,26 +227,19 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     alignItems: 'center',
   },
+  // Allegra's floating glass: a frosted capsule, lit edge, no drop shadow.
   card: {
-    width: '100%',
     maxWidth: 420,
-    borderRadius: 14,
+    borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: 'rgba(28,28,30,0.96)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 12,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingLeft: 10,
+    paddingRight: 16,
+    paddingVertical: 10,
   },
   iconDot: {
     width: 28,
@@ -254,18 +249,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    flex: 1,
-    color: '#F5F5F7',
+    flexShrink: 1,
+    color: Signal.ink,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 19,
   },
   progressTrack: {
     height: 2,
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: 16,
+    marginBottom: 1,
+    borderRadius: 1,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   progressFill: {
+    width: '100%',
     height: '100%',
+    transformOrigin: 'left',
   },
 });

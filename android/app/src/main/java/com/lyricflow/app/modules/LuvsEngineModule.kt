@@ -2,6 +2,7 @@ package com.lyricflow.app.modules
 
 import com.lyricflow.app.luvs.LocalSong
 import com.lyricflow.app.luvs.LuvInteraction
+import com.lyricflow.app.luvs.LuvSong
 import com.lyricflow.app.luvs.LuvsEngine
 import com.lyricflow.app.luvs.LuvsPrefs
 import com.lyricflow.app.luvs.SaavnClient
@@ -52,6 +53,12 @@ class LuvsEngineModule : Module() {
         // avoids coupling this module to that database's on-disk layout.
         Function("setLibrary") { songs: List<Map<String, Any?>> ->
             engine.setLibrary(songs.map { it.toLocalSong() })
+        }
+
+        // Recommendations from the listener's streaming (built on the JS side);
+        // woven into the next pages the engine builds.
+        Function("setTasteCandidates") { songs: List<Map<String, Any?>> ->
+            engine.setTasteCandidates(songs.map { it.toLuvSong() })
         }
 
         // ── Feed ─────────────────────────────────────────────────────────────
@@ -138,6 +145,18 @@ private fun Map<String, Any?>.toLocalSong() = LocalSong(
     audioUri = this["audioUri"]?.toString(),
     duration = int("duration"),
     hasLyrics = bool("hasLyrics"),
+)
+
+private fun Map<String, Any?>.toLuvSong() = LuvSong(
+    id = str("id"),
+    title = str("title"),
+    artist = str("artist"),
+    highResArt = str("highResArt"),
+    downloadUrl = str("downloadUrl"),
+    hasLyrics = bool("hasLyrics"),
+    source = this["source"]?.toString() ?: "Saavn",
+    duration = int("duration"),
+    language = this["language"]?.toString(),
 )
 
 private fun Map<String, Any?>.toInteraction() = LuvInteraction(

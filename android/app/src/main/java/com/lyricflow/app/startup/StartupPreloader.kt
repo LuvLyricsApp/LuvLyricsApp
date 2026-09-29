@@ -4,10 +4,14 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 object StartupPreloader {
     @Volatile private var result: String? = null
-    @Volatile private var done = false
+    // Released when the preload thread finishes (or fails), so a waiter wakes at
+    // that instant instead of polling for it.
+    private val finished = CountDownLatch(1)
 
     fun preload(context: Context) {
         Thread {
@@ -22,16 +26,13 @@ object StartupPreloader {
             } catch (_: Exception) {
                 // On any failure JS falls back to the normal init path
             } finally {
-                done = true
+                finished.countDown()
             }
         }.apply { isDaemon = true; start() }
     }
 
     fun waitForResult(timeoutMs: Long = 3000L): String? {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (!done && System.currentTimeMillis() < deadline) {
-            Thread.sleep(5)
-        }
+        finished.await(timeoutMs, TimeUnit.MILLISECONDS)
         return result
     }
 

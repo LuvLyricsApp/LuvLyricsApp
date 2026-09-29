@@ -236,8 +236,12 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     'worklet';
     const p = Math.max(0, Math.min(1, displayProgress.value));
     const h = interpolate(scrubUI.value, [0, 1], [3.5, 14], Extrapolation.CLAMP);
+    // A full-width bar slid left inside the clipped track: progress moves by
+    // transform, so playback never triggers a layout pass (a %-width did,
+    // several times a second, which is what made old phones stutter).
     return {
-      width: `${p * 100}%`,
+      transform: [{ translateX: (p - 1) * trackWidthSV.value }],
+      opacity: trackWidthSV.value > 0 ? 1 : 0, // unmeasured: don't flash a full bar
       // Leading edge of fill is always a soft cap (reads as curve while scrubbing).
       borderTopRightRadius: h / 2,
       borderBottomRightRadius: h / 2,
@@ -264,10 +268,10 @@ const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       [1, 0.55, 0.4],
       Extrapolation.CLAMP,
     );
+    const x = p * trackWidthSV.value;
     return {
-      left: `${p * 100}%`,
       opacity,
-      transform: [{ scale }],
+      transform: [{ translateX: x }, { scale }] as const,
     };
   });
 
@@ -400,10 +404,12 @@ const styles = StyleSheet.create({
     // Relative in the top-aligned trackWrapper (not absolute center)
   },
   fillBase: {
+    width: '100%',
     height: '100%',
   },
   thumbBase: {
     position: 'absolute',
+    left: 0,
     width: 11,
     height: 11,
     borderRadius: 6,

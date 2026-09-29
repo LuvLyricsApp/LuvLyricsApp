@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Song } from '../types/song';
 import { Image } from 'expo-image';
 import Artwork from './allegra/Artwork';
+import { Signal } from '../constants/allegraTheme';
 
 const COVER_SIZE = 200;
 const PEEK = 34;
@@ -128,7 +129,7 @@ const CoverCard = memo(function CoverCard({
 
           {isPlaying && (
             <View style={styles.playingDot}>
-              <Ionicons name="musical-note" size={12} color="#000" />
+              <Ionicons name="musical-note" size={12} color={Signal.waveInk} />
             </View>
           )}
         </View>
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#1DB954',
+    backgroundColor: Signal.wave,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,0 +1,320 @@
+---
+name: LuvLyrics — Soft Signal for mobile
+status: active
+inherits: Allegra "Soft Signal" (allegra/DESIGN.md)
+source_of_truth:
+  - src/constants/allegraTheme.ts
+  - src/components/allegra/
+  - src/components/PillPlayer.tsx
+  - src/navigation/playerSheet.ts
+  - src/widget/
+---
+
+# LuvLyrics design system
+
+LuvLyrics is a lyrics-first music player. It shares Allegra's visual language —
+album art supplies the atmosphere, frosted material separates content, one
+stable action colour stays legible over any artwork — and adapts it to a phone
+held in one hand, on hardware as old as a five-year-old mid-range Android.
+
+The feeling to aim for: a dark listening room lit by the cover that is playing.
+Calm at rest, responsive under the finger, never busy.
+
+This is the contract for new screens and for visual refactors. When this file
+and the code disagree, fix one of them in the same change.
+
+---
+
+## 1. Colour
+
+### Stable colours (`Signal` in `allegraTheme.ts`)
+
+| Token | Hex | Use |
+| --- | --- | --- |
+| `wave` | `#d9e66a` | Primary action, selected state, progress, the playing row |
+| `waveInk` | `#17180d` | Text and icons on a `wave` fill |
+| `accent` | `#ee6b5f` | Liked, love, destructive-but-warm (remove from playlist) |
+| `ink` | `#f4f1ea` | Primary text |
+| `inkSoft` | `#d1d0c9` | Secondary text that must still read over art |
+| `inkMuted` | `#8e9498` | Metadata, hints |
+| `inkFaint` | `#626b70` | Placeholders, disabled |
+| `bg` / `bgDeep` / `bgSubtle` | `#0a0b0e` / `#07080b` / `#12141a` | Page, deepest room, wells |
+
+Rules
+
+- Chartreuse means "act here" or "this one is on". Never decoration.
+- Coral means love. The heart, the Luv button, the liked badge. Nothing else.
+- No new one-off accent. If a role is missing, add a token first.
+- The app is dark. Light mode exists for text-heavy settings only; the player,
+  Stream, Luvs, Search and Library are always the dark room.
+
+### Artwork colour
+
+`useArtworkPalette(uri)` extracts the cover's colours natively on Android
+(`NativePalette`) with Allegra's vivify rules, falling back to a supplied
+duotone, then to Allegra's default room. Artwork colour may tint:
+
+- the live shader (`DynamicAura`),
+- glass washes (`Frosted` palette prop),
+- the colour that rises at the foot of a Luvs card,
+- glows behind featured art.
+
+It must never recolour text or the `wave` action colour.
+
+---
+
+## 2. Material
+
+### Frosted glass
+
+Floating surfaces (menus, sheets, the voice card) use `allegra/Frosted`: real
+blur on both platforms (`experimentalBlurMethod` on Android), a thin dark tint,
+an optional cover wash, a specular sheen and a lit top edge.
+
+**Never put live blur on always-visible chrome.** The tab bar and the now
+playing pill blur a *bitmap* of the cover once (`Image blurRadius`) under a dark
+tint. A live Android blur re-renders on every scroll frame.
+
+### The cheap blur
+
+For any large blurred background (Luvs backdrop, cover glows): decode a tiny copy
+(`resizeMethod="resize"`, 24–36 px), blur that, and scale it up with a
+transform. Blurring a thumbnail is instant; blurring a full-resolution cover on
+the CPU takes 1–2 s on older phones, which is exactly the "sharp, then fogs
+over" glitch Luvs used to have. Every mounted card carries its blur from the
+first frame — never gate blur on `isActive`.
+
+### Hierarchy
+
+One glass surface plus quieter wells. Don't stack opaque cards to fake depth.
+
+| Surface | Radius | Treatment |
+| --- | --- | --- |
+| Tab bar | pill | cover bitmap blur + tint, hairline, top highlight |
+| Now playing pill | pill, 56 px, max 330 | blurred cover / glow / solid; `wave` progress ring round the art |
+| More menu / sheets | 26–30 | `Frosted`, dim + blur behind |
+| Luvs card | 30 | art (or canvas while playing) full-bleed, hairline edge; the next in the lane peeks over its top |
+| Content wells, search field | 16 / pill | `rgba(255,255,255,0.06–0.10)` + hairline |
+| Artwork | 16 (thumbs 10–12) | crisp; never over-rounded |
+| Icon buttons | circle, ≥ 40 px | `Glass.fillLight` + hairline |
+
+---
+
+## 3. Type
+
+SF Pro everywhere (see CLAUDE.md for how Android gets it). Styles set only
+`fontWeight` and `fontSize`.
+
+| Role | Size / weight |
+| --- | --- |
+| Page title (Stream, Search, Library, Luvs) | 28 / 700 |
+| Shelf heading (`SectionHeading`) | 22 / 700 + optional 13 / 400 subtitle |
+| Featured title, player title | 22 / 700, 22 / 600 |
+| Row title / subtitle | 15–16 / 600 · 13 / 400 |
+| Chip / button label | 14–15 / 600 |
+| Meta, times | 12–13, tabular numbers |
+
+Sentence case, always. No all-caps, no tracking on labels, no emoji or sparkle
+glyphs in UI copy, no "magic" wording.
+
+---
+
+## 4. Layout and the bottom chrome
+
+```
+┌──────────────────────────┐
+│ status bar scrim         │
+│ Title          (glass ○) │
+│ search field / mood chips│
+│ …content…                │
+│                          │
+│ ╭ now playing pill ────╮ │  ← every screen except Luvs & the player
+│ ╰──────────────────────╯ │
+│ ╭ Stream Luvs 🎙 Library •••╮│  ← floating tab bar
+└──────────────────────────┘
+```
+
+- Gutter: 20 px (`GUTTER` in `StreamHome`). Headings and content share it.
+- Everything that scrolls pads its bottom with `useBottomClearance()` — tab bar
+  plus the pill when it shows. Don't hardcode 100/180/208 again.
+- The ••• menu, the pill and the voice card are mounted at the **root**
+  (`RootNavigator`), in that paint order: pill → menu (`MoreMenuHost`) → voice
+  card. The tab bar owns the menu's state and publishes it through
+  `HostedMoreMenu`, so the menu always opens on top of the pill.
+- A new destination goes in `MORE_ITEMS`, not in the tab bar.
+
+---
+
+## 5. The player
+
+### Now playing pill (`PillPlayer`)
+
+Default mini player (`miniPlayerStyle: 'pill'`), modelled on Echo Music's
+NewMiniPlayer. Shows on every screen in the tab shell except Luvs. Round art
+inside a `wave` progress ring, title over artist, then previous · play · next.
+The play button is Echo's nine-lobed "cookie": a circle at rest that grows soft
+lobes and turns once every 8 s while music plays.
+
+| Gesture | Result |
+| --- | --- |
+| Tap | open the player |
+| Swipe up | open the player, carrying the flick's speed into the sheet |
+| Drag sideways | the row follows the finger; past 60 px or faster than 600 px/s, it skips |
+
+The row springs home without bounce. It is 54 px tall: 40 px art in its ring,
+a 40 px cookie, 18 px skip glyphs.
+
+The Dynamic Island (`island`) and classic bar (`bar`) remain as settings.
+
+### Player sheet (`NowPlayingScreen` + `navigation/playerSheet.ts`)
+
+The route is a transparent modal with no native animation; the screen animates
+itself so it can be dragged.
+
+- **It is the pill, grown.** Closed, the sheet rests on the pill's top edge,
+  scaled to the pill's width (`playerSheetRest`); open, it is full screen. One
+  progress value (`navigation/sheetProgress.ts`) drives both: the pill rides
+  the sheet's top edge and fades over the first tenth of the travel while the
+  sheet turns solid over the first eighth, so the two overlap with no gap.
+- **Open:** a clamped spring (`stiffness 240, damping 32`) from the pill, carrying
+  the swipe's speed.
+- **Drag down from anywhere** to close. Over the lyrics the drag belongs to the
+  list until it is scrolled to its top (Apple Music's split). A grab mid-flight
+  takes over from where the sheet is; past the top it rubber-bands.
+- **Release:** the decision uses where the flick is heading (momentum
+  projection), not where the finger let go: past 22 % of the screen or faster
+  than 900 px/s → a clamped spring back onto the pill with the finger's speed;
+  otherwise it springs open.
+- **The page underneath** is drawn (the route is transparent) and blurred while
+  the sheet is up, clearing as it lowers — the blur's opacity follows the
+  progress. It is mounted only while the sheet moves; low-end phones dim instead.
+- Back button and the chevron use the same exit (`usePreventRemove`).
+- Controls never auto-hide.
+
+### Player look (Settings → Player)
+
+**Apple Music inspired** (switch): the cover runs full width across the top and
+melts into its own blur — Echo's hero, with the canvas playing inside it. Off
+shows a floating artwork card.
+
+**Player background:**
+
+| Style | What it is |
+| --- | --- |
+| **Apple Music** | Echo's style: the cover blurred soft behind a sharp hero |
+| **Apple + glow** (default, `blend`) | the Apple Music room, cross-fading into Echo's drifting glow while lyrics are open |
+
+"Glow animated" on its own was retired; a stored `glow` migrates to Apple + glow.
+
+**Mini player background:** glow animated (two blobs in the cover's colours) or
+cover tint.
+
+### Player menu and sheets
+
+••• opens a tall frosted sheet in Echo's order: Radio · Add · Share as pill
+buttons, then rounded rows (Cast, Ambient mode, Lyrics, Shuffle, Download,
+Like, Repeat, Refetch), View artist, Set as ringtone, Listen together, and
+Details · Equalizer · Advanced. A row that would do nothing for this song is
+not shown. Active modes (liked, repeat, in a room) tint their icon `wave`.
+Results come back as a short toast, never an alert.
+
+**Listen together** is a sheet too: name + "Start a room" (`wave`), or a room
+code to join; inside, the big room code with copy / share, join requests with
+Decline / Let in, who's listening (host badge, dimmed when offline) and End /
+Leave. A join request also appears as a frosted card at the top of any screen.
+While in a room the player shows a small "Listening together · n" chip under
+the grabber.
+
+**Ambient mode** fills the screen with the canvas (or the cover, centred) and
+the title underneath, keeps the screen awake, and returns on a tap or back.
+
+### Canvas
+
+Decorative, muted, never takes audio focus. The cover stays under it, so
+whatever the canvas reveals is the cover, never a gap. It never vanishes mid-frame: when
+the song changes the old clip fades out (520 ms) before the next one fades in
+on its first frame. The layer has no backing of its own, so before the first
+frame (or on a frame the decoder hasn't filled) the cover underneath shows,
+never black. The loop is the player's own repeat, which holds the last frame
+until the next one is ready — no fade at the seam. `CanvasVideoLayer` sizes the video
+from its real track dimensions to a true cover fit and renders into a
+TextureView on Android (a SurfaceView ignores fades, clips and the sheet's
+drag). The lookup keys on title + artist only, so metadata backfill mid-song
+can't blank it.
+
+---
+
+## 6. Screens
+
+| Screen | Recipe |
+| --- | --- |
+| **Stream** | `DynamicAura`, title, mood chips, shortcut grid, quick picks, cover shelves. Double-tap the Stream tab: scroll to the top, focus search, keyboard up (the first tap still switches at once) |
+| **Search** | same room; one field for the phone *and* the catalog; scopes All · On this phone · Online; recent searches; mood tiles |
+| **Library** | same room; the **cover deck** (recent songs as a staggered stack of sleeves — tap the front one to play, flick to leaf through; order lives on the UI thread so a flick never flickers), **Play all · Shuffle** under it and again in a frosted sticky bar once you scroll past, **Your artists** (round covers sized by how many songs you keep, tap to filter), Downloading, then Songs with filter, sort (Recently added · A–Z · By artist) and an **A–Z rail** (letter bubble, a tick per letter, jumps by fixed 64 pt rows) |
+| **Playlist** | CoverFlow deck, playlist name, meta + sort chip, **Play / Shuffle** (transport lives in the pill), glass header that fades in on scroll |
+| **Luvs** | a **taste map**, not a feed: lanes of taste side by side (For you, one per favourite artist, your chill and energy mixes) that turn like a carousel with the neighbours peeking at the edges; each lane is a stack — swipe up and the card lifts away while the next grows from behind, swipe down to bring the last one back. A lane rail slides with the camera and counts how deep you are. Under the map: title, clip scrubber, Luv · Save · Full song · Share (springy presses, a heart burst on Luv). The cover blurred small is the room |
+| **Player** | canvas or artwork stage, grab handle, controls on a scrim, `wave` play button; tap the artist to open their page |
+| **Artist** | Echo's layout: one sharp square photo masked into the shader (drifts at ⅓ scroll, stretches on overscroll), 40/700 name on its foot, subscriber + `wave` monthly chips, About, Play · Radio · Shuffle, Top songs, On this phone, shelves (albums, singles, fans also like as round avatars) |
+
+### Shader at rest
+
+`DynamicAura` keeps the field lit when nothing plays (66% opacity, 0.34 energy)
+— at 30% under the scrims the Stream page read as plain black. Screens pass a
+small `dim` (0.06 Stream, ~0.14 elsewhere); don't stack extra dark scrims on it.
+
+---
+
+## 7. Motion
+
+Primitives: `RiseIn`, `Tactile`, `SwapText`, `MorphIcon`, `NudgeIcon`
+(`allegra/motion.tsx`). Reuse them.
+
+- Springs for anything a finger can interrupt; 160–400 ms timings for state.
+- 40 ms list staggers, capped at 10 items.
+- **Transform and opacity only.** No animated `height`, `width`, `top`,
+  `backgroundColor` or `borderRadius`. Equaliser bars use `scaleY` from the
+  baseline; progress bars use `scaleX` from the left; a header "turns solid" by
+  fading a scrim, not by animating its colour.
+- At most two self-running effects per screen (e.g. the shader + a canvas).
+- Reduce Motion collapses movement to fades; it never removes a feature.
+
+### Old-phone budget
+
+- One gesture per component, worklets on the UI thread, cross to JS only when a
+  discrete value changes (the lyric line).
+- `DynamicAura` gets `active={isFocused}` so hidden screens stop their shader.
+- Lists over ~30 rows use FlashList.
+- Blur thumbnails, not full covers.
+- Rows respond on the first tap — no multi-tap timers in front of the common case.
+
+---
+
+## 8. Home-screen widgets (Android)
+
+Built with `react-native-android-widget`; glyphs are inline SVG (`widget/icons.ts`).
+
+**Now playing** (3×3, resizable): a soft frame around the cover full-bleed; a
+glass pill with the song, share and like circles; elapsed / remaining; a white
+progress bar; round dark-glass transport buttons. Below ~190 dp it drops text.
+
+**Playlist** (4×3, resizable): cover, name, count, a `wave` play button and ›
+to cycle playlists; a scrollable list where the playing row wears `wave`.
+
+The app writes a snapshot (`widget/widgetData.ts`) on song, play-state, like and
+playlist changes, plus a 20 s tick while playing. Transport acts on the live
+player; rows, "play playlist" and share are `lyricflow://widget/…` deep links so
+they work from a cold start. RemoteViews can't blur: "frosted" there means a
+dark translucent fill.
+
+---
+
+## 9. Checklist for a new screen
+
+1. Dark room: `Signal.bg`, `DynamicAura` (with `active={isFocused}`) or a
+   cheap-blur backdrop — not flat black.
+2. 28/700 sentence-case title on the gutter; glass round buttons for actions.
+3. Shelves with `SectionHeading`; rows with `SongRow` / `PlaylistItem`.
+4. Bottom padding from `useBottomClearance()`.
+5. Play/pause through `requestPlayback`; open the player with `openPlayerSheet`.
+6. Loading, empty and offline states designed, never blank glass.
+7. Transform/opacity motion from the primitives; check on a low-end phone.

@@ -21,7 +21,7 @@ interface PlaylistItemProps extends Partial<RenderItemParams<Song>> {
 
 const VisualizerBar = ({ anim }: { anim: SharedValue<number> }) => {
   const style = useAnimatedStyle(() => ({
-    height: interpolate(anim.value, [0, 1], [4, 14]),
+    transform: [{ scaleY: interpolate(anim.value, [0, 1], [4 / 14, 1]) }],
     opacity: interpolate(anim.value, [0, 1], [0.5, 1]),
   }));
   return <Animated.View style={[styles.visualizerBar, style]} />;
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   scanningOverlay: { position: 'absolute', bottom: 0, right: 0, left: 0, top: 0, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
   visualizerOverlay: { position: 'absolute', bottom: 0, right: 0, left: 0, top: 0, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
   visualizerContainer: { flexDirection: 'row', alignItems: 'flex-end', height: 16, gap: 2 },
-  visualizerBar: { width: 3, backgroundColor: '#FFF', borderRadius: 2 },
+  visualizerBar: { width: 3, height: 14, backgroundColor: '#FFF', borderRadius: 2, transformOrigin: 'bottom' },
   songInfo: { flex: 1, justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   songTitle: { fontSize: 16, color: '#fff', fontWeight: '500', marginBottom: 2 },
