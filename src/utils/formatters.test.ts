@@ -1,10 +1,23 @@
 import {
+  countOf,
   formatTime,
   formatTimeLong,
   formatRelativeDate,
   formatSongSubtitle,
   truncateText,
 } from './formatters';
+
+// ── countOf ──────────────────────────────────────────────────────────────────
+
+describe('countOf', () => {
+  it('says 1 song, not 1 songs', () => {
+    expect(countOf(0, 'song')).toBe('0 songs');
+    expect(countOf(1, 'song')).toBe('1 song');
+    expect(countOf(2, 'song')).toBe('2 songs');
+    expect(countOf(1, 'library', 'libraries')).toBe('1 library');
+    expect(countOf(3, 'library', 'libraries')).toBe('3 libraries');
+  });
+});
 
 // ── formatTime ───────────────────────────────────────────────────────────────
 
