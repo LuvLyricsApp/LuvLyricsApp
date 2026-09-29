@@ -160,7 +160,7 @@ class LuvsBufferManager {
       await LuvsPlayerModule.activateUrl(url, warmUrls, shouldPlay, startAtHook);
       return;
     }
-    // Index-keyed pools (iOS, an older Android build): start a fresh list each time.
+    // Index-keyed pool (iOS): start a fresh list each time.
     if (Platform.OS !== 'android') {
       await this.stopAll();
       for (const index of [...this.slots.keys()]) await this.unloadSlot(index);
@@ -170,13 +170,8 @@ class LuvsBufferManager {
   }
 
   async updateActiveIndex(newIndex: number, feedSongs: UnifiedSong[], shouldPlay: boolean = true) {
-    if (Platform.OS === 'android' && LuvsPlayerModule) {
-      this.activeIndex = newIndex;
-      const urls = feedSongs.map(s => s.streamUrl || s.downloadUrl || '');
-      await LuvsPlayerModule.updateActiveIndex(newIndex, urls, shouldPlay);
-      return;
-    }
-
+    // Android plays through the native URL-keyed pool (`activate`); this
+    // index-keyed pool is the JS one iOS uses.
     const lastIndex = this.activeIndex;
     if (newIndex === lastIndex) return;
     this.activeIndex = newIndex;
