@@ -40,7 +40,7 @@ import { Motion } from '../constants/allegraTheme';
 import { positionSV, durationSV } from '../playback/positionBus';
 import { isLowEndDevice } from '../utils/performanceTier';
 import GlowBackground from './player/GlowBackground';
-import LiquidGlass from './allegra/LiquidGlass';
+import LiquidGlass, { GlassShadow } from './allegra/LiquidGlass';
 import { useGlowColors } from './player/useGlowColors';
 import { useSettingsStore } from '../store/settingsStore';
 import { PILL_PLAYER_HEIGHT, pillPlayerInset } from '../navigation/tabs';
@@ -55,6 +55,8 @@ const RING_STROKE = 2.5;
 const RING_R = (RING - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 const COOKIE = 40;
+/** The artwork on the liquid-glass pill: a small rounded square, as in Apple Music. */
+const GLASS_ART = 40;
 const SPIN_MS = 14000;
 const SPIN = !isLowEndDevice();
 
@@ -131,6 +133,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   // liquid glass, or plain black.
   const background = useSettingsStore(s => s.miniPlayerBackground);
   const glow = background === 'glow';
+  const glass = background === 'glass';
   const glowColors = useGlowColors(glow ? coverImageUri : null);
   const shellColor = useAnimatedStyle(() => ({
     backgroundColor: background === 'glass'
@@ -169,13 +172,13 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
   // Where the pill shows under the finger (already rubber-banded).
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
-  // Hand-over with the player sheet: as the sheet grows out of the pill the
-  // pill rides its top edge and fades within the first tenth of the travel;
-  // closing brings it back the same way, landing exactly where it rests.
+  // Hand-over with the player sheet (Echo Music's): the pill rides the sheet's
+  // top edge and fades over the first quarter of the travel, before the player
+  // itself fades in; closing brings it back the same way, landing where it rests.
   const restTop = Math.max(Dimensions.get('window').height, Dimensions.get('screen').height) - bottom - PILL_PLAYER_HEIGHT;
   const shellMotion = useAnimatedStyle(() => {
     const p = playerSheetProgress.value;
-    const handOver = Math.max(0, 1 - p / 0.1);
+    const handOver = Math.max(0, 1 - p * 4);
     // The pill gives a few points under the finger, never more: the further
     // the pull, the harder it resists (a swipe up opens the player instead).
     const y = (1 - enter.value) * 24 + dragY.value - restTop * p;
@@ -226,14 +229,43 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
     <GestureDetector gesture={pan}>
       <Animated.View
         pointerEvents={sheetUp ? 'none' : 'auto'}
-        style={[styles.shell, { left: side, right: side, bottom }, shellColor, shellMotion]}
+        style={[styles.shell, glass && styles.shellGlass, { left: side, right: side, bottom }, shellColor, shellMotion]}
       >
         {glow ? (
           <View style={[StyleSheet.absoluteFill, styles.glowClip]} pointerEvents="none">
             <GlowBackground colors={glowColors} variant="mini" />
           </View>
         ) : null}
-        {background === 'glass' ? <LiquidGlass radius={PILL_PLAYER_HEIGHT / 2} palette={palette} /> : null}
+        {glass ? <GlassShadow radius={PILL_PLAYER_HEIGHT / 2} /> : null}
+        {glass ? <LiquidGlass radius={PILL_PLAYER_HEIGHT / 2} palette={palette} /> : null}
+        {glass ? (
+          // Apple Music's mini player on its glass: the artwork, the song, play and next.
+          <Pressable
+            onPress={() => onOpen()}
+            style={[styles.row, styles.rowGlass]}
+            accessibilityRole="button"
+            accessibilityLabel={`Now playing: ${title}. Open player`}
+          >
+            <Artwork uri={coverImageUri} title={title} artist={artist} size={GLASS_ART} priority="high" continuous style={styles.glassArt} />
+            <View style={styles.meta}>
+              <SwapMarquee style={styles.title} direction={songDirection} active={!sheetUp}>{title}</SwapMarquee>
+              {artist ? <SwapMarquee style={styles.artist} direction={songDirection} active={!sheetUp}>{artist}</SwapMarquee> : null}
+            </View>
+            <Tactile
+              onPress={() => { tick(); onTogglePlay(); }}
+              hitSlop={6}
+              pressScale={0.86}
+              accessibilityRole="button"
+              accessibilityLabel={playing ? 'Pause' : 'Play'}
+              style={styles.glassBtn}
+            >
+              <MorphIcon on={playing} onIcon="pause" offIcon="play" size={24} color="#fff" offStyle={styles.playNudge} />
+            </Tactile>
+            <Tactile onPress={next} hitSlop={6} pressScale={0.86} accessibilityRole="button" accessibilityLabel="Next" style={styles.glassBtn}>
+              <NudgeIcon name="play-forward" size={24} color="#fff" direction={1} trigger={nextNudge} />
+            </Tactile>
+          </Pressable>
+        ) : (
         <Pressable
           onPress={() => onOpen()}
           style={styles.row}
@@ -288,6 +320,7 @@ const PillPlayer: React.FC<PillPlayerProps> = ({
             <NudgeIcon name="play-skip-forward" size={18} color="#fff" direction={1} trigger={nextNudge} />
           </Tactile>
         </Pressable>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -302,7 +335,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     zIndex: 10,
   },
+  // The glass draws its own edge.
+  shellGlass: { borderWidth: 0 },
   glowClip: { borderRadius: PILL_PLAYER_HEIGHT / 2, overflow: 'hidden' },
+  rowGlass: { paddingLeft: (PILL_PLAYER_HEIGHT - GLASS_ART) / 2, paddingRight: 6 },
+  glassArt: { width: GLASS_ART, height: GLASS_ART, borderRadius: 8, overflow: 'hidden' },
+  glassBtn: { width: 42, height: 44, alignItems: 'center', justifyContent: 'center' },
   row: {
     flex: 1,
     flexDirection: 'row',
