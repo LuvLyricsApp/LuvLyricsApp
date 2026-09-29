@@ -20,6 +20,9 @@ export const HEADER_CLEARANCE = 28;
 /** The compact controls (no volume row) stacked at the bottom. */
 export const CONTROLS_CLEARANCE = 372;
 
+/** Height the controls take from the title down (full layout, with volume), plus a clear gap above the title. */
+const CONTROLS_ROOM = 360;
+
 /** The record's diameter on a screen this wide: leaves room on the right for the tonearm. */
 export const vinylSize = (screenWidth: number): number => Math.round(Math.min(screenWidth * 0.7, 320));
 
@@ -139,8 +142,11 @@ const Stage: React.FC<{
   const reduce = useReducedMotion();
   const focused = useIsFocused();
   const palette = useArtworkPalette(uri);
-  const card = Math.min(width - 64, 380);
-  const disc = vinylSize(width);
+  // Short screens: the card and the record also fit the height above the
+  // title, which used to run over the card's bottom edge.
+  const room = Math.max(160, screenH - paddingTop - CONTROLS_ROOM);
+  const card = Math.min(width - 64, 380, room);
+  const disc = Math.min(vinylSize(width), room);
   const follow = useAnimatedStyle(() => {
     const x = stageX ? stageX.value : 0;
     const away = Math.min(1, Math.abs(x) / Math.max(1, width));

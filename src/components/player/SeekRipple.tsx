@@ -17,7 +17,7 @@ export interface SeekPulse {
   n: number;
 }
 
-const HOLD_MS = 520;
+const HOLD_MS = 650;
 
 const Half: React.FC<{ side: -1 | 1; pulse: SeekPulse | null; width: number; height: number }> = ({ side, pulse, width, height }) => {
   const shown = useSharedValue(0);

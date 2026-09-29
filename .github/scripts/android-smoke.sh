@@ -385,14 +385,16 @@ if [ -n "${W:-}" ] && [ -n "${H:-}" ]; then
   adb shell input tap $((W / 2)) $((H * 28 / 100))
   sleep 3
   shot gesture-cover-full
-  step "gesture: double tap right, then left"
-  adb shell "input tap $((W * 80 / 100)) $((H * 28 / 100)); input tap $((W * 80 / 100)) $((H * 28 / 100))"
-  sleep 0.3
-  shot gesture-seek-forward
-  sleep 2
+  # Left first: this song is near its end, and 5s on can finish it. The shot
+  # waits 0.7s — at 0.3s screencap ran before the app had even seen the taps.
+  step "gesture: double tap left, then right"
   adb shell "input tap $((W * 20 / 100)) $((H * 28 / 100)); input tap $((W * 20 / 100)) $((H * 28 / 100))"
-  sleep 0.3
+  sleep 0.7
   shot gesture-seek-back
+  sleep 2
+  adb shell "input tap $((W * 80 / 100)) $((H * 28 / 100)); input tap $((W * 80 / 100)) $((H * 28 / 100))"
+  sleep 0.7
+  shot gesture-seek-forward
   sleep 2
   step "gesture: swipe the cover to the next song"
   adb shell input swipe $((W * 80 / 100)) $((H * 28 / 100)) $((W * 15 / 100)) $((H * 28 / 100)) 260

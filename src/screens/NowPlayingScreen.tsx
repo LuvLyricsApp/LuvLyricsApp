@@ -701,7 +701,8 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           />
         </Animated.View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, upNextShadeStyle]}>
-          <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)']} style={StyleSheet.absoluteFill} />
+          {/* Deep enough that the lifted title and transport read over a bright cover. */}
+          <LinearGradient colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.62)', 'rgba(0,0,0,0.72)']} style={StyleSheet.absoluteFill} />
         </Animated.View>
 
         {/* Above the cover, below the controls: tap for full-bleed, double-tap a side to seek, swipe sideways to skip. */}
