@@ -34,7 +34,8 @@ import { Radius, Signal, Space } from '../constants/allegraTheme';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import DynamicAura from '../components/allegra/DynamicAura';
 import { AuraMood } from '../components/allegra/MusicFlowField';
-import { RiseIn } from '../components/allegra/motion';
+import { RiseIn, Tactile } from '../components/allegra/motion';
+import AboutSheet from '../components/about/AboutSheet';
 import { PrimaryButton, SectionHeading } from '../components/allegra/home';
 import { CoverShelf, GUTTER, MoodChips, QuickPicks, ShortcutGrid, SongRow, TrackItem } from '../components/stream/StreamHome';
 import { ShimmerBlock } from '../components/stream/StreamItems';
@@ -93,6 +94,7 @@ const StreamScreen: React.FC = () => {
   const [feed, setFeed] = useState<HomeFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UnifiedSong[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -486,6 +488,16 @@ const StreamScreen: React.FC = () => {
       >
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">Stream</Text>
+          <Tactile
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); setAboutOpen(true); }}
+            hitSlop={8}
+            pressScale={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="About LuvLyrics"
+            style={styles.aboutBtn}
+          >
+            <Ionicons name="sparkles-outline" size={18} color={Signal.ink} />
+          </Tactile>
         </View>
 
         <View style={styles.search}>
@@ -522,6 +534,7 @@ const StreamScreen: React.FC = () => {
         style={[styles.statusScrim, { height: insets.top + 16 }]}
       />
       {toast ? <Toast visible message={toast} type="info" duration={2200} onDismiss={() => setToast(null)} /> : null}
+      <AboutSheet visible={aboutOpen} onClose={() => setAboutOpen(false)} />
     </View>
   );
 };
@@ -529,7 +542,17 @@ const StreamScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Signal.bg },
   content: {},
-  header: { height: HEADER_HEIGHT, justifyContent: 'center', paddingHorizontal: GUTTER },
+  header: { height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER },
+  aboutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
   title: { fontSize: 28, fontWeight: '700', color: Signal.ink },
   search: {
     flexDirection: 'row',
