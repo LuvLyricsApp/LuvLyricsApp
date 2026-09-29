@@ -38,6 +38,12 @@ export function safeGoBack(navigation?: BackCapable | null): void {
  */
 export function openMainTab(params: NonNullable<RootStackParamList['Main']>): void {
   const root = navigationRef.getRootState();
-  if (root && root.routes[root.index]?.name !== 'Main') navigationRef.dispatch(StackActions.popTo('Main'));
-  navigationRef.navigate('Main', params);
+  if (!root || root.routes[root.index]?.name === 'Main') {
+    navigationRef.navigate('Main', params);
+    return;
+  }
+  navigationRef.dispatch(StackActions.popTo('Main'));
+  // Into the tab on the next tick: navigating in the same tick as the pop
+  // left the tab navigator on its previous tab (open/library showed Stream).
+  setTimeout(() => navigationRef.navigate('Main', params), 0);
 }

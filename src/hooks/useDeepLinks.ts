@@ -91,6 +91,7 @@ const handle = async (url: string | null) => {
       case 'settings': openMainTab({ screen: 'Settings' }); break;
       default: break;
     }
+    setTimeout(() => diag('link', `open/${target} -> ${navigationRef.getCurrentRoute()?.name ?? 'nothing'}`), 800);
   }
 };
 
