@@ -141,9 +141,12 @@ interface SettingsState {
   setAppleMusicInspired: (v: boolean) => void;
   setHidePlayerVolume: (v: boolean) => void;
   setPlayerBackground: (v: PlayerBackground) => void;
-  /** Double-tap the cover: the artwork turns into a spinning record (and back). */
+  /** The artwork as a spinning record (Settings → Player → Record). */
   playerVinyl: boolean;
   setPlayerVinyl: (v: boolean) => void;
+  /** YouTube Music / Shader wash players: the cover runs full-bleed instead of a card (tap the cover). */
+  playerCoverFull: boolean;
+  setPlayerCoverFull: (v: boolean) => void;
   setCanvasEnabled: (enabled: boolean) => void;
   /** Your own Apple MusicKit developer token — unlocks Apple motion artwork. */
   appleMusicToken: string;
@@ -197,6 +200,7 @@ const DEFAULT_SETTINGS = {
   hidePlayerVolume: false,
   playerBackground: 'blend' as PlayerBackground,
   playerVinyl: false,
+  playerCoverFull: false,
   appleMusicToken: '',
   tidalToken: '',
   luvsStartAtHook: true,
@@ -281,6 +285,8 @@ export const useSettingsStore = create<SettingsState>()(
       setPlayerBackground: (playerBackground) => set({ playerBackground }),
       playerVinyl: false,
       setPlayerVinyl: (playerVinyl) => set({ playerVinyl }),
+      playerCoverFull: false,
+      setPlayerCoverFull: (playerCoverFull) => set({ playerCoverFull }),
       appleMusicToken: '',
       setAppleMusicToken: (appleMusicToken) => set({ appleMusicToken: appleMusicToken.trim() }),
       tidalToken: '',

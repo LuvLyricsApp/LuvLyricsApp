@@ -69,6 +69,11 @@ interface NowPlayingControlsProps {
   onArtistPress?: () => void;
   /** Lyrics view: drop the volume row so the lines get the room. */
   compact?: boolean;
+  /** Up next (0 closed .. 1 open): title, scrubber and transport ride up above the panel, the rest fades. */
+  upNext?: SharedValue<number>;
+  /** The Up next panel's top edge when open, in the player's frame. */
+  upNextTop?: number;
+  upNextOpen?: boolean;
 }
 
 const INK = '#ffffff';
@@ -174,8 +179,23 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   sleepLabel,
   onArtistPress,
   compact = false,
+  upNext,
+  upNextTop = 0,
+  upNextOpen = false,
 }) => {
   const insets = useSafeAreaInsets();
+  // Where the transport's bottom edge sits in the player, so Up next can lift
+  // it to just above the panel whatever the screen size.
+  const boxY = useSharedValue(0);
+  const transportEnd = useSharedValue(0);
+  const liftStyle = useAnimatedStyle(() => {
+    const p = upNext ? upNext.value : 0;
+    const bottom = boxY.value + CONTAINER_PAD_TOP + transportEnd.value;
+    const lift = transportEnd.value > 0 ? Math.min(0, upNextTop - 6 - bottom) : 0;
+    return { transform: [{ translateY: p * lift }] };
+  });
+  const lowerStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, (upNext ? upNext.value : 0) * 2.5) }));
+  const shadeStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, (upNext ? upNext.value : 0) * 2.5) }));
   // Long titles scroll only while this screen is the one in front.
   const focused = useIsFocused();
   // Read at render: when the title changes this is the way the skip went.
@@ -202,12 +222,18 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   }, []);
 
   return (
-    <Animated.View style={[styles.container, animatedStyle]} pointerEvents={controlsVisible ? 'box-none' : 'none'}>
+    <Animated.View
+      style={[styles.container, animatedStyle]}
+      pointerEvents={controlsVisible ? 'box-none' : 'none'}
+      onLayout={e => { boxY.value = e.nativeEvent.layout.y; }}
+    >
       {/* Only a whisper of shade — enough for white text over a bright canvas video. */}
-      <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Animated.View style={[StyleSheet.absoluteFill, shadeStyle]} pointerEvents="none">
+        <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']} style={StyleSheet.absoluteFill} />
+      </Animated.View>
 
       {/* Echo keeps the bottom row a clear step above the system bar. */}
-      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
+      <Animated.View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 14 }, liftStyle]} pointerEvents="box-none">
         <View style={styles.metaRow}>
           <Pressable style={styles.metaText} onPress={onArtistPress} disabled={!onArtistPress} accessibilityRole="button">
             <View style={styles.swapLine}>
@@ -251,7 +277,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           renderBelow={display => <TimeLabels display={display} durationSV={durationSV} />}
         />
 
-        <View style={styles.transport}>
+        <View style={styles.transport} onLayout={e => { transportEnd.value = e.nativeEvent.layout.y + e.nativeEvent.layout.height; }}>
           <Tactile
             onPress={() => { tick('light'); setBackNudge(n => n + 1); onSkipBackward(); }}
             hitSlop={12}
@@ -284,6 +310,7 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           </Tactile>
         </View>
 
+        <Animated.View style={lowerStyle} pointerEvents={upNextOpen ? 'none' : 'box-none'}>
         {compact || hideVolume ? null : <VolumeRow />}
 
         <View style={styles.footer}>
@@ -312,13 +339,16 @@ const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
             <MaterialCommunityIcons name="comment-quote-outline" size={24} color={showLyrics ? '#15151a' : INK_SOFT} />
           </Pressable>
         </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Animated.View>
   );
 };
 
+const CONTAINER_PAD_TOP = 40;
+
 const styles = StyleSheet.create({
-  container: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15, paddingTop: 40 },
+  container: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15, paddingTop: CONTAINER_PAD_TOP },
   content: { paddingHorizontal: 28 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   metaText: { flex: 1 },

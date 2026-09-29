@@ -33,7 +33,7 @@ import * as Haptics from '../utils/haptics';
 import appConfig from '../../app.json';
 import { TabScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
-import { AppBackground, LYRICS_SIZE_MAX, LYRICS_SIZE_MIN, LyricsAlign, MiniPlayerBackground, PlayerBackground, useSettingsStore } from '../store/settingsStore';
+import { AppBackground, LYRICS_SIZE_MAX, LYRICS_SIZE_MIN, LyricsAlign, MiniPlayerBackground, PlayerBackground, isCardPlayerBackground, useSettingsStore } from '../store/settingsStore';
 import { CustomAlert } from '../components/CustomAlert';
 import { Toast } from '../components/Toast';
 import ListenTogetherSettings from '../components/settings/ListenTogetherSettings';
@@ -276,6 +276,20 @@ const SettingsScreen: React.FC<Props> = () => {
           />
           {settings.appleMusicInspired ? (
             <Kit.Switch label="Hide volume slider" hint="Keep the phone's volume keys only." value={settings.hidePlayerVolume} onChange={settings.setHidePlayerVolume} />
+          ) : null}
+          <Kit.Switch
+            label="Record"
+            hint="The cover turns into a spinning record. Tap the cover to go full size, double-tap a side to skip 5 seconds."
+            value={settings.playerVinyl}
+            onChange={settings.setPlayerVinyl}
+          />
+          {isCardPlayerBackground(settings.playerBackground) ? (
+            <Kit.Switch
+              label="Full-size cover"
+              hint="The cover runs edge to edge at the top, as in YouTube Music. Tapping the cover switches it too."
+              value={settings.playerCoverFull}
+              onChange={settings.setPlayerCoverFull}
+            />
           ) : null}
           <Choice<PlayerBackground>
             label="Player background"

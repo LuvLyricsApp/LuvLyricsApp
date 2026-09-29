@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Dimensions, View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Artwork from './allegra/Artwork';
 import { isCardPlayerBackground, lyricsTextStyle, useSettingsStore } from '../store/settingsStore';
+import { washAt, youtubeWash } from './allegra/palette';
+import { isCoverFull } from './player/coverStage';
 import { usePlayerStore } from '../store/playerStore';
 import Animated, { EntryAnimationsValues, ExitAnimationsValues, SharedValue, useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
 import { Motion } from '../constants/allegraTheme';
@@ -38,6 +41,62 @@ const stageOut = (_v: ExitAnimationsValues) => {
     animations: { opacity: withTiming(0, t), transform: [{ scale: withTiming(0.92, t) }, { rotate: withTiming('10deg', t) }] as const },
   };
 };
+// Tap the cover: the card grows into the full-bleed cover, or the full cover
+// draws back into a card. No turn — that belongs to the record.
+const growIn = (_v: EntryAnimationsValues) => {
+  'worklet';
+  const t = { duration: 340, easing: Motion.ease.decelerate };
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.9 }] as const },
+    animations: { opacity: withTiming(1, t), transform: [{ scale: withTiming(1, t) }] as const },
+  };
+};
+const shrinkIn = (_v: EntryAnimationsValues) => {
+  'worklet';
+  const t = { duration: 340, easing: Motion.ease.decelerate };
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 1.12 }] as const },
+    animations: { opacity: withTiming(1, t), transform: [{ scale: withTiming(1, t) }] as const },
+  };
+};
+const fadeAway = (_v: ExitAnimationsValues) => {
+  'worklet';
+  const t = { duration: 220, easing: Motion.ease.accelerate };
+  return { initialValues: { opacity: 1 }, animations: { opacity: withTiming(0, t) } };
+};
+
+/** The full-bleed cover's height: YouTube Music's, a little taller than wide, never past 62% of the screen. */
+export const fullCoverHeight = (width: number, height: number): number => Math.round(Math.min(width * 1.15, height * 0.62));
+
+/**
+ * YouTube Music's full cover for the card styles: edge to edge from the top of
+ * the screen, melting at the bottom into the wash behind it.
+ */
+const FullCover: React.FC<{
+  width: number;
+  screenH: number;
+  uri?: string;
+  title: string;
+  artist?: string;
+  primary: string;
+  stageX?: SharedValue<number>;
+}> = ({ width, screenH, uri, title, artist, primary, stageX }) => {
+  const reduce = useReducedMotion();
+  const h = fullCoverHeight(width, screenH);
+  // The wash's own colour where the cover ends, so there is no seam.
+  const meet = washAt(youtubeWash(primary), h / Math.max(1, screenH));
+  const follow = useAnimatedStyle(() => {
+    const x = stageX ? stageX.value : 0;
+    return { opacity: 1 - 0.55 * Math.min(1, Math.abs(x) / Math.max(1, width)), transform: [{ translateX: x }] as const };
+  });
+  return (
+    <Animated.View style={[styles.fullCover, { height: h }, follow]} entering={reduce ? undefined : growIn} exiting={reduce ? undefined : fadeAway} pointerEvents="none">
+      <Artwork uri={uri} title={title} artist={artist} size={Math.max(width, h)} priority="high" continuous style={{ width, height: h }} />
+      <LinearGradient colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0)']} style={[styles.fullShade, { height: Math.round(h * 0.22) }]} />
+      <LinearGradient colors={[`${meet}00`, `${meet}cc`, meet]} locations={[0, 0.6, 1]} style={[styles.fullMelt, { height: Math.round(h * 0.42) }]} />
+    </Animated.View>
+  );
+};
 
 interface NowPlayingLyricsAreaProps {
   showLyrics: boolean;
@@ -58,18 +117,25 @@ interface NowPlayingLyricsAreaProps {
   stageX?: SharedValue<number>;
 }
 
+/**
+ * What the cover stage shows: the backdrop's own full-bleed hero (Apple
+ * styles, nothing drawn here), a full cover of our own (card styles), a
+ * floating card, or the record.
+ */
+type StageMode = 'hero' | 'full' | 'card' | 'vinyl';
+
 /** The cover (or the record it turns into), following a sideways swipe. */
 const Stage: React.FC<{
-  vinyl: boolean;
-  appleInspired: boolean;
+  mode: StageMode;
   width: number;
+  screenH: number;
   paddingTop: number;
   uri?: string;
   title: string;
   artist?: string;
   playing: boolean;
   stageX?: SharedValue<number>;
-}> = ({ vinyl, appleInspired, width, paddingTop, uri, title, artist, playing, stageX }) => {
+}> = ({ mode, width, screenH, paddingTop, uri, title, artist, playing, stageX }) => {
   const reduce = useReducedMotion();
   const focused = useIsFocused();
   const palette = useArtworkPalette(uri);
@@ -80,21 +146,24 @@ const Stage: React.FC<{
     const away = Math.min(1, Math.abs(x) / Math.max(1, width));
     return { opacity: 1 - 0.55 * away, transform: [{ translateX: x }, { scale: 1 - 0.05 * away }] as const };
   });
-  const enter = reduce ? undefined : stageIn;
-  const exit = reduce ? undefined : stageOut;
   return (
-    <View style={[styles.cardArea, { paddingTop }]} pointerEvents="none">
-      <Animated.View style={[{ width: card, height: card, alignItems: 'center', justifyContent: 'center' }, follow]}>
-        {vinyl ? (
-          <Animated.View key="vinyl" entering={enter} exiting={exit} style={styles.stageLayer}>
-            <VinylDisc size={disc} uri={uri} title={title} artist={artist} palette={palette} playing={playing} active={focused} />
-          </Animated.View>
-        ) : appleInspired ? null : (
-          <Animated.View key="card" entering={enter} exiting={exit} style={styles.stageLayer}>
-            <Artwork uri={uri} title={title} artist={artist} size={card} priority="high" continuous style={[styles.card, { width: card, height: card }]} />
-          </Animated.View>
-        )}
-      </Animated.View>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {mode === 'full' ? (
+        <FullCover key="full" width={width} screenH={screenH} uri={uri} title={title} artist={artist} primary={palette.primary} stageX={stageX} />
+      ) : null}
+      <View style={[styles.cardArea, { paddingTop }]}>
+        <Animated.View style={[{ width: card, height: card, alignItems: 'center', justifyContent: 'center' }, follow]}>
+          {mode === 'vinyl' ? (
+            <Animated.View key="vinyl" entering={reduce ? undefined : stageIn} exiting={reduce ? undefined : stageOut} style={styles.stageLayer}>
+              <VinylDisc size={disc} uri={uri} title={title} artist={artist} palette={palette} playing={playing} active={focused} />
+            </Animated.View>
+          ) : mode === 'card' ? (
+            <Animated.View key="card" entering={reduce ? undefined : shrinkIn} exiting={reduce ? undefined : fadeAway} style={styles.stageLayer}>
+              <Artwork uri={uri} title={title} artist={artist} size={card} priority="high" continuous style={[styles.card, { width: card, height: card }]} />
+            </Animated.View>
+          ) : null}
+        </Animated.View>
+      </View>
     </View>
   );
 };
@@ -125,19 +194,23 @@ const NowPlayingLyricsArea: React.FC<NowPlayingLyricsAreaProps> = ({
   const align = songAlign && songAlign !== 'left' ? songAlign : globalAlign;
   const textStyle = React.useMemo(() => lyricsTextStyle(fontSize, lineSpacing, align), [fontSize, lineSpacing, align]);
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  // YouTube Music's player (and our shader wash) always show the artwork as a card.
-  const appleInspired = useSettingsStore(s => s.appleMusicInspired && !isCardPlayerBackground(s.playerBackground));
+  const { width, height: windowH } = useWindowDimensions();
+  const screenH = Math.max(windowH, Dimensions.get('screen').height);
+  // Tapping the cover flips it between full-bleed and a card (coverStage.isCoverFull).
+  const full = useSettingsStore(s => isCoverFull(s.playerBackground, s.appleMusicInspired, s.playerCoverFull));
+  const cardStyle = useSettingsStore(s => isCardPlayerBackground(s.playerBackground));
   if (!showLyrics) {
-    // Apple Music inspired: the cover is drawn full-bleed by the backdrop, so
-    // there is nothing to draw here unless it has become a record.
-    // Off: a floating artwork card, as in Echo's other player design.
-    if (appleInspired && !vinyl) return null;
+    // Apple styles, full: the backdrop draws the cover full-bleed, so there is
+    // nothing to draw here unless it has become a record. The card styles
+    // draw their own full cover over the wash. Otherwise a floating card.
+    const mode: StageMode = vinyl ? 'vinyl' : !full ? 'card' : cardStyle ? 'full' : 'hero';
+    // 'hero' still renders the (empty) stage, so a card or record leaving
+    // plays its exit instead of vanishing with its parent.
     return (
       <Stage
-        vinyl={vinyl}
-        appleInspired={appleInspired}
+        mode={mode}
         width={width}
+        screenH={screenH}
         paddingTop={insets.top + HEADER_CLEARANCE + 24}
         uri={coverImageUri}
         title={songTitle ?? ''}
@@ -185,6 +258,9 @@ const styles = StyleSheet.create({
   cardArea: { alignItems: 'center' },
   stageLayer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   card: { borderRadius: 14, overflow: 'hidden' },
+  fullCover: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
+  fullShade: { position: 'absolute', top: 0, left: 0, right: 0 },
+  fullMelt: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   lyricsFrame: {
     flex: 1,
     // The controls (meta, scrubber, transport) float over the bottom.

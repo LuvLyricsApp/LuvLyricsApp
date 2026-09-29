@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, View, StyleSheet, useWindowDimensions } from 'react-native';
 import * as GestureHandler from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, usePreventRemove } from '@react-navigation/native';
 import Animated, {
   Easing,
@@ -17,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { RootStackScreenProps } from '../types/navigation';
 import { usePlayerStore } from '../store/playerStore';
-import { positionSV, durationSV } from '../playback/positionBus';
+import { positionSV, durationSV, isSeeking } from '../playback/positionBus';
 import { CoverArtSearchScreen } from './CoverArtSearchScreen';
 import { useNowPlayingLogic } from '../hooks/useNowPlayingLogic';
 import NowPlayingBackground from '../components/NowPlayingBackground';
@@ -26,6 +27,7 @@ import NowPlayingLyricsArea, { CONTROLS_CLEARANCE, HEADER_CLEARANCE } from '../c
 import NowPlayingControls from '../components/NowPlayingControls';
 import { navigationRef, safeGoBack } from '../utils/navigationService';
 import { DISMISS_DISTANCE, DISMISS_VELOCITY, takeOpenVelocity } from '../navigation/playerSheet';
+import { shouldCloseSheet } from '../navigation/sheetClose';
 import { playerSheetRest } from '../navigation/tabs';
 import { playerSheetProgress } from '../navigation/sheetProgress';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,8 +35,11 @@ import * as Haptics from '../utils/haptics';
 import { diag } from '../utils/diag';
 import { useCanvasArtwork } from '../hooks/useCanvasArtwork';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useSettingsStore } from '../store/settingsStore';
-import { PlayerSheet, QueueList, SleepTimerList } from '../components/player/PlayerSheet';
+import { isCardPlayerBackground, useSettingsStore } from '../store/settingsStore';
+import { PlayerSheet, SleepTimerList } from '../components/player/PlayerSheet';
+import UpNextPanel from '../components/player/UpNextPanel';
+import SeekRipple, { SeekPulse } from '../components/player/SeekRipple';
+import { isCoverFull, SEEK_STEP_S, seekSide, seekTarget } from '../components/player/coverStage';
 import { sleepLabel, useSleepTimerStore } from '../store/sleepTimerStore';
 import PlayerMenu, { PlayerMenuAction } from '../components/player/PlayerMenu';
 import { SongDetails, TempoPitch } from '../components/player/PlayerExtras';
@@ -153,13 +158,49 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   const [ambient, setAmbient] = useState(false);
   const ambientRef = useRef(false);
   ambientRef.current = ambient;
-  // A sheet over the player (queue, timer, menu…). Swiping down or pressing back
+  // A sheet over the player (timer, menu…). Swiping down or pressing back
   // closes the sheet only; the next swipe or press closes the player.
-  const [sheet, setSheet] = useState<'queue' | 'timer' | 'menu' | 'details' | 'advanced' | 'together' | null>(route.params.sheet ?? null);
+  type Sheet = 'timer' | 'menu' | 'details' | 'advanced' | 'together';
+  const initialSheet = route.params.sheet;
+  const [sheet, setSheet] = useState<Sheet | null>(initialSheet && initialSheet !== 'queue' ? initialSheet : null);
   const sheetRef = useRef(sheet);
   sheetRef.current = sheet;
+
+  // ── Up next: swipe up and the queue rises under the player (YouTube Music) ──
+  // 0 closed .. 1 open. The finger drives it both ways; the title, scrubber and
+  // transport ride up above the panel (NowPlayingControls), the rest fades.
+  const upNext = useSharedValue(0);
+  const [upNextOpen, setUpNextOpen] = useState(false);
+  const [upNextMounted, setUpNextMounted] = useState(false);
+  const upNextRef = useRef(false);
+  upNextRef.current = upNextOpen;
+  const upNextShown = useSharedValue(false);
+  const frameH = useSharedValue(screenH);
+  const [frameHeight, setFrameHeight] = useState(screenH);
+  // The panel's top edge: half the player, so the compact transport keeps its room above it.
+  const upNextTop = Math.round(frameHeight * 0.5);
+  const upNextTravel = Math.max(1, frameHeight - upNextTop);
+
+  const markUpNext = useCallback((open: boolean) => {
+    setUpNextOpen(open);
+    diag('player', `up next ${open ? 'open' : 'closed'}`);
+  }, []);
+  const mountUpNext = useCallback(() => setUpNextMounted(true), []);
+  const openUpNext = useCallback((velocity = 0) => {
+    setUpNextMounted(true);
+    upNextShown.value = true;
+    upNext.value = withSpring(1, { ...SETTLE_SPRING, velocity: -velocity / upNextTravel });
+    markUpNext(true);
+  }, [upNext, upNextShown, upNextTravel, markUpNext]);
+  const closeUpNext = useCallback((velocity = 0) => {
+    upNextShown.value = false;
+    upNext.value = withSpring(0, { ...SETTLE_SPRING, velocity: -Math.max(0, velocity) / upNextTravel });
+    markUpNext(false);
+  }, [upNext, upNextShown, upNextTravel, markUpNext]);
+
   usePreventRemove(holdRoute, () => {
     if (sheetRef.current) setSheet(null);
+    else if (upNextRef.current) closeUpNext(0);
     else if (ambientRef.current) setAmbient(false);
     else animateClose(0);
   });
@@ -167,14 +208,17 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
   // Drag down from anywhere to dismiss. Over the lyrics it only takes over once
   // the list is scrolled to its top — otherwise the drag scrolls the lyrics.
   const lyricsOffset = useSharedValue(0);
+  const showLyricsSV = useSharedValue(false);
   const grabY = useSharedValue(0);
   // The lyrics list owns a drag that starts on it; anywhere else a drag down
   // closes the player, even with the lyrics scrolled.
-  const frameH = useSharedValue(screenH);
   const lyricsTop = insets.top + HEADER_CLEARANCE;
   // Activation is the handler's own (12pt down, native side): a manual
   // activate() from onTouchesMove could land after a quick flick had already
   // lifted, and the flick did nothing.
+  // With Up next open the same drag, started above the panel, lowers the
+  // panel instead (the panel's own pan handles drags that start on it).
+  const dragUpNext = useSharedValue(false);
   const dismissGesture = Gesture.Pan()
     .enabled(!ambient && sheet === null)
     .activeOffsetY(12)
@@ -186,8 +230,13 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         state.fail();
         return;
       }
+      const y = e.allTouches[0] ? e.allTouches[0].y : 0;
+      dragUpNext.value = upNextShown.value;
+      if (upNextShown.value) {
+        if (y > upNextTop) state.fail();
+        return;
+      }
       if (lyricsOffset.value > 2) {
-        const y = e.allTouches[0] ? e.allTouches[0].y : 0;
         if (y > lyricsTop && y < frameH.value - CONTROLS_CLEARANCE) state.fail();
       }
     })
@@ -198,12 +247,21 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     })
     .onUpdate(e => {
       'worklet';
+      if (dragUpNext.value) {
+        upNext.value = Math.min(1, Math.max(0, 1 - e.translationY / upNextTravel));
+        return;
+      }
       const y = grabY.value + e.translationY;
       // Past the top it resists instead of detaching; it never goes below the pill.
       sheetY.value = y >= 0 ? Math.min(y, restY) : rubberBand(y, 120);
     })
     .onEnd(e => {
       'worklet';
+      if (dragUpNext.value) {
+        if (shouldCloseSheet(e.translationY, e.velocityY)) runOnJS(closeUpNext)(e.velocityY);
+        else upNext.value = withSpring(1, SETTLE_SPRING);
+        return;
+      }
       // Decide on where the flick is heading, not where the finger let go.
       const landing = sheetY.value + projectMomentum(e.velocityY);
       const past = landing > screenH * DISMISS_DISTANCE;
@@ -214,6 +272,42 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
         sheetY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
       }
     });
+
+  // Swipe up anywhere but the lyrics list (which scrolls) to bring up Up next.
+  const upNextGesture = Gesture.Pan()
+    .enabled(!ambient && sheet === null && !upNextOpen)
+    .activeOffsetY(-12)
+    .failOffsetY(10)
+    .failOffsetX([-24, 24])
+    .onTouchesDown((e, state) => {
+      'worklet';
+      const y = e.allTouches[0] ? e.allTouches[0].y : 0;
+      if (closing.value || (showLyricsSV.value && y > lyricsTop && y < frameH.value - CONTROLS_CLEARANCE)) state.fail();
+    })
+    .onStart(() => {
+      'worklet';
+      runOnJS(mountUpNext)();
+    })
+    .onUpdate(e => {
+      'worklet';
+      upNext.value = Math.min(1, Math.max(0, -e.translationY / upNextTravel));
+    })
+    .onEnd(e => {
+      'worklet';
+      const landing = upNext.value - projectMomentum(e.velocityY) / upNextTravel;
+      if (landing > 0.4 || e.velocityY < -DISMISS_VELOCITY) {
+        // Set here too, before onFinalize runs on this thread.
+        upNextShown.value = true;
+        runOnJS(openUpNext)(e.velocityY);
+      } else {
+        upNext.value = withSpring(0, SETTLE_SPRING);
+      }
+    })
+    .onFinalize((_e, success) => {
+      'worklet';
+      if (!success && !upNextShown.value && upNext.value > 0) upNext.value = withSpring(0, SETTLE_SPRING);
+    });
+  const playerGesture = Gesture.Race(dismissGesture, upNextGesture);
 
   // The sheet is the pill, grown: pinned at its top edge, as wide as the pill
   // at rest, full width open. It is solid within the first eighth of the
@@ -280,26 +374,61 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // With the lyrics hidden there is nothing to scroll, so a drag always dismisses.
   useEffect(() => {
+    showLyricsSV.value = showLyrics;
     if (!showLyrics) lyricsOffset.value = 0;
-  }, [showLyrics, lyricsOffset]);
+  }, [showLyrics, lyricsOffset, showLyricsSV]);
 
   const canvas = useCanvasArtwork(currentSong);
 
   // ── The cover stage ──────────────────────────────────────────────────────
-  // Swipe the cover sideways for the next or previous song (it follows the
-  // finger, then the new cover arrives from the other side); double-tap it to
-  // turn it into a record and back. Off under lyrics, ambient mode and sheets.
+  // YouTube Music's cover gestures: tap it to go full-bleed (or back to a
+  // card), double-tap the left or right half for 5 seconds back or on, swipe
+  // it sideways for the previous or next song (it follows the finger, then the
+  // new cover arrives from the other side). Off under lyrics, ambient mode,
+  // sheets and Up next (where a tap on the cover just lowers the panel).
   const vinylOn = useSettingsStore(s => s.playerVinyl);
-  const setPlayerVinyl = useSettingsStore(s => s.setPlayerVinyl);
   const stageX = useSharedValue(0);
-  const stageEnabled = !showLyrics && !ambient && sheet === null;
+  const stageEnabled = !showLyrics && !ambient && sheet === null && !upNextOpen;
 
-  const toggleVinyl = useCallback(() => {
+  const toggleCover = useCallback(() => {
+    if (upNextRef.current) {
+      closeUpNext(0);
+      return;
+    }
+    Haptics.selectionAsync().catch(() => {});
+    const s = useSettingsStore.getState();
+    // A record turns back into the cover first.
+    if (s.playerVinyl) {
+      diag('player', 'tap: record -> cover');
+      s.setPlayerVinyl(false);
+      return;
+    }
+    const full = isCoverFull(s.playerBackground, s.appleMusicInspired, s.playerCoverFull);
+    diag('player', `tap: cover ${full ? 'full -> card' : 'card -> full'}`);
+    if (isCardPlayerBackground(s.playerBackground)) s.setPlayerCoverFull(!full);
+    else s.setAppleMusicInspired(!full);
+  }, [closeUpNext]);
+
+  // Double-taps in a row on the same side add up, as on YouTube: 5, 10, 15…
+  const [seekPulse, setSeekPulse] = useState<SeekPulse | null>(null);
+  const seekRun = useRef<{ side: -1 | 1; seconds: number; at: number }>({ side: 1, seconds: 0, at: 0 });
+  const seekBy = useCallback((x: number) => {
+    const side = seekSide(x, windowW);
+    const now = Date.now();
+    const run = seekRun.current;
+    const seconds = run.side === side && now - run.at < 900 ? run.seconds + SEEK_STEP_S : SEEK_STEP_S;
+    seekRun.current = { side, seconds, at: now };
+    const target = seekTarget(positionSV.value, durationSV.value, side * SEEK_STEP_S);
+    diag('player', `double tap ${side < 0 ? 'left' : 'right'}: ${positionSV.value.toFixed(1)}s -> ${target.toFixed(1)}s`);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const next = !useSettingsStore.getState().playerVinyl;
-    diag('player', `double tap: ${next ? 'record' : 'cover'}`);
-    setPlayerVinyl(next);
-  }, [setPlayerVinyl]);
+    setSeekPulse(p => ({ side, seconds, n: (p?.n ?? 0) + 1 }));
+    // The bar jumps at once; handleScrub resumes playback if it was playing.
+    isSeeking.value = true;
+    positionSV.value = target;
+    Promise.resolve(handleScrub(target)).finally(() => {
+      setTimeout(() => { isSeeking.value = false; }, 280);
+    });
+  }, [windowW, handleScrub]);
 
   // dir: -1 = swiped left (next song), 1 = swiped right (previous).
   const swipeSong = useCallback((dir: 1 | -1) => {
@@ -343,15 +472,24 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
       'worklet';
       if (!success) stageX.value = withSpring(0, SETTLE_SPRING);
     });
-  const stageTap = Gesture.Tap()
+  const stageDoubleTap = Gesture.Tap()
     .enabled(stageEnabled)
     .numberOfTaps(2)
     .maxDelay(280)
+    .onEnd((e, success) => {
+      'worklet';
+      if (success) runOnJS(seekBy)(e.x);
+    });
+  // Waits for the double-tap to fail, so a single tap lands ~280ms late —
+  // the price of having both, as on YouTube.
+  const stageTap = Gesture.Tap()
+    .enabled(stageEnabled || upNextOpen)
+    .maxDuration(400)
     .onEnd((_e, success) => {
       'worklet';
-      if (success) runOnJS(toggleVinyl)();
+      if (success) runOnJS(toggleCover)();
     });
-  const stageGesture = Gesture.Race(stagePan, stageTap);
+  const stageGesture = Gesture.Race(stagePan, Gesture.Exclusive(stageDoubleTap, stageTap));
 
   // Tap the artist line to open their page (YouTube Music, Echo style).
   const artistName = currentSong?.artist;
@@ -372,8 +510,9 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     if (linkLyrics) setShowLyrics(true);
   }, [linkLyrics, route.params.songId, setShowLyrics]);
   useEffect(() => {
-    if (linkSheet) setSheet(linkSheet);
-  }, [linkSheet]);
+    if (linkSheet === 'queue') openUpNext(0);
+    else if (linkSheet) setSheet(linkSheet);
+  }, [linkSheet, openUpNext]);
   const closeSheet = useCallback(() => setSheet(null), []);
 
   // The sleep timer's remaining time, refreshed while it runs.
@@ -501,11 +640,23 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [currentSong, updateCurrentSong, addRecentArt, setShowCoverSearch]);
 
+  // Up next: the cover (or lyrics) steps back and the room darkens a little
+  // so the lifted title reads over it.
+  const stageBackStyle = useAnimatedStyle(() => ({ opacity: 1 - 0.75 * upNext.value }));
+  const upNextShadeStyle = useAnimatedStyle(() => ({ opacity: upNext.value }));
+
   return (
     <View style={styles.root}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
-      <GestureDetector gesture={dismissGesture}>
-      <Animated.View style={[styles.container, sheetStyle]} onLayout={e => { frameH.value = e.nativeEvent.layout.height; }}>
+      <GestureDetector gesture={playerGesture}>
+      <Animated.View
+        style={[styles.container, sheetStyle]}
+        onLayout={e => {
+          const h = e.nativeEvent.layout.height;
+          frameH.value = h;
+          if (h > 0) setFrameHeight(h);
+        }}
+      >
         <NowPlayingBackground
           coverImageUri={currentSong?.coverImageUri}
           gradientColors={gradientColors}
@@ -531,7 +682,7 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           onSelect={handleCoverSelect}
         />
 
-        <View style={styles.contentArea}>
+        <Animated.View style={[styles.contentArea, stageBackStyle]}>
           <NowPlayingLyricsArea
             showLyrics={showLyrics}
             processedLyrics={processedLyrics}
@@ -548,16 +699,20 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
             playing={storePlaying}
             stageX={stageX}
           />
-        </View>
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, upNextShadeStyle]}>
+          <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)']} style={StyleSheet.absoluteFill} />
+        </Animated.View>
 
-        {/* Above the cover, below the controls: swipe it sideways to skip, double-tap to turn it into a record. */}
+        {/* Above the cover, below the controls: tap for full-bleed, double-tap a side to seek, swipe sideways to skip. */}
         <GestureDetector gesture={stageGesture}>
           <View
             style={[styles.stageZone, { height: Math.round(screenH * 0.56) }]}
-            pointerEvents={stageEnabled ? 'auto' : 'none'}
+            pointerEvents={stageEnabled || upNextOpen ? 'auto' : 'none'}
             collapsable={false}
           />
         </GestureDetector>
+        <SeekRipple pulse={seekPulse} width={windowW} height={Math.round(screenH * 0.56)} />
 
         <NowPlayingControls
           animatedStyle={animatedStyle}
@@ -578,15 +733,19 @@ const NowPlayingScreen: React.FC<Props> = ({ navigation, route }) => {
           showLyrics={showLyrics}
           compact={showLyrics}
           onMorePress={() => setSheet('menu')}
-          onOpenQueue={() => setSheet('queue')}
+          onOpenQueue={() => openUpNext(0)}
           onOpenTimer={() => setSheet('timer')}
           sleepLabel={sleepText}
           onArtistPress={openArtist}
+          upNext={upNext}
+          upNextTop={upNextTop}
+          upNextOpen={upNextOpen}
         />
 
-        <PlayerSheet visible={sheet === 'queue'} title="Playing next" onClose={closeSheet}>
-          <QueueList onPicked={closeSheet} />
-        </PlayerSheet>
+        {upNextMounted ? (
+          <UpNextPanel progress={upNext} top={upNextTop} frameH={frameHeight} open={upNextOpen} onClose={closeUpNext} onNotice={say} />
+        ) : null}
+
         <PlayerSheet visible={sheet === 'timer'} title="Sleep timer" onClose={closeSheet}>
           <SleepTimerList onPicked={closeSheet} />
         </PlayerSheet>
