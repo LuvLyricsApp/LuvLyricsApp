@@ -18,13 +18,11 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import MusicFlowField, { AuraMood } from './MusicFlowField';
 import { AuraPalette } from './palette';
 import { Motion } from '../../constants/allegraTheme';
-import { isLowEndDevice } from '../../utils/performanceTier';
 import { useSettingsStore } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import GlassRoom from './GlassRoom';
 import GlowRoom from './GlowRoom';
 
-const LOW_END = isLowEndDevice();
 /** Paused, the field rests but still carries the cover's colour. */
 const PAUSED_FIELD = 0.5;
 
@@ -95,8 +93,8 @@ const ShaderRoom: React.FC<DynamicAuraProps> = ({ palette, playing = false, acti
       </Svg>
 
       <Animated.View style={[StyleSheet.absoluteFill, fieldStyle]}>
-        {/* Low-end phones let the field rest while music is paused. */}
-        <MusicFlowField palette={palette} energy={playing ? 0.72 : 0.12} mood={mood} paused={!active || (LOW_END && !playing)} width={width} height={height} />
+        {/* The visual budget lets the field rest while music is paused on low-end phones and in Battery Saver. */}
+        <MusicFlowField palette={palette} energy={playing ? 0.72 : 0.12} mood={mood} paused={!active} width={width} height={height} />
       </Animated.View>
 
       <LinearGradient

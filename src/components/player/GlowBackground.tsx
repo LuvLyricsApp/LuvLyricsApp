@@ -9,23 +9,20 @@
  *   - each glow's centre and radius drift on a sine: oscillate(min, max, phase)
  *   - a new song's palette cross-fades in over 1200ms (Echo's AnimatedContent)
  *
- * Drawn with Skia; only the gradient uniforms change per frame. Old phones
- * step it at 30fps (performanceTier), and it stops when `active` is false.
+ * Drawn with Skia; only the gradient uniforms change per frame. The frame cap,
+ * canvas density and rest rule come from the visual budget (device tier,
+ * Battery Saver, playback), and it stops when `active` is false.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { LayoutChangeEvent, PixelRatio, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Canvas, Fill, RadialGradient, Rect, vec } from '@shopify/react-native-skia';
 import { Easing, useDerivedValue, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
-import { isLowEndDevice } from '../../utils/performanceTier';
+import { useVisualBudget } from '../../hooks/useVisualBudget';
 
 import { Blob, BASE, CYCLE_S, FADE_MS, MINI_BLOBS, oscillate, PLAYER_BLOBS, rgba, rotatedColorAt, toRgb } from './glowMath';
 
-const LOW_END = isLowEndDevice();
-const FRAME_S = LOW_END ? 1 / 30 : 0;
 /** Surfaces bigger than this (points squared) are drawn at a reduced size. */
 const LARGE_AREA = 90_000;
-/** About one device pixel per point (0.6 on low-end phones), never more than half size. */
-const RENDER_SCALE = Math.min(0.5, (LOW_END ? 0.6 : 1) / PixelRatio.get());
 
 const styles = StyleSheet.create({
   clip: { overflow: 'hidden' },
@@ -86,25 +83,31 @@ const GlowBackground: React.FC<GlowBackgroundProps> = ({ colors, variant = 'play
   }, [palette, from, to, mix]);
 
   // progress: 0→1 every 20s, linear, restarting (Echo's infiniteRepeatable tween).
+  const budget = useVisualBudget();
+  const minStep = useSharedValue(budget.minStepSeconds);
+  useEffect(() => {
+    minStep.value = budget.minStepSeconds;
+  }, [budget.minStepSeconds, minStep]);
   const progress = useSharedValue(0);
   const pending = useSharedValue(0);
   const frame = useFrameCallback(info => {
     'worklet';
     pending.value += Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
-    if (pending.value < FRAME_S) return;
+    if (pending.value < minStep.value) return;
     progress.value = (progress.value + pending.value / CYCLE_S) % 1;
     pending.value = 0;
   }, false);
+  const running = active && budget.running;
   useEffect(() => {
-    frame.setActive(active);
-  }, [active, frame]);
+    frame.setActive(running);
+  }, [running, frame]);
 
   const blobs = variant === 'mini' ? MINI_BLOBS : PLAYER_BLOBS;
   const { width, height } = size;
   // The glows are soft gradients, so a big surface is drawn small and scaled up
   // (about one device pixel per point): six full-screen radial gradients redrawn
   // every frame under the lyrics were the heaviest thing on the GPU there.
-  const scale = width * height > LARGE_AREA ? RENDER_SCALE : 1;
+  const scale = width * height > LARGE_AREA ? budget.renderScale : 1;
   const cw = Math.max(1, Math.round(width * scale));
   const ch = Math.max(1, Math.round(height * scale));
   return (

@@ -11,7 +11,7 @@
  * soft by design, and that keeps the fragment cost flat across screen densities.
  */
 import React, { useEffect, useMemo } from 'react';
-import { PixelRatio, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
 import {
   useDerivedValue,
@@ -22,7 +22,7 @@ import {
 } from 'react-native-reanimated';
 import { Motion } from '../../constants/allegraTheme';
 import { AuraPalette, hexToRgb } from './palette';
-import { isLowEndDevice } from '../../utils/performanceTier';
+import { useVisualBudget } from '../../hooks/useVisualBudget';
 
 const SKSL = `
 uniform float2 uResolution;
@@ -134,17 +134,9 @@ half4 main(float2 fragCoord) {
 const effect = Skia.RuntimeEffect.Make(SKSL);
 if (!effect && __DEV__) console.warn('[MusicFlowField] SkSL failed to compile');
 
-const LOW_END = isLowEndDevice();
-
-/**
- * Canvas renders at this fraction of the view, then scales up. Skia draws at
- * the screen's pixel density, so a fixed fraction cost 2.25x more on a 3x
- * phone than a 2x one. Budget device pixels per point instead: about one
- * (0.6 on low-end phones) — the field is soft, so nobody sees the difference.
- */
-const RENDER_SCALE = Math.min(0.5, (LOW_END ? 0.6 : 1) / PixelRatio.get());
-/** Low-end phones draw the field at 30fps; the motion is slow enough to hide it. */
-const FRAME_S = LOW_END ? 1 / 30 : 0;
+// How often it redraws and at what density is not decided here: the visual
+// budget (hooks/useVisualBudget) sets the frame cap, the canvas scale and
+// whether the field rests, from the device tier, Battery Saver and playback.
 
 export type AuraMood = 'energy' | 'chill' | 'different' | 'surprise';
 const MOOD_VALUE: Record<AuraMood, number> = { energy: 0.2, chill: 1.0, different: 2.0, surprise: 3.0 };
@@ -175,6 +167,11 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   const width = widthProp ?? window.width;
   const height = heightProp ?? window.height;
   const reduceMotion = useReducedMotion();
+  const budget = useVisualBudget();
+  const minStep = useSharedValue(budget.minStepSeconds);
+  useEffect(() => {
+    minStep.value = budget.minStepSeconds;
+  }, [budget.minStepSeconds, minStep]);
 
   const clock = useSharedValue(1.6);
   const shownEnergy = useSharedValue(energy);
@@ -189,7 +186,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
   const colors = useSharedValue(target);
   const targetColors = useSharedValue(target);
 
-  const running = !paused && !reduceMotion;
+  const running = !paused && !reduceMotion && budget.running;
   useEffect(() => {
     targetColors.value = target;
     // The per-frame easing only runs while frames do. When the field is
@@ -207,7 +204,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
     'worklet';
     // Clamped step: a stall or a trip to the background never makes time leap.
     pending.value += Math.min(info.timeSincePreviousFrame ?? 16, 66) / 1000;
-    if (pending.value < FRAME_S) return; // no uniform write = no redraw this frame
+    if (pending.value < minStep.value) return; // no uniform write = no redraw this frame
     const dt = Math.min(pending.value, 0.066);
     pending.value = 0;
     clock.value += dt;
@@ -231,8 +228,9 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
     if (!running) colors.value = targetColors.value;
   }, [running, frame, colors, targetColors]);
 
-  const renderW = Math.max(1, Math.round(width * RENDER_SCALE));
-  const renderH = Math.max(1, Math.round(height * RENDER_SCALE));
+  const renderScale = budget.renderScale;
+  const renderW = Math.max(1, Math.round(width * renderScale));
+  const renderH = Math.max(1, Math.round(height * renderScale));
   const ribs = width / Math.min(64, Math.max(30, width * 0.032));
   const moodValue = MOOD_VALUE[mood];
 
@@ -263,7 +261,7 @@ export const MusicFlowField: React.FC<MusicFlowFieldProps> = ({
           transform: [
             { translateX: (width - renderW) / 2 },
             { translateY: (height - renderH) / 2 },
-            { scale: 1 / RENDER_SCALE },
+            { scale: 1 / renderScale },
             ...(inverted ? [{ scaleY: -1 }] : []),
           ],
         }}
