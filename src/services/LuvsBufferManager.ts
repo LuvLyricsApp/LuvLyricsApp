@@ -151,12 +151,13 @@ class LuvsBufferManager {
    * next). Addressed by URL on Android, so moving between lanes never plays
    * the wrong song from a stale index.
    */
-  async activate(song: UnifiedSong, warm: UnifiedSong[], shouldPlay: boolean = true) {
+  async activate(song: UnifiedSong, warm: UnifiedSong[], shouldPlay: boolean = true, startAtHook: boolean = false) {
     const url = song.streamUrl || song.downloadUrl || '';
     if (!url) return;
     if (Platform.OS === 'android' && LuvsPlayerModule?.activateUrl) {
       const warmUrls = warm.map(s => s.streamUrl || s.downloadUrl || '').filter(Boolean);
-      await LuvsPlayerModule.activateUrl(url, warmUrls, shouldPlay);
+      // On Android the player opens the clip on its hook itself, from the real length.
+      await LuvsPlayerModule.activateUrl(url, warmUrls, shouldPlay, startAtHook);
       return;
     }
     // Index-keyed pools (iOS, an older Android build): start a fresh list each time.

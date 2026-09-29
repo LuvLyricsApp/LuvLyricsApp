@@ -15,7 +15,7 @@
  * player is hidden here (RootNavigator), and the library player yields.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Share, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Share, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -212,9 +212,12 @@ const LuvsScreen: React.FC = () => {
     silenceMain();
     setPlaying(true);
     const warm = warmAround(explorerLanes, laneIndex, depths).filter(s => !isPlaceholder(s));
-    luvsBufferManager.activate(song, warm, true)
+    const atHook = useSettingsStore.getState().luvsStartAtHook;
+    luvsBufferManager.activate(song, warm, true, atHook)
       .then(() => {
-        if (!useSettingsStore.getState().luvsStartAtHook) return;
+        // Android opens the clip on its hook inside the player (it knows the real
+        // length). Elsewhere it seeks from the catalogue's duration, when it has one.
+        if (!atHook || Platform.OS === 'android') return;
         if (watching.current?.song.id !== song.id) return;
         const offset = hookOffsetSeconds(song.duration);
         if (offset > 0) luvsBufferManager.seekTo(offset * 1000);

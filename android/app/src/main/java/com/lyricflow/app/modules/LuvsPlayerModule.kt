@@ -4,12 +4,18 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.*
+
+private const val HOOK_MIN_SECONDS = 90.0
+private const val HOOK_FRACTION = 0.3
+private const val HOOK_EARLIEST = 25.0
+private const val HOOK_LATEST = 70.0
 
 class LuvsPlayerModule : Module() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -126,7 +132,7 @@ class LuvsPlayerModule : Module() {
          * swipe can reach next. Everything else is released. Players already
          * warm start instantly.
          */
-        AsyncFunction("activateUrl") { url: String, warm: List<String>, shouldPlay: Boolean ->
+        AsyncFunction("activateUrl") { url: String, warm: List<String>, shouldPlay: Boolean, startAtHook: Boolean ->
             scope.launch {
                 activePlayer()?.pause()
                 stopStatusPoller()
@@ -143,6 +149,10 @@ class LuvsPlayerModule : Module() {
                 }
                 if (shouldPlay) {
                     player.seekTo(0)
+                    // The clip opens on its hook. The player knows the real length
+                    // once it is ready; the catalogue's duration is often missing,
+                    // which used to leave every clip at 0:00.
+                    if (startAtHook) seekToHookWhenKnown(player)
                     player.play()
                     startStatusPoller(player)
                 }
@@ -181,6 +191,31 @@ class LuvsPlayerModule : Module() {
                 activePlayer()?.seekTo(millis.toLong())
             }
         }
+    }
+
+    /**
+     * Moves a clip to its hook once its real length is known. Kept in step with
+     * services/luvsHook.ts: songs under 90s start from the top, otherwise about
+     * 30% in, clamped to 25–70 seconds so intros are skipped and the hook is
+     * never overshot on a long track.
+     */
+    private fun seekToHookWhenKnown(player: ExoPlayer) {
+        fun apply(): Boolean {
+            val duration = player.duration
+            if (duration == C.TIME_UNSET || duration <= 0) return false
+            val seconds = duration / 1000.0
+            if (seconds >= HOOK_MIN_SECONDS) {
+                val target = Math.round((seconds * HOOK_FRACTION).coerceIn(HOOK_EARLIEST, HOOK_LATEST))
+                player.seekTo(target * 1000L)
+            }
+            return true
+        }
+        if (apply()) return
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY && apply()) player.removeListener(this)
+            }
+        })
     }
 
     private fun createPlayerForUrl(url: String): ExoPlayer {
