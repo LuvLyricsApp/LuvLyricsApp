@@ -1,4 +1,4 @@
-import { createNavigationContainerRef } from '@react-navigation/native';
+import { createNavigationContainerRef, StackActions } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -27,4 +27,17 @@ export function safeGoBack(navigation?: BackCapable | null): void {
   // Nothing left to pop — drop onto the tab shell.
   if (navigationRef.canGoBack()) navigationRef.goBack();
   else navigationRef.navigate('Main');
+}
+
+/**
+ * Opens a tab from anywhere, including over the full-screen player. Pops back
+ * to the tab shell first: a plain navigate makes React Navigation 7 push a
+ * second Main over an open player, which stays mounted underneath and keeps
+ * the mini pill faded out, and navigate with `pop` goes back but drops the
+ * nested tab.
+ */
+export function openMainTab(params: NonNullable<RootStackParamList['Main']>): void {
+  const root = navigationRef.getRootState();
+  if (root && root.routes[root.index]?.name !== 'Main') navigationRef.dispatch(StackActions.popTo('Main'));
+  navigationRef.navigate('Main', params);
 }

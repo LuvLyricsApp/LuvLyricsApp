@@ -19,7 +19,7 @@
  */
 import { useEffect } from 'react';
 import { Linking } from 'react-native';
-import { navigationRef } from '../utils/navigationService';
+import { navigationRef, openMainTab } from '../utils/navigationService';
 import { searchOfficial } from '../services/stream/officialSearch';
 import { StreamService } from '../services/stream/StreamService';
 import { usePlayerStore } from '../store/playerStore';
@@ -82,17 +82,13 @@ const handle = async (url: string | null) => {
   }
   if (link.action.startsWith('open/')) {
     const target = link.action.slice(5);
-    // `pop` goes back to the tab shell. Without it React Navigation 7 pushes a
-    // second Main over an open player, which stays mounted underneath and keeps
-    // the mini pill faded out as if the sheet were still up.
-    const pop = { pop: true };
     switch (target) {
-      case 'stream': navigationRef.navigate('Main', { screen: 'Stream' }, pop); break;
-      case 'luvs': navigationRef.navigate('Main', { screen: 'Luvs' }, pop); break;
-      case 'library': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'LibraryHome' } }, pop); break;
-      case 'playlists': navigationRef.navigate('Main', { screen: 'Library', params: { screen: 'Playlists' } }, pop); break;
-      case 'search': navigationRef.navigate('Main', { screen: 'Search' }, pop); break;
-      case 'settings': navigationRef.navigate('Main', { screen: 'Settings' }, pop); break;
+      case 'stream': openMainTab({ screen: 'Stream' }); break;
+      case 'luvs': openMainTab({ screen: 'Luvs' }); break;
+      case 'library': openMainTab({ screen: 'Library', params: { screen: 'LibraryHome' } }); break;
+      case 'playlists': openMainTab({ screen: 'Library', params: { screen: 'Playlists' } }); break;
+      case 'search': openMainTab({ screen: 'Search' }); break;
+      case 'settings': openMainTab({ screen: 'Settings' }); break;
       default: break;
     }
   }
