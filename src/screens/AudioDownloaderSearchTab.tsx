@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_CLEARANCE } from '../navigation/tabs';
 
 import { Glass, Radius, Signal, Space } from '../constants/allegraTheme';
 import { Tactile } from '../components/allegra/motion';
@@ -36,28 +38,16 @@ interface ScrollableHeaderProps {
     setActiveTab: (id: string) => void;
     closeTab: (id: string) => void;
     createTab: (query: string) => void;
-    selectionMode: boolean;
-    setSelectionMode: (mode: boolean) => void;
     activeTabMode: 'search' | 'bulk';
     updateTab: (id: string, updates: Partial<SearchTabState>) => void;
 }
 
 const ScrollableHeader: React.FC<ScrollableHeaderProps> = memo(({
     tabs, activeTabId, setActiveTab, closeTab, createTab,
-    selectionMode, setSelectionMode, activeTabMode, updateTab
+    activeTabMode, updateTab
 }) => {
     return (
     <View style={styles.toolbarRow}>
-        <Tactile
-            onPress={() => { Haptics.selectionAsync().catch(() => {}); setSelectionMode(!selectionMode); }}
-            pressScale={0.9}
-            accessibilityRole="button"
-            accessibilityLabel={selectionMode ? 'Stop selecting' : 'Select several songs'}
-            style={[styles.microBtn, selectionMode && styles.microBtnActive]}
-        >
-            <Ionicons name={selectionMode ? 'checkmark-circle' : 'checkmark-circle-outline'} size={18} color={selectionMode ? Signal.waveInk : Signal.inkSoft} />
-        </Tactile>
-
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -156,9 +146,10 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
     const selectedCount = (activeTab.selectedSongs ?? []).length;
     const readyBulkCount = (activeTab.bulkItems ?? []).filter(i => i.result !== null).length;
 
+    const insets = useSafeAreaInsets();
+
     // --- Local state ---
     const [searchMode, setSearchMode] = useState<'title' | 'artist'>('title');
-    const [selectionMode, setSelectionMode] = useState(false);
     const [jsonInput, setJsonInput] = useState('');
     const [remixSectionExpanded, setRemixSectionExpanded] = useState(false);
     const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
@@ -170,8 +161,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     // --- Refs ---
     const previewSoundRef = useRef<AudioPlayer | null>(null);
-    const downloadContextRef = useRef<'single' | 'selected' | 'bulk'>('single');
-    const pendingSingleRef = useRef<UnifiedSong | null>(null);
+    const downloadContextRef = useRef<'selected' | 'bulk'>('selected');
     const hasAutoSearchedRef = useRef(false);
     const hasAutoDownloadedRef = useRef(false);
 
@@ -226,18 +216,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
         } catch {}
     }, [playingPreviewId]);
 
+    // A tap anywhere on a result ticks it; the bar at the bottom downloads what is ticked.
     const handlePress = useCallback((item: UnifiedSong) => {
-        if (selectionMode || (activeTab.selectedSongs ?? []).length > 0) {
-            useDownloaderTabStore.getState().toggleSelection(activeTabId, item.id);
-        } else {
-            downloadContextRef.current = 'single';
-            pendingSingleRef.current = item;
-            setPlaylistModalVisible(true);
-        }
-    }, [selectionMode, activeTab.selectedSongs, activeTabId]);
-
-    const handleLongPress = useCallback((item: UnifiedSong) => {
-        setSelectionMode(true);
+        Haptics.selectionAsync().catch(() => {});
         useDownloaderTabStore.getState().toggleSelection(activeTabId, item.id);
     }, [activeTabId]);
 
@@ -260,10 +241,6 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
             const selected = getSelectedSongs();
             addToQueue(selected.map(s => s.song), playlistId);
             clearAllSelections();
-            setSelectionMode(false);
-        } else if (ctx === 'single' && pendingSingleRef.current) {
-            addToQueue([pendingSingleRef.current], playlistId);
-            pendingSingleRef.current = null;
         } else if (ctx === 'bulk') {
             const songs = (activeTab.bulkItems ?? []).filter(i => i.result !== null).map(i => i.result!);
             addToQueue(songs, playlistId);
@@ -358,7 +335,6 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
     const sharedHeaderProps = {
         tabs, activeTabId, setActiveTab, closeTab, createTab,
-        selectionMode, setSelectionMode,
         activeTabMode: activeTab.mode,
         updateTab,
     };
@@ -565,10 +541,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                             isSelected={activeTab.selectedSongs.includes(item.id)}
                                             isPlayingPreview={playingPreviewId === item.id}
                                             onPress={() => handlePress(item)}
-                                            onLongPress={() => handleLongPress(item)}
                                             onPlayPress={() => handlePreviewToggle(item)}
                                             onArtistPress={() => openArtistTab(item.artist)}
-                                            selectionMode={selectionMode || activeTab.selectedSongs.length > 0}
+                                            selectionMode
                                         />
                                     </View>
                                 );
@@ -588,10 +563,9 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                                     isSelected={activeTab.selectedSongs.includes(item.id)}
                                     isPlayingPreview={playingPreviewId === item.id}
                                     onPress={() => handlePress(item)}
-                                    onLongPress={() => handleLongPress(item)}
                                     onPlayPress={() => handlePreviewToggle(item)}
                                     onArtistPress={() => openArtistTab(item.artist)}
-                                    selectionMode={selectionMode || activeTab.selectedSongs.length > 0}
+                                    selectionMode
                                 />
                             )}
                         />
@@ -607,7 +581,7 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
                             <Text style={styles.emptyText}>
                                 {activeTab.status
                                     ? 'Try the artist as well as the title, or check the spelling.'
-                                    : 'Search by title or artist. Tap a result to download it, or press and hold to pick several.'}
+                                    : 'Search by title or artist. Tap results to pick them, then download.'}
                             </Text>
                         </View>
                     </ScrollView>
@@ -616,7 +590,8 @@ export const AudioDownloaderSearchTab = memo(({ autoSearchQuery, autoDownload, o
 
             {/* Selection action bar */}
             {selectedCount > 0 && (
-                <View style={styles.actionBar}>
+                // Above the floating tab bar, not under it.
+                <View style={[styles.actionBar, { bottom: TAB_BAR_CLEARANCE + insets.bottom + 8 }]}>
                     <Text style={styles.selectionText}>{selectedCount} selected</Text>
                     <PrimaryButton icon="arrow-down" label="Download" onPress={handleBatchDownload} compact />
                     <Tactile onPress={clearAllSelections} hitSlop={8} pressScale={0.9} accessibilityRole="button" accessibilityLabel="Clear the selection" style={styles.clearBtn}>
@@ -712,7 +687,7 @@ const styles = StyleSheet.create({
     emptyText: { color: Signal.inkMuted, marginTop: 6, fontSize: 14, lineHeight: 20, textAlign: 'center' },
     // The floating bar over the results: how many, and the one thing to do next.
     actionBar: {
-        position: 'absolute', bottom: 24, left: Space.lg, right: Space.lg,
+        position: 'absolute', left: Space.lg, right: Space.lg,
         backgroundColor: Glass.fillHeavy, borderRadius: Radius.pill,
         flexDirection: 'row', alignItems: 'center', gap: 8,
         paddingVertical: 8, paddingLeft: 20, paddingRight: 8,
