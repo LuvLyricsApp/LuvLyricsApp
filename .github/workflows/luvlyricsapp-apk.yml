@@ -80,12 +80,12 @@ jobs:
           EXPO_PUBLIC_GENIUS_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_GENIUS_ACCESS_TOKEN }}
         # gradlew was committed without the executable bit. gradle.properties
         # caps the JVM at 2 GB, which leaves R8 (minify) thrashing; runners have
-        # 16 GB. Both ABIs: arm64 for modern phones, armeabi-v7a for older and
-        # Android Go phones that run a 32-bit system.
+        # 16 GB. arm64 only: the 32-bit armeabi-v7a copy of every native
+        # library added 23.5 MB for phones that run a 32-bit system.
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon \
-            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -PreactNativeArchitectures=arm64-v8a \
             "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
 
       - name: Collect APK
