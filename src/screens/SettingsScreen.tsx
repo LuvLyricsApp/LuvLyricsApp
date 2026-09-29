@@ -1,6 +1,7 @@
 /**
- * Settings, in Allegra's language: one scrolling page of frosted sections
- * (components/settings/SettingsKit) over the live shader, with jump chips.
+ * Settings, in Allegra's language: one scrolling page of dark sections
+ * (components/settings/SettingsKit) in a dark room with the song's glow
+ * behind the title (components/settings/SettingsGlow), with jump chips.
  * Every control here changes something.
  */
 
@@ -20,9 +21,9 @@ import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { LayoutChangeEvent } from 'react-native';
-import DynamicAura from '../components/allegra/DynamicAura';
+import SettingsGlow from '../components/settings/SettingsGlow';
 import { useArtworkPalette } from '../components/allegra/useArtworkPalette';
 import * as Kit from '../components/settings/SettingsKit';
 import { Action, Choice, JumpChips, Row, Section } from '../components/settings/SettingsKit';
@@ -206,10 +207,9 @@ const SettingsScreen: React.FC<Props> = () => {
     }
   }, [pairingPayloadText]);
 
-  // Allegra's shell: the live shader in the playing cover's colours behind
-  // frosted section panels, jump chips that stay under the status bar.
-  const isFocused = useIsFocused();
-  const isPlaying = usePlayerStore(state => state.isPlaying);
+  // A dark room with one glow of the playing cover's colour behind the title
+  // (SettingsGlow), dark panels, jump chips that stay under the status bar.
+  const hasSong = usePlayerStore(state => !!state.currentSongId);
   const palette = useArtworkPalette(playerCurrentCover);
   const scrollRef = React.useRef<ScrollView>(null);
   const sectionY = React.useRef<Record<string, number>>({});
@@ -236,7 +236,7 @@ const SettingsScreen: React.FC<Props> = () => {
 
   return (
     <View style={styles.container}>
-      <DynamicAura palette={palette} playing={isPlaying} active={isFocused} dim={0.35} />
+      <SettingsGlow palette={hasSong ? palette : null} />
       <ScrollView
         ref={scrollRef}
         stickyHeaderIndices={[1]}
@@ -277,12 +277,6 @@ const SettingsScreen: React.FC<Props> = () => {
           {settings.appleMusicInspired ? (
             <Kit.Switch label="Hide volume slider" hint="Keep the phone's volume keys only." value={settings.hidePlayerVolume} onChange={settings.setHidePlayerVolume} />
           ) : null}
-          <Kit.Switch
-            label="Record"
-            hint="The cover turns into a spinning record. Tap the cover to go full size, double-tap a side to skip 5 seconds."
-            value={settings.playerVinyl}
-            onChange={settings.setPlayerVinyl}
-          />
           {isCardPlayerBackground(settings.playerBackground) ? (
             <Kit.Switch
               label="Full-size cover"

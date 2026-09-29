@@ -2,8 +2,8 @@
  * Settings building blocks in Allegra's language (allegra/DESIGN.md §3–5 and
  * apps/web/src/components/SettingsPage.tsx):
  *
- *   Section — one frosted glass panel (24 radius, hairline, top highlight)
- *             with a round chartreuse-tinted icon, a title and a one-line lead
+ *   Section — one dark glass panel (22 radius, hairline, light along the top
+ *             edge) with a chartreuse icon tile, a title and a one-line lead
  *   Row     — label + plain hint on the left, the control on the right,
  *             hairline dividers between rows
  *   Switch  — chartreuse track when on, the thumb slides by transform
@@ -15,8 +15,9 @@
 import React, { useEffect } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, interpolateColor } from 'react-native-reanimated';
-import { Glass, Motion, Radius, Signal } from '../../constants/allegraTheme';
+import { Motion, Radius, Signal } from '../../constants/allegraTheme';
 import * as Haptics from '../../utils/haptics';
 import { choiceColumns } from './choiceLayout';
 
@@ -30,9 +31,16 @@ export const Section: React.FC<{
   children: React.ReactNode;
 }> = ({ icon, title, lead, onLayout, children }) => (
   <View style={styles.section} onLayout={onLayout}>
-    <View style={styles.sectionHighlight} pointerEvents="none" />
+    {/* Light along the top edge, brightest in the middle. */}
+    <LinearGradient
+      colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.sectionHighlight}
+      pointerEvents="none"
+    />
     <View style={styles.head}>
-      <View style={styles.headIcon}><Ionicons name={icon} size={18} color={Signal.ink} /></View>
+      <View style={styles.headIcon}><Ionicons name={icon} size={18} color={Signal.wave} /></View>
       <View style={styles.flex}>
         <Text style={styles.headTitle} accessibilityRole="header">{title}</Text>
         <Text style={styles.headLead}>{lead}</Text>
@@ -60,7 +68,7 @@ export const Switch: React.FC<{ label: string; hint?: string; value: boolean; on
   useEffect(() => {
     on.value = withSpring(value ? 1 : 0, Motion.spring.tactile);
   }, [value, on]);
-  const track = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(on.value, [0, 1], ['rgba(244,241,234,0.14)', Signal.wave]) }));
+  const track = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(on.value, [0, 1], ['rgba(255,255,255,0.12)', Signal.wave]) }));
   const thumb = useAnimatedStyle(() => ({
     transform: [{ translateX: on.value * (TRACK_W - THUMB - 8) }],
     backgroundColor: interpolateColor(on.value, [0, 1], ['#ffffff', Signal.waveInk]),
@@ -163,25 +171,35 @@ export const FadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  // Dark glass on a dark room: a whisper of white over black, a hairline edge
+  // and light along the top — depth from light, not from grey fill.
   section: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 4,
-    borderRadius: 24,
-    backgroundColor: Glass.fill,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Glass.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
     overflow: 'hidden',
   },
-  // Allegra's inset top highlight on glass.
-  sectionHighlight: { position: 'absolute', top: 0, left: 24, right: 24, height: StyleSheet.hairlineWidth, backgroundColor: Glass.highlight },
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingBottom: 12 },
-  headIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(217, 230, 106, 0.18)' },
-  headTitle: { color: Signal.ink, fontSize: 18, fontWeight: '700' },
+  sectionHighlight: { position: 'absolute', top: 0, left: 0, right: 0, height: 1 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 14 },
+  headIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(217, 230, 106, 0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(217, 230, 106, 0.28)',
+  },
+  headTitle: { color: Signal.ink, fontSize: 18, fontWeight: '700', letterSpacing: -0.2 },
   headLead: { color: Signal.inkMuted, fontSize: 13, marginTop: 2 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Glass.hairline },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255, 255, 255, 0.07)' },
   rowStack: { flexDirection: 'column', alignItems: 'stretch', gap: 12 },
   copy: { gap: 3 },
   label: { color: Signal.ink, fontSize: 15, fontWeight: '600' },
@@ -193,19 +211,19 @@ const styles = StyleSheet.create({
   track: { width: TRACK_W, height: 28, borderRadius: 14, padding: 4, justifyContent: 'center' },
   thumb: { width: THUMB, height: THUMB, borderRadius: THUMB / 2 },
   // Segmented: 38pt pills 4pt inside the box, so the box's radius is 19 + 4 = 23.
-  choice: { padding: 4, borderRadius: 23, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  choice: { padding: 4, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.08)' },
   choiceRow: { flexDirection: 'row', gap: 4 },
   // Grid: each option is its own pill.
   choiceGrid: { gap: 8 },
   choiceGridRow: { flexDirection: 'row', gap: 8 },
   choiceOption: { flex: 1, flexBasis: 0, minHeight: 38, paddingHorizontal: 10, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  choiceChip: { minHeight: 42, backgroundColor: 'rgba(244,241,234,0.06)', borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairlineStrong },
+  choiceChip: { minHeight: 42, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   choicePad: { flex: 1, flexBasis: 0 },
   choiceOptionOn: { backgroundColor: Signal.wave },
   choiceText: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600' },
   choiceTextOn: { color: Signal.waveInk },
   pressed: { opacity: 0.75 },
   jump: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingVertical: 8 },
-  jumpChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: Radius.pill, justifyContent: 'center', backgroundColor: Glass.fillHeavy, borderWidth: StyleSheet.hairlineWidth, borderColor: Glass.hairline },
+  jumpChip: { minHeight: 36, paddingHorizontal: 15, borderRadius: Radius.pill, justifyContent: 'center', backgroundColor: 'rgba(22, 22, 25, 0.88)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   jumpText: { color: Signal.inkSoft, fontSize: 13, fontWeight: '600' },
 });
