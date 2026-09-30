@@ -1,4 +1,4 @@
-import { CommonActions, createNavigationContainerRef } from '@react-navigation/native';
+import { createNavigationContainerRef } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -29,25 +29,39 @@ export function safeGoBack(navigation?: BackCapable | null): void {
   else navigationRef.navigate('Main');
 }
 
+type MainParams = NonNullable<RootStackParamList['Main']>;
+
+/** A tab asked for over the player, opened once Main is on top again. */
+let pendingTab: { params: MainParams; until: number } | null = null;
+let stopWatching: (() => void) | null = null;
+
 /**
  * Opens a tab from anywhere, including over the full-screen player.
  *
- * Over the player, the tab changes underneath it and the player is asked to
- * close. The player blocks its own removal (`usePreventRemove`) to animate
- * out, so popping to Main and then navigating left the old tab showing once it
- * had gone; a plain navigate pushed a second Main over it instead, keeping the
- * mini pill faded out.
+ * Over the player, the player is asked to close (like the back button) and
+ * the tab opens once Main is on top again. The player blocks its own removal
+ * (`usePreventRemove`) to animate out, and every way of changing the tab
+ * while it was still up (pop then navigate, navigate into the tab underneath)
+ * left Stream showing once it had gone. A plain navigate pushed a second Main
+ * over it instead, keeping the mini pill faded out.
  */
-export function openMainTab(params: NonNullable<RootStackParamList['Main']>): void {
+export function openMainTab(params: MainParams): void {
   const root = navigationRef.getRootState();
-  const main = root?.routes.find(r => r.name === 'Main');
-  const tabsKey = main?.state?.key;
-  if (!root || root.routes[root.index]?.name === 'Main' || !tabsKey || !('screen' in params)) {
+  if (!root || root.routes[root.index]?.name === 'Main') {
     navigationRef.navigate('Main', params);
     return;
   }
-  navigationRef.dispatch({ ...CommonActions.navigate(params.screen, params.params), target: tabsKey });
-  // Like the back button: a sheet or Up next open over the player closes
-  // first and the player stays, already over the right tab.
+  // If only a sheet or Up next closes, the player stays and the tab is dropped
+  // after a moment rather than opening whenever the player is closed later.
+  pendingTab = { params, until: Date.now() + 3000 };
+  stopWatching ??= navigationRef.addListener('state', () => {
+    const now = navigationRef.getRootState();
+    if (!pendingTab || now.routes[now.index]?.name !== 'Main') return;
+    const { params: tab, until } = pendingTab;
+    pendingTab = null;
+    stopWatching?.();
+    stopWatching = null;
+    if (Date.now() <= until) navigationRef.navigate('Main', tab);
+  });
   navigationRef.goBack();
 }
