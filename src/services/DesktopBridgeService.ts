@@ -245,6 +245,7 @@ class DesktopBridgeService {
   private downloadUnsubscribe: (() => void) | null = null;
   private zeroconf: any = null;
   private running = false;
+  private starting: Promise<void> | null = null;
   private bridgeSource: BridgeSource = 'phone';
   private sourceTransitionInFlight = false;
   private desktopConnected = false;
@@ -497,8 +498,20 @@ class DesktopBridgeService {
     }
   }
 
-  async start(): Promise<void> {
-    if (this.running) return;
+  /**
+   * One start at a time. `running` is only set once the servers are up, so a
+   * second call (the app's JS entry ran twice in one process) used to start a
+   * second pair on the same fields: its bind failed, and its cleanup closed the
+   * first pair's server before the native listen task ran, which crashed the
+   * app inside react-native-tcp-socket.
+   */
+  start(): Promise<void> {
+    if (this.running) return Promise.resolve();
+    this.starting ??= this.startServers().finally(() => { this.starting = null; });
+    return this.starting;
+  }
+
+  private async startServers(): Promise<void> {
     const tcpSocket = loadTcpSocket();
     if (!tcpSocket) {
       this.running = false;
